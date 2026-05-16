@@ -1,0 +1,46 @@
+server:
+  port: 8080
+
+logging:
+  level:
+    root: INFO
+    com.middleware.manager: INFO
+  file:
+    name: logs/middleware-resource-manager.log
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+
+spring:
+  datasource:
+    url: jdbc:mysql://${APP_DB_HOST:127.0.0.1}:${APP_DB_PORT:3306}/${APP_DB_NAME:middleware_resource_manager}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${APP_DB_USERNAME:root}
+    password: ${APP_DB_PASSWORD:YOUR_DB_PASSWORD}
+    hikari:
+      initialization-fail-timeout: -1
+      minimum-idle: 2
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+        query:
+          plan_cache_max_size: 256
+        jdbc:
+          batch_size: 20
+  servlet:
+    multipart:
+      max-file-size: 2048MB
+      max-request-size: 2048MB
+
+
+
+app:
+  storage:
+    location: ./storage
+  security:
+    admin:
+      default-password: admin123

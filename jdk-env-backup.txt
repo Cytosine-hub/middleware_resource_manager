@@ -1,0 +1,4 @@
+﻿User JAVA_HOME=
+Machine JAVA_HOME=
+User PATH=;C:\Users\Lenovo\AppData\Local\Programs\Microsoft VS Code\bin;C:\Users\Lenovo\AppData\Local\Programs\Qoder\bin
+Machine PATH=C:\Program Files\Common Files\Oracle\Java\javapath;C:\Users\Lenovo\dev\apache-maven-3.8.8\bin;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files (x86)\PersonalProgram\;C:\Users\Lenovo\dev\openjdk-8u43-windows-i586\java-se-8u43-ri\bin;C:\WINDOWS\system32;C:\Program Files\Docker\Docker\resources\bin;C:\Program Files\Git\cmd;C:\Program Files\nodejs\;C:\Users\Lenovo\AppData\Roaming\npm;

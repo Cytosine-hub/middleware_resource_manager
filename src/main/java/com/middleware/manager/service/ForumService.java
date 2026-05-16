@@ -1,0 +1,172 @@
+package com.middleware.manager.service;
+
+import com.middleware.manager.domain.*;
+import com.middleware.manager.repository.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+public class ForumService {
+    private final ForumPostRepository postRepo;
+    private final ForumTagRepository tagRepo;
+    private final ForumCommentRepository commentRepo;
+
+    public ForumService(ForumPostRepository postRepo, ForumTagRepository tagRepo, ForumCommentRepository commentRepo) {
+        this.postRepo = postRepo;
+        this.tagRepo = tagRepo;
+        this.commentRepo = commentRepo;
+    }
+
+    public Page<ForumPost> listPosts(String keyword, String tag, int page, int size) {
+        int s = Math.min(Math.max(size, 1), 50);
+        PageRequest pr = PageRequest.of(Math.max(page, 0), s, Sort.by(Sort.Direction.DESC, "createdAt"));
+        if (StringUtils.hasText(keyword) || StringUtils.hasText(tag)) {
+            String kw = StringUtils.hasText(keyword) ? keyword.trim() : null;
+            String tg = StringUtils.hasText(tag) ? tag.trim() : null;
+            return postRepo.search(kw, tg, pr);
+        }
+        return postRepo.findByStatusOrderByCreatedAtDesc("PUBLISHED", pr);
+    }
+
+    public ForumPost getPost(Long id) {
+        return postRepo.findById(id).orElseThrow(() -> new IllegalArgumentException("文章不存在"));
+    }
+
+    @Transactional
+    public ForumPost createPost(String title, String content, List<String> tagNames,
+                                 String authorUsername, String authorDisplayName) {
+        ForumPost post = new ForumPost();
+        post.setTitle(title);
+        post.setContent(content);
+        post.setAuthorUsername(authorUsername);
+        post.setAuthorDisplayName(authorDisplayName);
+        post.setStatus("PUBLISHED");
+        post.setTags(resolveTags(tagNames));
+        return postRepo.save(post);
+    }
+
+    @Transactional
+    public ForumPost updatePost(Long id, String title, String content, List<String> tagNames, String username) {
+        ForumPost post = getPost(id);
+        if (!post.getAuthorUsername().equals(username))
+            throw new IllegalArgumentException("只能编辑自己的文章");
+        post.setTitle(title);
+        post.setContent(content);
+        updateTags(post, tagNames);
+        return postRepo.save(post);
+    }
+
+    @Transactional
+    public void deletePost(Long id, String username) {
+        ForumPost post = getPost(id);
+        if (!post.getAuthorUsername().equals(username))
+            throw new IllegalArgumentException("只能删除自己的文章");
+        for (ForumTag tag : post.getTags()) {
+            tag.setPostCount(Math.max(0, tag.getPostCount() - 1));
+            tagRepo.save(tag);
+        }
+        commentRepo.findByPostIdOrderByCreatedAtAsc(id).forEach(c -> commentRepo.delete(c));
+        postRepo.delete(post);
+    }
+
+    @Transactional
+    public void incrementViewCount(Long id) {
+        ForumPost post = getPost(id);
+        post.setViewCount(post.getViewCount() + 1);
+        postRepo.save(post);
+    }
+
+    @Transactional
+    public Map<String, Object> toggleLike(Long postId, String username) {
+        ForumPost post = getPost(postId);
+        post.setLikeCount(post.getLikeCount() + 1);
+        postRepo.save(post);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("likeCount", post.getLikeCount());
+        result.put("liked", true);
+        return result;
+    }
+
+    // Comments
+    public List<ForumComment> getComments(Long postId) {
+        return commentRepo.findByPostIdOrderByCreatedAtAsc(postId);
+    }
+
+    @Transactional
+    public ForumComment addComment(Long postId, String content, String authorUsername, String authorDisplayName) {
+        ForumPost post = getPost(postId);
+        ForumComment comment = new ForumComment();
+        comment.setPostId(postId);
+        comment.setContent(content);
+        comment.setAuthorUsername(authorUsername);
+        comment.setAuthorDisplayName(authorDisplayName);
+        ForumComment saved = commentRepo.save(comment);
+        post.setCommentCount(post.getCommentCount() + 1);
+        postRepo.save(post);
+        return saved;
+    }
+
+    @Transactional
+    public ForumComment addReply(Long postId, Long parentId, String content, String authorUsername, String authorDisplayName) {
+        getPost(postId);
+        commentRepo.findById(parentId).orElseThrow(() -> new IllegalArgumentException("父评论不存在"));
+        ForumComment reply = new ForumComment();
+        reply.setPostId(postId);
+        reply.setParentId(parentId);
+        reply.setContent(content);
+        reply.setAuthorUsername(authorUsername);
+        reply.setAuthorDisplayName(authorDisplayName);
+        return commentRepo.save(reply);
+    }
+
+    @Transactional
+    public Map<String, Object> toggleCommentLike(Long commentId) {
+        ForumComment comment = commentRepo.findById(commentId).orElseThrow(() -> new IllegalArgumentException("评论不存在"));
+        comment.setLikeCount(comment.getLikeCount() + 1);
+        commentRepo.save(comment);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("likeCount", comment.getLikeCount());
+        return result;
+    }
+
+    // Tags
+    public List<ForumTag> getAllTags() {
+        return tagRepo.findAllByOrderByPostCountDesc();
+    }
+
+    private Set<ForumTag> resolveTags(List<String> names) {
+        if (names == null || names.isEmpty()) return new HashSet<>();
+        return names.stream().map(this::getOrCreateTag).collect(Collectors.toSet());
+    }
+
+    private void updateTags(ForumPost post, List<String> newNames) {
+        Set<String> newSet = newNames != null ? newNames.stream().map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet()) : new HashSet<>();
+        Set<String> oldSet = post.getTags().stream().map(ForumTag::getName).collect(Collectors.toSet());
+        for (ForumTag tag : new HashSet<>(post.getTags())) {
+            if (!newSet.contains(tag.getName())) {
+                post.getTags().remove(tag);
+                tag.setPostCount(Math.max(0, tag.getPostCount() - 1));
+                tagRepo.save(tag);
+            }
+        }
+        for (String name : newSet) {
+            if (!oldSet.contains(name)) {
+                post.getTags().add(getOrCreateTag(name));
+            }
+        }
+    }
+
+    private ForumTag getOrCreateTag(String name) {
+        String trimmed = name.trim();
+        ForumTag tag = tagRepo.findByNameIgnoreCase(trimmed).orElseGet(() -> tagRepo.save(new ForumTag(trimmed)));
+        tag.setPostCount(tag.getPostCount() + 1);
+        return tagRepo.save(tag);
+    }
+}

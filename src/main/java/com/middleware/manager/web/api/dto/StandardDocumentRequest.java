@@ -1,0 +1,57 @@
+package com.middleware.manager.web.api.dto;
+
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Size;
+
+public class StandardDocumentRequest {
+    @NotBlank
+    @Size(max = 160)
+    private String title;
+
+    @NotBlank
+    @Size(max = 40)
+    private String documentType = "MANUAL";
+
+    @Size(max = 500)
+    private String summary;
+
+    private Long relatedStandardDocumentId;
+
+    private Long softwareTypeId;
+
+    @Size(max = 60)
+    private String category;
+
+    @Size(max = 120)
+    private String software;
+
+    @Size(max = 80)
+    private String softwareVersion;
+
+    @Size(max = 80)
+    private String standardVersion;
+
+    @NotBlank
+    private String content;
+
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
+    public String getDocumentType() { return documentType; }
+    public void setDocumentType(String documentType) { this.documentType = documentType; }
+    public String getSummary() { return summary; }
+    public void setSummary(String summary) { this.summary = summary; }
+    public Long getRelatedStandardDocumentId() { return relatedStandardDocumentId; }
+    public void setRelatedStandardDocumentId(Long relatedStandardDocumentId) { this.relatedStandardDocumentId = relatedStandardDocumentId; }
+    public Long getSoftwareTypeId() { return softwareTypeId; }
+    public void setSoftwareTypeId(Long softwareTypeId) { this.softwareTypeId = softwareTypeId; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
+    public String getSoftware() { return software; }
+    public void setSoftware(String software) { this.software = software; }
+    public String getSoftwareVersion() { return softwareVersion; }
+    public void setSoftwareVersion(String softwareVersion) { this.softwareVersion = softwareVersion; }
+    public String getStandardVersion() { return standardVersion; }
+    public void setStandardVersion(String standardVersion) { this.standardVersion = standardVersion; }
+    public String getContent() { return content; }
+    public void setContent(String content) { this.content = content; }
+}
