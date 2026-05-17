@@ -23,7 +23,7 @@
     <div class="editor-body">
       <div class="editor-pane">
         <div class="pane-label">Markdown</div>
-        <textarea class="editor-textarea" v-model="documentForm.content" placeholder="使用 Markdown 编写文档内容，支持 {{参数名}} 占位符" @input="onContentChange"></textarea>
+        <textarea class="editor-textarea" v-model="documentForm.content" placeholder="使用 Markdown 编写文档内容，支持 {{参数名}} 占位符，可直接粘贴图片" @input="onContentChange" @keydown="onEditorKeydown" @paste="onEditorPaste"></textarea>
       </div>
       <div class="preview-pane">
         <div class="pane-label">预览</div>
@@ -78,6 +78,10 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { request } from '../api'
 import MarkdownHelp from './MarkdownHelp.vue'
+import { handleEditorKeydown, handleEditorPaste } from '../editor-utils'
+
+const onEditorKeydown = handleEditorKeydown
+const onEditorPaste = handleEditorPaste
 
 const showHelp = ref(false)
 

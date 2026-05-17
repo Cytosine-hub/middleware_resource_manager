@@ -32,6 +32,8 @@ public class SecurityConfig {
                             new AntPathRequestMatcher("/api/**"))
                 .and()
                 .authorizeRequests()
+                    // 图片文件公开访问（markdown 预览中 img 标签无 Auth header）
+                    .antMatchers("/files/images/**").permitAll()
                     // 文件下载：需登录
                     .antMatchers("/files/**").authenticated()
                     // 论坛：读公开，写需登录

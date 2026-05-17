@@ -1310,6 +1310,52 @@ label {
   letter-spacing: 0;
 }
 
+.markdown-preview em {
+  font-style: italic;
+}
+
+.markdown-preview code {
+  font-family: "SFMono-Regular", Consolas, "Fira Code", monospace;
+  font-size: 0.9em;
+  background: #edf2f7;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #1a202c;
+  border: 1px solid #e2e8f0;
+}
+
+.markdown-preview pre {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 6px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  line-height: 1.55;
+  font-size: 13px;
+  margin: 12px 0;
+  border: 1px solid #334155;
+}
+
+.markdown-preview pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  color: inherit;
+  border: none;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  padding-left: 24px;
+  margin: 8px 0;
+}
+
+.markdown-preview li {
+  margin: 4px 0;
+  line-height: 1.7;
+}
+
 .checkline {
   display: flex;
   align-items: center;
