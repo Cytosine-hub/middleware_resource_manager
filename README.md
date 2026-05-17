@@ -1,6 +1,6 @@
 # Middleware Resource Manager
 
-基于 `Spring Boot 3 + JDK 17 + MySQL` 的中间件文件管理平台。
+基于 `Spring Boot 2.7 + Java 8 + MySQL 8.0` 的中间件文件管理平台。
 
 ## 功能
 
@@ -13,72 +13,77 @@
 
 ## 技术栈
 
-- Spring Boot 3.3.5
+- Spring Boot 2.7.18
 - Spring MVC
 - Spring Security
 - Spring Data JPA
 - Thymeleaf
-- MySQL 8.4.x
+- Vue 3 + Vite（前端）
+- MySQL 8.0.x
 
 ## 本地目录
 
-- MySQL 程序目录：`./tools/mysql-8.4.9-winx64`
-- MySQL 数据目录：`./mysql/data`
-- MySQL 配置文件：`./mysql/my.ini`
 - 上传文件目录：`./storage/<middleware-name>/`
+- 应用日志：`./logs/middleware-resource-manager.log`
 
-## 默认配置
+## 管理员账号
+
+系统预设了以下管理员账号（密码均为 `admin123`）：
+
+| 用户名 | 角色 | 显示名称 |
+|--------|------|----------|
+| `sysadmin` | 系统管理员 | 系统管理员 |
+| `mwadmin` | 中间件管理岗 | 中间件管理员 |
+| `dbadmin` | 数据库管理岗 | 数据库管理员 |
+| `hostadmin` | 主机管理岗 | 主机管理员 |
+| `netadmin` | 网络管理岗 | 网络管理员 |
+| `secadmin` | 网络安全岗 | 安全管理员 |
+| `devmgr` | 开发经理 | 开发经理 |
+| `opsmgr` | 运维经理 | 运维经理 |
+
+## 访问地址
 
 - 管理后台：`http://localhost:8080/admin/releases`
 - 登录页：`http://localhost:8080/login`
 - 公开下载页：`http://localhost:8080/downloads`
-- 默认管理员账号：`admin`
-- 默认管理员密码：`admin123`
-- MySQL 地址：`127.0.0.1:3306`
-- MySQL 用户：`root`
-- MySQL 密码：`SuNfgbZjdm-UnLZ4P4QH`
+- 前端开发：`http://localhost:5173`
 
-## 启动 MySQL
+## 启动应用
 
-在项目根目录执行：
+**后端（Spring Boot）：**
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\start-local-mysql.ps1
+```bash
+# 编译
+mvn clean package -DskipTests
+
+# 启动
+mvn spring-boot:run
 ```
 
-停止 MySQL：
+**前端（Vue 3 + Vite）：**
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\stop-local-mysql.ps1
-```
-
-## 启动项目
-
-直接运行打包后的 JAR：
-
-```powershell
-java -jar target\middleware-resource-manager-0.0.1-SNAPSHOT.jar
-```
-
-或者使用 Maven：
-
-```powershell
-mvn "-Dmaven.repo.local=.m2" spring-boot:run
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
 ## 数据库连接配置
 
 应用默认读取以下环境变量；未设置时使用本地默认值：
 
-- `APP_DB_HOST`，默认 `127.0.0.1`
-- `APP_DB_PORT`，默认 `3306`
-- `APP_DB_NAME`，默认 `middleware_resource_manager`
-- `APP_DB_USERNAME`，默认 `root`
-- `APP_DB_PASSWORD`，默认 `SuNfgbZjdm-UnLZ4P4QH`
+| 环境变量 | 默认值 |
+|----------|--------|
+| `APP_DB_HOST` | `127.0.0.1` |
+| `APP_DB_PORT` | `3306` |
+| `APP_DB_NAME` | `middleware_resource_manager` |
+| `APP_DB_USERNAME` | `root` |
+| `APP_DB_PASSWORD` | `OlgDqdJfehRwBUITqFpi` |
 
 ## 首次运行说明
 
-1. 先启动本地 MySQL。
-2. 再启动 Spring Boot 应用。
-3. 应用会自动创建数据库 `middleware_resource_manager` 和表结构。
-4. 首次登录后台后，建议修改 `src/main/resources/application.yml` 中的默认管理员账号密码。
+1. 确保本地 MySQL 8.0 已启动。
+2. 创建数据库：`CREATE DATABASE IF NOT EXISTS middleware_resource_manager DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+3. 导入初始数据（如有 SQL 导出文件）。
+4. 启动 Spring Boot 应用，应用会自动创建/更新表结构。
+5. 登录后建议修改默认密码。
