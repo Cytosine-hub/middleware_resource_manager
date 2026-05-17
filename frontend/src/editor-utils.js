@@ -10,7 +10,46 @@ function insertAtCursor(textarea, text) {
   textarea.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
+function expandTableShorthand(ta) {
+  const start = ta.selectionStart
+  // 向前查找最近的 [
+  const before = ta.value.slice(0, start)
+  const match = before.match(/\[(\d+)\]\[(\d+)\]$/)
+  if (!match) return false
+
+  const rows = parseInt(match[1], 10)
+  const cols = parseInt(match[2], 10)
+  if (rows < 1 || cols < 1 || rows > 10 || cols > 10) return false
+
+  // 替换 [N][M] 为表格模板
+  const prefix = ta.value.slice(0, start - match[0].length)
+  const suffix = ta.value.slice(start)
+
+  const lines = []
+  // 表头
+  lines.push('| ' + Array(cols).fill('Header').join(' | ') + ' |')
+  // 分隔行
+  lines.push('|' + Array(cols).fill('----------').join('|') + '|')
+  // 数据行
+  for (let r = 1; r < rows; r++) {
+    lines.push('| ' + Array(cols).fill('Cell').join(' | ') + ' |')
+  }
+  lines.push('') // 尾部空行
+
+  ta.value = prefix + lines.join('\n') + suffix
+  ta.selectionStart = ta.selectionEnd = prefix + lines.join('\n').length
+  ta.dispatchEvent(new Event('input', { bubbles: true }))
+  return true
+}
+
 export function handleEditorKeydown(event) {
+  if (event.key === ' ' || event.key === 'Enter') {
+    if (expandTableShorthand(event.target)) {
+      event.preventDefault()
+      return
+    }
+  }
+
   if (event.key === 'Enter') {
     const ta = event.target
     const start = ta.selectionStart

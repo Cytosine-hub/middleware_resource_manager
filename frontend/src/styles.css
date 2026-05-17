@@ -1356,6 +1356,43 @@ label {
   line-height: 1.7;
 }
 
+.markdown-preview blockquote {
+  margin: 12px 0;
+  padding: 8px 16px;
+  border-left: 4px solid #5b8cce;
+  background: #f0f4fa;
+  color: #3a5068;
+  border-radius: 0 4px 4px 0;
+}
+
+.markdown-preview blockquote p {
+  margin: 4px 0;
+}
+
+.markdown-preview table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  border: 1px solid #d8e1ec;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-preview th {
+  background: #f0f4fa;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.markdown-preview tr:nth-child(even) td {
+  background: #fafbfc;
+}
+
 .checkline {
   display: flex;
   align-items: center;
