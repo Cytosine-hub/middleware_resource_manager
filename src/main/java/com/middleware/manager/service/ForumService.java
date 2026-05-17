@@ -2,6 +2,7 @@ package com.middleware.manager.service;
 
 import com.middleware.manager.domain.*;
 import com.middleware.manager.repository.*;
+import com.middleware.manager.domain.PostLike;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -17,11 +18,13 @@ public class ForumService {
     private final ForumPostRepository postRepo;
     private final ForumTagRepository tagRepo;
     private final ForumCommentRepository commentRepo;
+    private final PostLikeRepository postLikeRepo;
 
-    public ForumService(ForumPostRepository postRepo, ForumTagRepository tagRepo, ForumCommentRepository commentRepo) {
+    public ForumService(ForumPostRepository postRepo, ForumTagRepository tagRepo, ForumCommentRepository commentRepo, PostLikeRepository postLikeRepo) {
         this.postRepo = postRepo;
         this.tagRepo = tagRepo;
         this.commentRepo = commentRepo;
+        this.postLikeRepo = postLikeRepo;
     }
 
     public Page<ForumPost> listPosts(String keyword, String tag, int page, int size) {
@@ -86,12 +89,28 @@ public class ForumService {
     @Transactional
     public Map<String, Object> toggleLike(Long postId, String username) {
         ForumPost post = getPost(postId);
-        post.setLikeCount(post.getLikeCount() + 1);
-        postRepo.save(post);
+        boolean alreadyLiked = postLikeRepo.existsByPostIdAndUsername(postId, username);
         Map<String, Object> result = new LinkedHashMap<>();
+        if (alreadyLiked) {
+            postLikeRepo.deleteByPostIdAndUsername(postId, username);
+            post.setLikeCount(Math.max(0, post.getLikeCount() - 1));
+            postRepo.save(post);
+            result.put("liked", false);
+        } else {
+            PostLike pl = new PostLike();
+            pl.setPostId(postId);
+            pl.setUsername(username);
+            postLikeRepo.save(pl);
+            post.setLikeCount(post.getLikeCount() + 1);
+            postRepo.save(post);
+            result.put("liked", true);
+        }
         result.put("likeCount", post.getLikeCount());
-        result.put("liked", true);
         return result;
+    }
+
+    public boolean hasUserLiked(Long postId, String username) {
+        return postLikeRepo.existsByPostIdAndUsername(postId, username);
     }
 
     // Comments

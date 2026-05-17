@@ -38,10 +38,11 @@ public class ForumController {
     }
 
     @GetMapping("/posts/{id}")
-    public Map<String, Object> detail(@PathVariable Long id) {
+    public Map<String, Object> detail(@PathVariable Long id, Authentication auth) {
         ForumPost post = forumService.getPost(id);
         forumService.incrementViewCount(id);
         Map<String, Object> result = toDetail(post);
+        result.put("liked", auth != null && forumService.hasUserLiked(id, auth.getName()));
         result.put("comments", forumService.getComments(id).stream().map(this::toCommentMap).collect(Collectors.toList()));
         return result;
     }
