@@ -12,7 +12,6 @@ function insertAtCursor(textarea, text) {
 
 function expandTableShorthand(ta) {
   const start = ta.selectionStart
-  // 向前查找最近的 [
   const before = ta.value.slice(0, start)
   const match = before.match(/\[(\d+)\]\[(\d+)\]$/)
   if (!match) return false
@@ -21,23 +20,25 @@ function expandTableShorthand(ta) {
   const cols = parseInt(match[2], 10)
   if (rows < 1 || cols < 1 || rows > 10 || cols > 10) return false
 
-  // 替换 [N][M] 为表格模板
-  const prefix = ta.value.slice(0, start - match[0].length)
+  const prefixEnd = start - match[0].length
+  let prefix = ta.value.slice(0, prefixEnd)
   const suffix = ta.value.slice(start)
 
+  // 确保表格前有空行，markdown 才能正确解析
+  if (prefix.length > 0 && !prefix.endsWith('\n\n')) {
+    prefix = prefix.endsWith('\n') ? prefix + '\n' : prefix + '\n\n'
+  }
+
   const lines = []
-  // 表头
   lines.push('| ' + Array(cols).fill('Header').join(' | ') + ' |')
-  // 分隔行
   lines.push('|' + Array(cols).fill('----------').join('|') + '|')
-  // 数据行
   for (let r = 1; r < rows; r++) {
     lines.push('| ' + Array(cols).fill('Cell').join(' | ') + ' |')
   }
-  lines.push('') // 尾部空行
+  lines.push('')
 
   ta.value = prefix + lines.join('\n') + suffix
-  ta.selectionStart = ta.selectionEnd = prefix + lines.join('\n').length
+  ta.selectionStart = ta.selectionEnd = prefix.length + lines.join('\n').length
   ta.dispatchEvent(new Event('input', { bubbles: true }))
   return true
 }
