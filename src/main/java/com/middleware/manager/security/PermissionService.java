@@ -42,4 +42,8 @@ public class PermissionService {
         }
         return category;
     }
+
+    public boolean canReview(Authentication authentication) {
+        return isAdmin(authentication);
+    }
 }

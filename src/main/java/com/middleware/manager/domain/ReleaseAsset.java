@@ -62,6 +62,9 @@ public class ReleaseAsset {
     @Column(nullable = false)
     private long downloadCount;
 
+    @Column(name = "standard_document_id")
+    private Long standardDocumentId;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -193,6 +196,14 @@ public class ReleaseAsset {
 
     public void setDownloadCount(long downloadCount) {
         this.downloadCount = downloadCount;
+    }
+
+    public Long getStandardDocumentId() {
+        return standardDocumentId;
+    }
+
+    public void setStandardDocumentId(Long standardDocumentId) {
+        this.standardDocumentId = standardDocumentId;
     }
 
     public LocalDateTime getCreatedAt() {

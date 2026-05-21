@@ -11,19 +11,24 @@
         <span>{{ documentForm.software || '未关联软件' }}</span>
         <span class="meta-sep">/</span>
         <span>{{ metaStandardLabel }}</span>
-        <button class="meta-edit-btn" @click="openMetaDialog()" title="编辑文档信息">编辑信息</button>
+        <span class="meta-sep">/</span>
+        <span :class="['status', statusClass(documentForm.status)]">{{ statusLabel(documentForm.status) }}</span>
+        <span class="meta-sep">/</span>
+        <span>V{{ documentForm.version || '-' }}</span>
+        <button v-if="documentForm.canEdit" class="meta-edit-btn" @click="openMetaDialog()" title="编辑文档信息">编辑信息</button>
       </div>
       <div class="toolbar-actions">
         <button class="ghost" @click="$emit('cancel')">返回列表</button>
         <button class="ghost" @click="showHelp = true">语法</button>
-        <button :disabled="saving" @click="handleSave">{{ saving ? '保存中...' : '保存' }}</button>
+        <button v-if="documentForm.canEdit" :disabled="saving" @click="handleSave">{{ saving ? '保存中...' : '保存' }}</button>
+        <span v-else class="readonly-hint">当前状态不可编辑</span>
       </div>
     </div>
 
     <div class="editor-body">
       <div class="editor-pane">
         <div class="pane-label">Markdown</div>
-        <textarea class="editor-textarea" v-model="documentForm.content" placeholder="使用 Markdown 编写文档内容，支持 {{参数名}} 占位符，可直接粘贴图片" @input="onContentChange" @keydown="onEditorKeydown" @paste="onEditorPaste"></textarea>
+        <textarea class="editor-textarea" v-model="documentForm.content" :disabled="!documentForm.canEdit" :placeholder="documentForm.canEdit ? '使用 Markdown 编写文档内容，支持 {{参数名}} 占位符，可直接粘贴图片' : '当前状态不可编辑'" @input="onContentChange" @keydown="onEditorKeydown" @paste="onEditorPaste"></textarea>
       </div>
       <div class="preview-pane">
         <div class="pane-label">预览</div>
@@ -127,9 +132,20 @@ function defaultDocumentForm() {
   return {
     id: null, title: '', documentType: 'MANUAL', summary: '',
     relatedStandardDocumentId: '', category: '', software: '',
-    softwareVersion: '', standardVersion: '',
+    softwareVersion: '', standardVersion: '', status: 'DRAFT', version: '',
+    canEdit: true,
     content: '# 手册标题\n\n## 1. 适用范围\n\n## 2. 标准参数\n\n- JDK 版本：{{JDK_VERSION}}\n- 日志保留天数：{{LOG_RETENTION_DAYS}}\n\n## 3. 操作步骤\n\n'
   }
+}
+
+function statusLabel(status) {
+  const map = { DRAFT: '草稿', PENDING_REVIEW: '审核中', PUBLISHED: '已发布', MODIFYING: '修改中' }
+  return map[status] || status
+}
+
+function statusClass(status) {
+  const map = { DRAFT: 'draft', PENDING_REVIEW: 'pending-review', PUBLISHED: 'published', MODIFYING: 'modifying' }
+  return map[status] || 'off'
 }
 
 function findStandardDocument(id) {
@@ -238,6 +254,9 @@ async function loadDocument(id) {
       software: relatedStandard?.software || doc.software || '',
       softwareVersion: relatedStandard?.softwareVersion || doc.softwareVersion || '',
       standardVersion: relatedStandard?.standardVersion || doc.standardVersion || '',
+      status: doc.status || 'DRAFT',
+      version: doc.version || '',
+      canEdit: doc.canEdit !== false,
       content: doc.content || ''
     })
     if (doc.relatedStandardDocumentId) await loadStandardParameters(doc.relatedStandardDocumentId)
@@ -368,6 +387,19 @@ onMounted(() => {
 }
 
 .editor-textarea:focus { outline: none; }
+
+.editor-textarea:disabled {
+  background: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.readonly-hint {
+  font-size: 12px;
+  color: #b45309;
+  padding: 0 14px;
+  line-height: 32px;
+}
 
 .preview-content {
   flex: 1;

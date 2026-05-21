@@ -28,6 +28,8 @@ public class StandardParameterRequest {
 
     private boolean active = true;
 
+    private boolean deploymentStandard;
+
     public Long getStandardDocumentId() {
         return standardDocumentId;
     }
@@ -82,5 +84,13 @@ public class StandardParameterRequest {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public boolean isDeploymentStandard() {
+        return deploymentStandard;
+    }
+
+    public void setDeploymentStandard(boolean deploymentStandard) {
+        this.deploymentStandard = deploymentStandard;
     }
 }

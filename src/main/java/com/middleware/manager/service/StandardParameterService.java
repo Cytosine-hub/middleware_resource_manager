@@ -105,6 +105,7 @@ public class StandardParameterService {
         parameter.setCategory(trimToNull(request.getCategory()));
         parameter.setDescription(trimToNull(request.getDescription()));
         parameter.setActive(request.isActive());
+        parameter.setDeploymentStandard(request.isDeploymentStandard());
     }
 
     private Specification<StandardParameter> specification(String keyword, String category, Boolean active, Long standardDocumentId) {

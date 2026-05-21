@@ -1,8 +1,9 @@
 package com.middleware.manager.service;
 
-import com.middleware.manager.domain.SoftwareType;
+import com.middleware.manager.domain.ReviewRecord;
 import com.middleware.manager.domain.StandardDocument;
 import com.middleware.manager.domain.StandardParameter;
+import com.middleware.manager.repository.ReviewRecordRepository;
 import com.middleware.manager.repository.StandardDocumentRepository;
 import com.middleware.manager.web.api.dto.StandardDocumentRequest;
 import org.springframework.data.jpa.domain.Specification;
@@ -11,18 +12,22 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 
 @Service
 public class StandardDocumentService {
     private final StandardDocumentRepository repository;
+    private final ReviewRecordRepository reviewRecordRepository;
     private final StandardParameterService parameterService;
     private final SoftwareTypeService softwareTypeService;
 
     public StandardDocumentService(StandardDocumentRepository repository,
+                                   ReviewRecordRepository reviewRecordRepository,
                                    StandardParameterService parameterService,
                                    SoftwareTypeService softwareTypeService) {
         this.repository = repository;
+        this.reviewRecordRepository = reviewRecordRepository;
         this.parameterService = parameterService;
         this.softwareTypeService = softwareTypeService;
     }
@@ -45,15 +50,20 @@ public class StandardDocumentService {
 
     public StandardDocument get(Long id) {
         return repository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Standard document does not exist"));
+                .orElseThrow(() -> new IllegalArgumentException("文档不存在"));
     }
 
     public StandardDocument getPublished(Long id) {
         StandardDocument document = get(id);
         if (!"PUBLISHED".equals(document.getStatus())) {
-            throw new IllegalArgumentException("Standard document does not exist");
+            throw new IllegalArgumentException("文档不存在或未发布");
         }
         return document;
+    }
+
+    @Transactional
+    public StandardDocument save(StandardDocument document) {
+        return repository.save(document);
     }
 
     @Transactional
@@ -61,6 +71,7 @@ public class StandardDocumentService {
         StandardDocument document = new StandardDocument();
         apply(document, request);
         document.setStatus("DRAFT");
+        document.setVersion(VersionManager.firstDraftVersion());
         StandardDocument saved = repository.save(document);
         refreshRenderedContent(saved);
         return saved;
@@ -69,36 +80,111 @@ public class StandardDocumentService {
     @Transactional
     public StandardDocument update(Long id, StandardDocumentRequest request) {
         StandardDocument document = get(id);
+        if (document.getPendingReviewRecordId() != null) {
+            throw new IllegalStateException("文档正在审核中，不可编辑");
+        }
+        String status = document.getStatus();
+        if (!"DRAFT".equals(status) && !"MODIFYING".equals(status)) {
+            throw new IllegalStateException("当前状态不可编辑");
+        }
         apply(document, request);
+        if ("DRAFT".equals(status)) {
+            document.setVersion(VersionManager.nextDraftVersion(document.getVersion()));
+        } else {
+            document.setVersion(VersionManager.nextModifyingVersion(document.getVersion()));
+        }
         StandardDocument saved = repository.save(document);
         refreshRenderedContent(saved);
         return saved;
     }
 
     @Transactional
-    public StandardDocument publish(Long id) {
+    public ReviewRecord submitForReview(Long id, String submitter, String submitterDisplayName) {
         StandardDocument document = get(id);
-        if (!"STANDARD".equals(document.getDocumentType()) && document.getRelatedStandardDocumentId() != null) {
-            StandardDocument parent = get(document.getRelatedStandardDocumentId());
-            if (!"PUBLISHED".equals(parent.getStatus())) {
-                throw new IllegalStateException("关联的标准尚未发布，请先发布标准后再发布本文档");
-            }
+        if (document.getPendingReviewRecordId() != null) {
+            throw new IllegalStateException("文档已有待审核记录");
         }
-        document.setStatus("PUBLISHED");
-        document.setPublishedAt(LocalDateTime.now());
+        String status = document.getStatus();
+        if (!"DRAFT".equals(status) && !"MODIFYING".equals(status)) {
+            throw new IllegalStateException("只有草稿或修改中的文档可以提交审核");
+        }
+
+        // 创建审核记录
+        ReviewRecord record = new ReviewRecord();
+        record.setDocumentId(document.getId());
+        record.setDocumentTitle(document.getTitle());
+        record.setDocumentType(document.getDocumentType());
+        record.setCategory(document.getCategory());
+        record.setSoftware(document.getSoftware());
+        record.setDocumentVersion(document.getVersion());
+        record.setSubmitterUsername(submitter);
+        record.setSubmitterDisplayName(submitterDisplayName);
+        record.setStatus("PENDING");
+        record.setSubmittedAt(LocalDateTime.now());
+        record.setPreviousContent(document.getPreviousContent());
+        record.setCurrentContent(document.getContent());
+        ReviewRecord saved = reviewRecordRepository.save(record);
+
+        // 文档关联审核记录
+        document.setPendingReviewRecordId(saved.getId());
+        document.setSubmittedAt(LocalDateTime.now());
+        repository.save(document);
+
+        return saved;
+    }
+
+    @Transactional
+    public StandardDocument startModify(Long id) {
+        StandardDocument document = get(id);
+        if (document.getPendingReviewRecordId() != null) {
+            throw new IllegalStateException("文档正在审核中，不可操作");
+        }
+        if (!"PUBLISHED".equals(document.getStatus())) {
+            throw new IllegalStateException("只有已发布的文档可以开始修改");
+        }
+        document.setStatus("MODIFYING");
+        document.setVersion(VersionManager.toModifyingVersion(document.getVersion()));
+        document.setSubmittedAt(null);
+        document.setReviewedAt(null);
+        document.setReviewedBy(null);
+        document.setReviewComment(null);
         return repository.save(document);
     }
 
     @Transactional
-    public StandardDocument unpublish(Long id) {
+    public StandardDocument cancelModify(Long id) {
         StandardDocument document = get(id);
-        document.setStatus("DRAFT");
-        return repository.save(document);
+        if (document.getPendingReviewRecordId() != null) {
+            throw new IllegalStateException("文档正在审核中，不可操作");
+        }
+        if (!"MODIFYING".equals(document.getStatus())) {
+            throw new IllegalStateException("只有修改中的文档可以取消修改");
+        }
+        document.setStatus("PUBLISHED");
+        document.setVersion(VersionManager.toPublishedVersion(document.getVersion()));
+        if (document.getPreviousContent() != null) {
+            document.setContent(document.getPreviousContent());
+            document.setRenderedContent(null);
+        }
+        document.setSubmittedAt(null);
+        document.setReviewedAt(null);
+        document.setReviewedBy(null);
+        document.setReviewComment(null);
+        StandardDocument saved = repository.save(document);
+        refreshRenderedContent(saved);
+        return saved;
     }
 
     @Transactional
     public void delete(Long id) {
-        repository.delete(get(id));
+        StandardDocument document = get(id);
+        if (document.getPendingReviewRecordId() != null) {
+            throw new IllegalStateException("文档正在审核中，不可删除");
+        }
+        if ("PUBLISHED".equals(document.getStatus())) {
+            throw new IllegalStateException("已发布的文档不能删除，请先开始修改后再删除");
+        }
+        repository.delete(document);
     }
 
     public String render(StandardDocument document) {
@@ -132,13 +218,13 @@ public class StandardDocumentService {
     }
 
     private void apply(StandardDocument document, StandardDocumentRequest request) {
-        document.setTitle(requireText(request.getTitle(), "Document title cannot be blank"));
+        document.setTitle(requireText(request.getTitle(), "文档标题不能为空"));
         String documentType = normalizeDocumentType(request.getDocumentType());
         document.setDocumentType(documentType);
         document.setSummary(trimToNull(request.getSummary()));
 
         if ("STANDARD".equals(documentType)) {
-            SoftwareType softwareType = resolveSoftwareType(request.getSoftwareTypeId());
+            com.middleware.manager.domain.SoftwareType softwareType = resolveSoftwareType(request.getSoftwareTypeId());
             document.setRelatedStandardDocumentId(null);
             document.setSoftwareTypeId(softwareType.getId());
             document.setCategory(softwareType.getCategory());
@@ -155,7 +241,7 @@ public class StandardDocumentService {
             document.setStandardVersion(relatedStandard.getStandardVersion());
         }
 
-        document.setContent(requireText(request.getContent(), "Document content cannot be blank"));
+        document.setContent(requireText(request.getContent(), "文档内容不能为空"));
         document.setCode(trimToNull(request.getCode()));
     }
 
@@ -188,14 +274,14 @@ public class StandardDocumentService {
     private String normalizeDocumentType(String documentType) {
         String value = StringUtils.hasText(documentType) ? documentType.trim().toUpperCase() : "MANUAL";
         if (!"MANUAL".equals(value) && !"ARTICLE".equals(value) && !"STANDARD".equals(value)) {
-            throw new IllegalArgumentException("Document type must be MANUAL, ARTICLE, or STANDARD");
+            throw new IllegalArgumentException("文档类型必须是 MANUAL、ARTICLE 或 STANDARD");
         }
         return value;
     }
 
-    private SoftwareType resolveSoftwareType(Long softwareTypeId) {
+    private com.middleware.manager.domain.SoftwareType resolveSoftwareType(Long softwareTypeId) {
         if (softwareTypeId == null) {
-            throw new IllegalArgumentException("Standard must select a software type");
+            throw new IllegalArgumentException("标准必须选择软件类型");
         }
         return softwareTypeService.get(softwareTypeId);
     }
@@ -209,11 +295,11 @@ public class StandardDocumentService {
 
     private StandardDocument resolveRelatedStandard(Long standardDocumentId) {
         if (standardDocumentId == null) {
-            throw new IllegalArgumentException("Document must be linked to a standard");
+            throw new IllegalArgumentException("文档必须关联标准");
         }
         StandardDocument standard = get(standardDocumentId);
         if (!"STANDARD".equals(standard.getDocumentType())) {
-            throw new IllegalArgumentException("Linked document must be a standard");
+            throw new IllegalArgumentException("关联的文档必须是标准类型");
         }
         return standard;
     }

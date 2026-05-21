@@ -42,6 +42,9 @@ public class StandardParameter {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Column(name = "deployment_standard", nullable = false)
+    private boolean deploymentStandard = false;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -122,6 +125,14 @@ public class StandardParameter {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public boolean isDeploymentStandard() {
+        return deploymentStandard;
+    }
+
+    public void setDeploymentStandard(boolean deploymentStandard) {
+        this.deploymentStandard = deploymentStandard;
     }
 
     public LocalDateTime getCreatedAt() {

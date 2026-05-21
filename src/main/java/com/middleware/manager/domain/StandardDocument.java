@@ -28,6 +28,12 @@ public class StandardDocument {
     @Column(nullable = false, length = 40)
     private String status = "DRAFT";
 
+    @Column(length = 20)
+    private String version;
+
+    @Column(name = "pending_review_record_id")
+    private Long pendingReviewRecordId;
+
     @Column(length = 500)
     private String summary;
 
@@ -58,6 +64,20 @@ public class StandardDocument {
     @Lob
     @Column(name = "rendered_content")
     private String renderedContent;
+
+    @Lob
+    @Column(name = "previous_content")
+    private String previousContent;
+
+    @Column(length = 1000)
+    private String reviewComment;
+
+    private LocalDateTime submittedAt;
+
+    private LocalDateTime reviewedAt;
+
+    @Column(length = 80)
+    private String reviewedBy;
 
     private LocalDateTime publishedAt;
 
@@ -109,6 +129,22 @@ public class StandardDocument {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getVersion() {
+        return version;
+    }
+
+    public void setVersion(String version) {
+        this.version = version;
+    }
+
+    public Long getPendingReviewRecordId() {
+        return pendingReviewRecordId;
+    }
+
+    public void setPendingReviewRecordId(Long pendingReviewRecordId) {
+        this.pendingReviewRecordId = pendingReviewRecordId;
     }
 
     public String getSummary() {
@@ -192,6 +228,46 @@ public class StandardDocument {
 
     public void setPublishedAt(LocalDateTime publishedAt) {
         this.publishedAt = publishedAt;
+    }
+
+    public String getPreviousContent() {
+        return previousContent;
+    }
+
+    public void setPreviousContent(String previousContent) {
+        this.previousContent = previousContent;
+    }
+
+    public String getReviewComment() {
+        return reviewComment;
+    }
+
+    public void setReviewComment(String reviewComment) {
+        this.reviewComment = reviewComment;
+    }
+
+    public LocalDateTime getSubmittedAt() {
+        return submittedAt;
+    }
+
+    public void setSubmittedAt(LocalDateTime submittedAt) {
+        this.submittedAt = submittedAt;
+    }
+
+    public LocalDateTime getReviewedAt() {
+        return reviewedAt;
+    }
+
+    public void setReviewedAt(LocalDateTime reviewedAt) {
+        this.reviewedAt = reviewedAt;
+    }
+
+    public String getReviewedBy() {
+        return reviewedBy;
+    }
+
+    public void setReviewedBy(String reviewedBy) {
+        this.reviewedBy = reviewedBy;
     }
 
     public LocalDateTime getCreatedAt() {

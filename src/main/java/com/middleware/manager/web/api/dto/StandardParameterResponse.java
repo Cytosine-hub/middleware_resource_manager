@@ -13,6 +13,7 @@ public class StandardParameterResponse {
     private String category;
     private String description;
     private boolean active;
+    private boolean deploymentStandard;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -26,6 +27,7 @@ public class StandardParameterResponse {
         response.setCategory(parameter.getCategory());
         response.setDescription(parameter.getDescription());
         response.setActive(parameter.isActive());
+        response.setDeploymentStandard(parameter.isDeploymentStandard());
         response.setCreatedAt(parameter.getCreatedAt());
         response.setUpdatedAt(parameter.getUpdatedAt());
         return response;
@@ -47,6 +49,8 @@ public class StandardParameterResponse {
     public void setDescription(String description) { this.description = description; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+    public boolean isDeploymentStandard() { return deploymentStandard; }
+    public void setDeploymentStandard(boolean deploymentStandard) { this.deploymentStandard = deploymentStandard; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

@@ -16,7 +16,7 @@ spring:
     url: jdbc:mysql://${APP_DB_HOST:127.0.0.1}:${APP_DB_PORT:3306}/${APP_DB_NAME:middleware_resource_manager}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${APP_DB_USERNAME:root}
-    password: ${APP_DB_PASSWORD:YOUR_DB_PASSWORD}
+    password: ${APP_DB_PASSWORD:OlgDqdJfehRwBUITqFpi}
     hikari:
       initialization-fail-timeout: -1
       minimum-idle: 2

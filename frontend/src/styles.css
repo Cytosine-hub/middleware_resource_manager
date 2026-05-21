@@ -1268,7 +1268,14 @@ label {
 }
 
 .document-item {
-  grid-template-columns: minmax(260px, 1fr) auto auto auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.document-item > div {
+  flex: 1;
+  min-width: 200px;
 }
 
 .parameter-item p {
@@ -1484,8 +1491,12 @@ th {
   width: 9%;
 }
 
+.resource-standard {
+  width: 10%;
+}
+
 .resource-file {
-  width: 27%;
+  width: 17%;
 }
 
 .resource-downloads {
@@ -1513,6 +1524,71 @@ td.row-actions {
 .status.off {
   color: #795121;
   background: #fff1d7;
+}
+
+.status.draft {
+  color: #526071;
+  background: #e8ecf1;
+}
+
+.status.pending-review {
+  color: #8b5e00;
+  background: #fff3cd;
+}
+
+.status.published {
+  color: #16653a;
+  background: #dff4e8;
+}
+
+.status.modifying {
+  color: #1e40af;
+  background: #dbeafe;
+}
+
+.review-hint {
+  color: #b45309;
+  cursor: help;
+  font-size: 12px;
+}
+
+.diff-view {
+  max-height: 60vh;
+  overflow: auto;
+  background: #1e1e2e;
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.diff-content {
+  font-family: Consolas, "SFMono-Regular", "Fira Code", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #cdd6f4;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.review-meta {
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.review-meta p {
+  margin: 4px 0;
+  font-size: 13px;
+  color: #475569;
+}
+
+.review-actions-panel {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid #e3e9f1;
+  border-radius: 8px;
+  background: #fff;
 }
 
 .pagination {
@@ -1923,12 +1999,15 @@ td.row-actions {
 }
 .standards-table .table-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+  flex-wrap: wrap;
+  overflow: visible;
+  white-space: normal;
 }
 .standards-table .table-actions button {
-  font-size: 12px;
-  min-height: 26px;
-  padding: 0 10px;
+  font-size: 11px;
+  min-height: 24px;
+  padding: 0 8px;
 }
 
 /* ========== 标准文档分类 Tab ========== */

@@ -10,4 +10,5 @@ public interface StandardDocumentRepository extends JpaRepository<StandardDocume
     List<StandardDocument> findByDocumentTypeAndStatusOrderByPublishedAtDescUpdatedAtDesc(String documentType, String status);
     List<StandardDocument> findByRelatedStandardDocumentIdAndStatusOrderByPublishedAtDescUpdatedAtDesc(Long relatedStandardDocumentId, String status);
     List<StandardDocument> findByStatusOrderByCategoryAscPublishedAtDesc(String status);
+    List<StandardDocument> findByStatusInOrderByUpdatedAtDesc(List<String> statuses);
 }

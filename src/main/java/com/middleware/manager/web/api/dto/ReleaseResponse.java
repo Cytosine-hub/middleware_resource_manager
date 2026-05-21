@@ -24,6 +24,8 @@ public class ReleaseResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String downloadUrl;
+    private Long standardDocumentId;
+    private String standardDocumentTitle;
 
     public static ReleaseResponse from(ReleaseAsset asset) {
         ReleaseResponse response = new ReleaseResponse();
@@ -47,6 +49,7 @@ public class ReleaseResponse {
         response.setCreatedAt(asset.getCreatedAt());
         response.setUpdatedAt(asset.getUpdatedAt());
         response.setDownloadUrl("/files/" + asset.getDownloadToken());
+        response.setStandardDocumentId(asset.getStandardDocumentId());
         return response;
     }
 
@@ -193,4 +196,9 @@ public class ReleaseResponse {
     public void setDownloadUrl(String downloadUrl) {
         this.downloadUrl = downloadUrl;
     }
+
+    public Long getStandardDocumentId() { return standardDocumentId; }
+    public void setStandardDocumentId(Long standardDocumentId) { this.standardDocumentId = standardDocumentId; }
+    public String getStandardDocumentTitle() { return standardDocumentTitle; }
+    public void setStandardDocumentTitle(String standardDocumentTitle) { this.standardDocumentTitle = standardDocumentTitle; }
 }

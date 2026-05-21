@@ -1,0 +1,147 @@
+package com.middleware.manager.service;
+
+import com.middleware.manager.domain.ReviewRecord;
+import com.middleware.manager.domain.StandardDocument;
+import com.middleware.manager.repository.ReviewRecordRepository;
+import com.middleware.manager.security.PermissionService;
+import com.middleware.manager.web.api.dto.ReviewResponse;
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+public class ReviewService {
+    private final ReviewRecordRepository repository;
+    private final StandardDocumentService documentService;
+    private final PermissionService permissionService;
+
+    public ReviewService(ReviewRecordRepository repository,
+                         StandardDocumentService documentService,
+                         PermissionService permissionService) {
+        this.repository = repository;
+        this.documentService = documentService;
+        this.permissionService = permissionService;
+    }
+
+    public List<ReviewResponse> listReviews(Authentication authentication) {
+        boolean isAdmin = permissionService.isAdmin(authentication);
+        List<ReviewRecord> records;
+        if (isAdmin) {
+            records = repository.findAllByOrderBySubmittedAtDesc();
+        } else {
+            records = repository.findBySubmitterUsernameOrderBySubmittedAtDesc(authentication.getName());
+        }
+        return records.stream().map(ReviewResponse::from).collect(Collectors.toList());
+    }
+
+    public ReviewResponse getReviewDetail(Long id) {
+        ReviewRecord record = getRecord(id);
+        ReviewResponse response = ReviewResponse.from(record);
+        response.setDiff(computeDiff(record));
+        return response;
+    }
+
+    @Transactional
+    public ReviewResponse approve(Long id, String reviewer, String comment) {
+        ReviewRecord record = getRecord(id);
+        if (!"PENDING".equals(record.getStatus())) {
+            throw new IllegalStateException("该审核记录不是待审核状态");
+        }
+        record.setStatus("APPROVED");
+        record.setReviewerUsername(reviewer);
+        record.setReviewedAt(LocalDateTime.now());
+        record.setReviewComment(comment);
+
+        // 更新文档状态
+        StandardDocument doc = documentService.get(record.getDocumentId());
+        doc.setPendingReviewRecordId(null);
+        if (doc.getPreviousContent() == null) {
+            // 首次发布
+            doc.setVersion(VersionManager.firstPublishVersion());
+            doc.setStatus("PUBLISHED");
+            doc.setPublishedAt(LocalDateTime.now());
+        } else {
+            // 从修改态提交的
+            doc.setVersion(VersionManager.toPublishedVersion(doc.getVersion()));
+            doc.setStatus("PUBLISHED");
+            doc.setPublishedAt(LocalDateTime.now());
+        }
+        doc.setPreviousContent(record.getCurrentContent());
+        doc.setReviewedAt(LocalDateTime.now());
+        doc.setReviewedBy(reviewer);
+        doc.setReviewComment(comment);
+        documentService.save(doc);
+
+        repository.save(record);
+        return ReviewResponse.from(record);
+    }
+
+    @Transactional
+    public ReviewResponse reject(Long id, String reviewer, String comment) {
+        ReviewRecord record = getRecord(id);
+        if (!"PENDING".equals(record.getStatus())) {
+            throw new IllegalStateException("该审核记录不是待审核状态");
+        }
+        record.setStatus("REJECTED");
+        record.setReviewerUsername(reviewer);
+        record.setReviewedAt(LocalDateTime.now());
+        record.setReviewComment(comment);
+
+        // 更新文档：清除待审核记录ID，回到原状态
+        StandardDocument doc = documentService.get(record.getDocumentId());
+        doc.setPendingReviewRecordId(null);
+        doc.setReviewedAt(LocalDateTime.now());
+        doc.setReviewedBy(reviewer);
+        doc.setReviewComment(comment);
+        documentService.save(doc);
+
+        repository.save(record);
+        return ReviewResponse.from(record);
+    }
+
+    public String computeDiff(ReviewRecord record) {
+        String current = record.getCurrentContent();
+        String previous = record.getPreviousContent();
+        if (previous == null) {
+            return "（首次提交，无历史版本对比）\n\n" + truncate(current, 2000);
+        }
+        return computeLineDiff(previous, current);
+    }
+
+    private ReviewRecord getRecord(Long id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("审核记录不存在"));
+    }
+
+    private String computeLineDiff(String oldText, String newText) {
+        List<String> oldLines = Arrays.asList(oldText.split("\\n", -1));
+        List<String> newLines = Arrays.asList(newText.split("\\n", -1));
+        StringBuilder sb = new StringBuilder();
+        int maxLen = Math.max(oldLines.size(), newLines.size());
+        for (int i = 0; i < maxLen; i++) {
+            String oldLine = i < oldLines.size() ? oldLines.get(i) : null;
+            String newLine = i < newLines.size() ? newLines.get(i) : null;
+            if (oldLine == null) {
+                sb.append("+ ").append(newLine).append("\n");
+            } else if (newLine == null) {
+                sb.append("- ").append(oldLine).append("\n");
+            } else if (!oldLine.equals(newLine)) {
+                sb.append("- ").append(oldLine).append("\n");
+                sb.append("+ ").append(newLine).append("\n");
+            } else {
+                sb.append("  ").append(oldLine).append("\n");
+            }
+        }
+        return sb.toString();
+    }
+
+    private String truncate(String s, int max) {
+        if (s == null) return "";
+        return s.length() <= max ? s : s.substring(0, max) + "\n...";
+    }
+}

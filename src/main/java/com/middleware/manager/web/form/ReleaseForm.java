@@ -30,6 +30,8 @@ public class ReleaseForm {
 
     private boolean published;
 
+    private Long standardDocumentId;
+
     private MultipartFile file;
 
     public Long getSoftwareTypeId() {
@@ -86,6 +88,14 @@ public class ReleaseForm {
 
     public void setPublished(boolean published) {
         this.published = published;
+    }
+
+    public Long getStandardDocumentId() {
+        return standardDocumentId;
+    }
+
+    public void setStandardDocumentId(Long standardDocumentId) {
+        this.standardDocumentId = standardDocumentId;
     }
 
     public MultipartFile getFile() {

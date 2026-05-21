@@ -235,6 +235,7 @@ public class ReleaseService {
         entity.setDescription(trimToNull(form.getDescription()));
         entity.setReleasedAt(form.getReleasedAt());
         entity.setPublished(form.isPublished());
+        entity.setStandardDocumentId(form.getStandardDocumentId());
     }
 
     private SoftwareType resolveSoftwareType(Long softwareTypeId) {

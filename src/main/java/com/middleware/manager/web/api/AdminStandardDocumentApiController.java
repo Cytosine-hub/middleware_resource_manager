@@ -2,6 +2,7 @@ package com.middleware.manager.web.api;
 
 import com.middleware.manager.domain.StandardDocument;
 import com.middleware.manager.security.PermissionService;
+import com.middleware.manager.service.AdminAccountService;
 import com.middleware.manager.service.StandardDocumentService;
 import com.middleware.manager.web.api.dto.StandardDocumentRequest;
 import com.middleware.manager.web.api.dto.StandardDocumentResponse;
@@ -27,10 +28,14 @@ import java.util.stream.Collectors;
 public class AdminStandardDocumentApiController {
     private final StandardDocumentService service;
     private final PermissionService permissionService;
+    private final AdminAccountService adminAccountService;
 
-    public AdminStandardDocumentApiController(StandardDocumentService service, PermissionService permissionService) {
+    public AdminStandardDocumentApiController(StandardDocumentService service,
+                                              PermissionService permissionService,
+                                              AdminAccountService adminAccountService) {
         this.service = service;
         this.permissionService = permissionService;
+        this.adminAccountService = adminAccountService;
     }
 
     @GetMapping
@@ -64,17 +69,25 @@ public class AdminStandardDocumentApiController {
         return StandardDocumentResponse.from(document, service.render(document));
     }
 
-    @PostMapping("/{id}/publish")
-    public StandardDocumentResponse publish(@PathVariable Long id, Authentication authentication) {
+    @PostMapping("/{id}/submit-review")
+    public StandardDocumentResponse submitForReview(@PathVariable Long id, Authentication authentication) {
         checkDocAccess(id, authentication);
-        StandardDocument document = service.publish(id);
+        service.submitForReview(id, authentication.getName(), getDisplayName(authentication));
+        StandardDocument document = service.get(id);
         return StandardDocumentResponse.from(document, service.render(document));
     }
 
-    @PostMapping("/{id}/unpublish")
-    public StandardDocumentResponse unpublish(@PathVariable Long id, Authentication authentication) {
+    @PostMapping("/{id}/start-modify")
+    public StandardDocumentResponse startModify(@PathVariable Long id, Authentication authentication) {
         checkDocAccess(id, authentication);
-        StandardDocument document = service.unpublish(id);
+        StandardDocument document = service.startModify(id);
+        return StandardDocumentResponse.from(document, service.render(document));
+    }
+
+    @PostMapping("/{id}/cancel-modify")
+    public StandardDocumentResponse cancelModify(@PathVariable Long id, Authentication authentication) {
+        checkDocAccess(id, authentication);
+        StandardDocument document = service.cancelModify(id);
         return StandardDocumentResponse.from(document, service.render(document));
     }
 
@@ -90,5 +103,9 @@ public class AdminStandardDocumentApiController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权操作该分类文档");
         }
         return doc;
+    }
+
+    private String getDisplayName(Authentication authentication) {
+        return adminAccountService.getDisplayNameByUsername(authentication.getName());
     }
 }

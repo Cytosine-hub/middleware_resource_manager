@@ -353,8 +353,9 @@
               <nav class="side-nav" aria-label="Admin">
                 <button :class="{ active: adminSection === 'files' }" @click="switchAdminSection('files')">文件管理</button>
                 <button :class="{ active: adminSection === 'types' }" @click="switchAdminSection('types')">类型管理</button>
-                <button :class="{ active: adminSection === 'standardPublish' }" @click="switchAdminSection('standardPublish')">标准发布</button>
+                <button :class="{ active: adminSection === 'standardPublish' }" @click="switchAdminSection('standardPublish')">参数标准</button>
                 <button :class="{ active: adminSection === 'documentMaintenance' }" @click="switchAdminSection('documentMaintenance')">标准文档</button>
+                <button :class="{ active: adminSection === 'reviews' }" @click="switchAdminSection('reviews')">审核管理</button>
                 <button v-if="isSysAdmin" :class="{ active: adminSection === 'users' }" @click="switchAdminSection('users')">用户管理</button>
               </nav>
               <div class="sidebar-actions">
@@ -431,6 +432,7 @@
                         <col class="resource-version" />
                         <col class="resource-platform" />
                         <col class="resource-status" />
+                        <col class="resource-standard" />
                         <col class="resource-file" />
                         <col class="resource-downloads" />
                         <col class="resource-actions" />
@@ -441,6 +443,7 @@
                           <th>版本</th>
                           <th>平台</th>
                           <th>状态</th>
+                          <th>关联标准</th>
                           <th>文件</th>
                           <th>下载</th>
                           <th>操作</th>
@@ -452,6 +455,7 @@
                           <td :title="release.version">{{ release.version }}</td>
                           <td :title="release.platform || '-'">{{ release.platform || '-' }}</td>
                           <td><span :class="['status', release.published ? 'ok' : 'off']">{{ release.published ? '已发布' : '未发布' }}</span></td>
+                          <td :title="release.standardDocumentId ? getStandardLabel(release.standardDocumentId) : '-'">{{ release.standardDocumentId ? getStandardLabel(release.standardDocumentId) : '-' }}</td>
                           <td :title="release.originalFileName">{{ release.originalFileName }}</td>
                           <td>{{ release.downloadCount }}</td>
                           <td class="row-actions">
@@ -517,7 +521,8 @@
                           <th>名称</th>
                           <th>软件类型</th>
                           <th>版本</th>
-                          <th>标准版本</th>
+                          <th>管理版本</th>
+                          <th>状态</th>
                           <th>编码</th>
                           <th>操作</th>
                         </tr>
@@ -529,16 +534,20 @@
                           </td>
                           <td>{{ doc.category || '-' }}</td>
                           <td>{{ doc.softwareVersion || '-' }}</td>
-                          <td>{{ doc.standardVersion || '-' }}</td>
+                          <td>{{ doc.version || '-' }}</td>
+                          <td><span :class="['status', doc._statusClass || statusClass(doc.status)]">{{ doc.statusLabel || statusLabel(doc.status) }}</span></td>
                           <td>{{ doc.code || '-' }}</td>
                           <td class="table-actions">
                             <button class="ghost" @click="openStandardDetail(doc)">详情</button>
-                            <button class="ghost" @click="openEditStandardDialog(doc)">修改</button>
-                            <button class="ghost" @click="toggleDocumentPublish(doc)">{{ doc.status === 'PUBLISHED' ? '下架' : '发布' }}</button>
+                            <button v-if="doc.canEdit" class="ghost" @click="openEditStandardDialog(doc)">编辑</button>
+                            <button v-if="doc.availableActions?.includes('submit-review')" class="ghost" @click="submitForReview(doc)">提交审核</button>
+                            <button v-if="doc.availableActions?.includes('start-modify')" class="ghost" @click="startModify(doc)">开始修改</button>
+                            <button v-if="doc.availableActions?.includes('cancel-modify')" class="ghost" @click="cancelModify(doc)">取消修改</button>
+                            <button v-if="doc.availableActions?.includes('delete')" class="ghost danger" @click="confirmDeleteDoc(doc)">删除</button>
                           </td>
                         </tr>
                         <tr v-if="filteredStandardDocuments.length === 0">
-                          <td colspan="6" class="empty-state">暂无标准记录</td>
+                          <td colspan="7" class="empty-state">暂无标准记录</td>
                         </tr>
                       </tbody>
                     </table>
@@ -554,7 +563,7 @@
                     </div>
                     <div class="admin-actions">
                       <button type="button" class="ghost" @click="backToStandardList()">返回列表</button>
-                      <button type="button" @click="openCreateParameterDialog()">新增参数</button>
+                      <button v-if="selectedStandard.status !== 'PUBLISHED'" type="button" @click="openCreateParameterDialog()">新增参数</button>
                     </div>
                   </div>
                   <div class="list-panel type-list-panel">
@@ -562,16 +571,46 @@
                       <article v-for="param in selectedStandardParameters" :key="param.id" class="parameter-item">
                         <div>
                           <strong>{{ param.code }}</strong>
+                          <span v-if="param.deploymentStandard" class="status ok" style="margin-left:8px;font-size:12px;">部署标准</span>
                           <p>{{ param.name }} = {{ param.value }}</p>
                           <p>{{ param.category || '未分类' }} · {{ param.description || '暂无说明' }}</p>
                         </div>
                         <button class="ghost" @click="copyParameter(param)">复制占位符</button>
-                        <button class="ghost" @click="openEditParameterDialog(param)">编辑</button>
+                        <button v-if="selectedStandard.status !== 'PUBLISHED'" class="ghost" @click="openEditParameterDialog(param)">编辑</button>
                       </article>
                       <p v-if="selectedStandardParameters.length === 0" class="empty-state">该标准暂未配置参数。</p>
                     </div>
                   </div>
                 </template>
+              </section>
+
+              <section v-else-if="adminSection === 'reviews'" class="utility-panel type-panel">
+                <div class="list-panel type-list-panel">
+                  <div class="filters document-filters">
+                    <select v-model="reviewFilters.status" @change="applyReviewFilters()">
+                      <option value="">全部状态</option>
+                      <option value="PENDING">待审核</option>
+                      <option value="APPROVED">已通过</option>
+                      <option value="REJECTED">已驳回</option>
+                    </select>
+                  </div>
+                  <div class="type-list">
+                    <article v-for="record in pagedReviews" :key="record.id" class="parameter-item document-item">
+                      <div>
+                        <strong>{{ record.documentTitle }}</strong>
+                        <p>
+                          <span :class="['status', reviewStatusClass(record.status)]">{{ record.statusLabel }}</span>
+                          V{{ record.documentVersion || '-' }} · {{ record.category || '-' }} / {{ record.software || '-' }}
+                        </p>
+                        <p>提交人：{{ record.submitterDisplayName || record.submitterUsername }} · {{ formatTime(record.submittedAt) }}</p>
+                      </div>
+                      <button class="ghost" @click="openReviewDetail(record)">查看</button>
+                      <button v-if="record.status === 'PENDING' && isSysAdmin" class="ghost" @click="openReviewDetail(record)">审核</button>
+                    </article>
+                    <p v-if="pagedReviews.length === 0" class="empty-state">暂无审核记录。</p>
+                  </div>
+                  <Pagination :page="reviewPageInfo" @change="changeReviewPage" />
+                </div>
               </section>
 
               <section v-else-if="adminSection === 'users'" class="utility-panel type-panel">
@@ -601,7 +640,9 @@
                   <select v-model="maintenanceDocumentFilters.status" @change="applyMaintenanceDocumentFilters()">
                     <option value="">全部状态</option>
                     <option value="DRAFT">草稿</option>
+                    <option value="PENDING_REVIEW">审核中</option>
                     <option value="PUBLISHED">已发布</option>
+                    <option value="MODIFYING">修改中</option>
                   </select>
                   <input v-model.trim="maintenanceDocumentFilters.keyword" placeholder="搜索标题/摘要" @keyup.enter="applyMaintenanceDocumentFilters()" />
                   <button type="button" @click="applyMaintenanceDocumentFilters()">查询</button>
@@ -611,14 +652,21 @@
                     <article v-for="doc in pagedMaintenanceDocuments" :key="doc.id" class="parameter-item document-item">
                       <div>
                         <strong>{{ doc.title }}</strong>
-                        <p>{{ doc.status === 'PUBLISHED' ? '已发布' : '草稿' }} · {{ doc.documentType === 'ARTICLE' ? '文章' : '手册' }}</p>
+                        <p>
+                          <span :class="['status', doc._statusClass || statusClass(doc.status)]">{{ doc.statusLabel || statusLabel(doc.status) }}</span>
+                          V{{ doc.version || '-' }} · {{ doc.documentType === 'ARTICLE' ? '文章' : '手册' }}
+                          <span v-if="doc.reviewComment" class="review-hint" :title="doc.reviewComment">（审核意见）</span>
+                        </p>
                         <p>关联标准：{{ getStandardLabel(doc.relatedStandardDocumentId) }}</p>
                       </div>
                       <button class="ghost" @click="previewDocument(doc)">预览</button>
-                      <button class="ghost" @click="goDocumentEditorEdit(doc.id)">编辑</button>
-                      <button class="ghost" @click="toggleDocumentPublish(doc)">{{ doc.status === 'PUBLISHED' ? '下架' : '发布' }}</button>
+                      <button v-if="doc.canEdit" class="ghost" @click="goDocumentEditorEdit(doc.id)">编辑</button>
+                      <button v-if="doc.availableActions?.includes('submit-review')" class="ghost" @click="submitForReview(doc)">提交审核</button>
+                      <button v-if="doc.availableActions?.includes('start-modify')" class="ghost" @click="startModify(doc)">开始修改</button>
+                      <button v-if="doc.availableActions?.includes('cancel-modify')" class="ghost" @click="cancelModify(doc)">取消修改</button>
+                      <button v-if="doc.availableActions?.includes('delete')" class="ghost danger" @click="confirmDeleteDoc(doc)">删除</button>
                     </article>
-                    <p v-if="pagedMaintenanceDocuments.length === 0" class="empty-state">暂无文档，点击“新增文档”创建手册或文章。</p>
+                    <p v-if="pagedMaintenanceDocuments.length === 0" class="empty-state">暂无文档，点击"新增文档"创建手册或文章。</p>
                   </div>
                   <Pagination :page="maintenanceDocumentPage" @change="changeMaintenanceDocumentPage" />
                 </div>
@@ -653,6 +701,12 @@
           <label>平台<input v-model.trim="releaseForm.platform" maxlength="60" /></label>
           <label>发布日期<input v-model="releaseForm.releasedAt" type="date" /></label>
           <label class="checkline"><input v-model="releaseForm.published" type="checkbox" />发布</label>
+          <label>关联标准
+            <select v-model="releaseForm.standardDocumentId">
+              <option :value="null">不关联</option>
+              <option v-for="doc in standardDocumentOptions" :key="doc.id" :value="doc.id">{{ getStandardLabel(doc.id) }}</option>
+            </select>
+          </label>
           <label class="file-field">安装包
             <span class="file-control">
               <input type="file" @change="handleReleaseFileChange" />
@@ -795,6 +849,7 @@
           <label>分类<input v-model.trim="parameterForm.category" maxlength="60" /></label>
           <label>说明<textarea v-model.trim="parameterForm.description" maxlength="500" /></label>
           <label class="checkline"><input v-model="parameterForm.active" type="checkbox" />启用</label>
+          <label class="checkline"><input v-model="parameterForm.deploymentStandard" type="checkbox" />是否为部署标准</label>
         </div>
         <div class="form-actions">
           <button type="submit">保存</button>
@@ -932,6 +987,38 @@
       </article>
     </div>
 
+    <div v-if="selectedReview" class="modal-backdrop" @click.self="closeReviewDetail()">
+      <article class="modal-panel wide-modal">
+        <div class="panel-title">
+          <h3>{{ selectedReview.documentTitle }}</h3>
+          <button type="button" class="ghost" @click="closeReviewDetail()">关闭</button>
+        </div>
+        <p class="muted" style="margin: 0 0 12px">
+          <span :class="['status', reviewStatusClass(selectedReview.status)]">{{ selectedReview.statusLabel }}</span>
+          V{{ selectedReview.documentVersion || '-' }} · {{ selectedReview.category || '-' }} / {{ selectedReview.software || '-' }}
+        </p>
+        <div class="review-meta">
+          <p>提交人：{{ selectedReview.submitterDisplayName || selectedReview.submitterUsername }} · 提交时间：{{ formatTime(selectedReview.submittedAt) }}</p>
+          <p v-if="selectedReview.reviewerUsername">审核人：{{ selectedReview.reviewerUsername }} · 审核时间：{{ formatTime(selectedReview.reviewedAt) }}</p>
+          <p v-if="selectedReview.reviewComment">审核意见：{{ selectedReview.reviewComment }}</p>
+        </div>
+        <div class="diff-view">
+          <h4>版本差异对比</h4>
+          <pre class="diff-content" v-text="selectedReviewDiff"></pre>
+        </div>
+        <div v-if="selectedReview.status === 'PENDING' && isSysAdmin" class="review-actions-panel">
+          <div class="form-grid single">
+            <label>审核意见<textarea v-model.trim="reviewComment" maxlength="1000" placeholder="请输入审核意见（可选）" /></label>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="ghost" @click="closeReviewDetail()">取消</button>
+            <button type="button" class="ghost danger" @click="reviewReject(selectedReview)">驳回</button>
+            <button type="button" @click="reviewApprove(selectedReview)">审核通过</button>
+          </div>
+        </div>
+      </article>
+    </div>
+
     <p v-if="notice" :class="['notice', notice.type]">{{ notice.message }}</p>
   </div>
 </template>
@@ -998,6 +1085,18 @@ const showParameterDialog = ref(false)
 const selectedStandard = ref(null)
 const deleteTarget = ref(null)
 const deletingRelease = ref(false)
+const showReviewDialog = ref(false)
+const reviewTarget = ref(null)
+const reviewAction = ref('approve')
+const reviewComment = ref('')
+const showDiffDialog = ref(false)
+const diffTarget = ref(null)
+const diffContent = ref('')
+const allReviews = ref([])
+const selectedReview = ref(null)
+const selectedReviewDiff = ref('')
+const reviewFilters = reactive({ status: '' })
+const reviewPage = reactive({ page: 0, size: 10 })
 
 const publicFilters = reactive({ keyword: '', platform: '', page: 0, size: 12 })
 const adminFilters = reactive({ keyword: '', platform: '', published: '', page: 0, size: 10 })
@@ -1041,8 +1140,9 @@ const adminPublishedParam = computed(() => adminFilters.published === '' ? '' : 
 const adminSectionLabel = computed(() => {
   if (adminSection.value === 'files') return { eyebrow: 'Files', title: '文件管理' }
   if (adminSection.value === 'types') return { eyebrow: 'Types', title: '类型管理' }
-  if (adminSection.value === 'standardPublish') return { eyebrow: 'Standards', title: '标准发布' }
+  if (adminSection.value === 'standardPublish') return { eyebrow: 'Standards', title: '参数标准' }
   if (adminSection.value === 'documentMaintenance') return { eyebrow: 'Documents', title: '标准文档' }
+  if (adminSection.value === 'reviews') return { eyebrow: 'Reviews', title: '审核管理' }
   return { eyebrow: 'Admin', title: '用户管理' }
 })
 const pageTitle = computed(() => {
@@ -1284,7 +1384,7 @@ function softwareTypesByCategory(category, onlyActive = false) {
 }
 
 function defaultReleaseForm() {
-  return { id: null, category: '', softwareTypeId: '', middlewareName: '', version: '', platform: '', description: '', releasedAt: todayString(), published: false, file: null, originalFileName: '' }
+  return { id: null, category: '', softwareTypeId: '', middlewareName: '', version: '', platform: '', description: '', releasedAt: todayString(), published: false, file: null, originalFileName: '', standardDocumentId: null }
 }
 
 function defaultImportForm() {
@@ -1309,7 +1409,7 @@ function defaultStandardForm() {
 }
 
 function defaultParameterForm() {
-  return { id: null, standardDocumentId: null, code: '', name: '', value: '', category: '', description: '', active: true }
+  return { id: null, standardDocumentId: null, code: '', name: '', value: '', category: '', description: '', active: true, deploymentStandard: false }
 }
 
 function parseRoute() {
@@ -1447,7 +1547,8 @@ async function loadStandardModule() {
 }
 
 async function loadStandardDocuments() {
-  standardDocuments.value = await request('/api/admin/standard-documents')
+  const data = await request('/api/admin/standard-documents')
+  standardDocuments.value = Array.isArray(data) ? data.map(normalizeDoc) : []
   if (selectedStandard.value) {
     selectedStandard.value = standardDocuments.value.find(doc => doc.id === selectedStandard.value.id) || null
   }
@@ -1671,6 +1772,8 @@ function switchAdminSection(section) {
     loadStandardModule()
   } else if (section === 'users') {
     loadUsers()
+  } else if (section === 'reviews') {
+    loadReviews()
   } else {
     loadAdmin()
     loadSoftwareTypes()
@@ -1712,7 +1815,8 @@ function startEdit(release) {
     releasedAt: release.releasedAt || '',
     published: release.published,
     file: null,
-    originalFileName: release.originalFileName || ''
+    originalFileName: release.originalFileName || '',
+    standardDocumentId: release.standardDocumentId || null
   })
   editing.value = true
 }
@@ -1738,7 +1842,7 @@ async function saveRelease() {
     return
   }
   releaseForm.middlewareName = selectedType.name
-  for (const key of ['middlewareName', 'version', 'platform', 'description', 'releasedAt', 'published']) {
+  for (const key of ['middlewareName', 'version', 'platform', 'description', 'releasedAt', 'published', 'standardDocumentId']) {
     formData.append(key, releaseForm[key] ?? '')
   }
   formData.append('softwareTypeId', releaseForm.softwareTypeId)
@@ -2012,15 +2116,218 @@ async function saveStandard() {
   }
 }
 
-async function toggleDocumentPublish(document) {
-  const action = document.status === 'PUBLISHED' ? 'unpublish' : 'publish'
-  const actionText = action === 'publish' ? '发布' : '下架'
+function statusLabel(status) {
+  const map = { DRAFT: '草稿', PENDING_REVIEW: '审核中', PUBLISHED: '已发布', MODIFYING: '修改中' }
+  return map[status] || status
+}
+
+function statusClass(status) {
+  const map = { DRAFT: 'draft', PENDING_REVIEW: 'pending-review', PUBLISHED: 'published', MODIFYING: 'modifying' }
+  return map[status] || 'off'
+}
+
+const actionMap = {
+  DRAFT: ['submit-review', 'edit', 'delete'],
+  PUBLISHED: ['start-modify'],
+  MODIFYING: ['submit-review', 'edit', 'cancel-modify', 'delete']
+}
+
+function normalizeDoc(doc) {
+  const status = doc.status || 'DRAFT'
+  doc.status = status
+  const underReview = doc.pendingReviewRecordId != null
+  if (!doc.statusLabel || underReview) doc.statusLabel = underReview ? '审核中' : statusLabel(status)
+  if (!doc._statusClass || underReview) doc._statusClass = underReview ? 'pending-review' : statusClass(status)
+  if (doc.canEdit == null) {
+    doc.canEdit = !underReview && (status === 'DRAFT' || status === 'MODIFYING')
+  }
+  if (!Array.isArray(doc.availableActions) || doc.availableActions.length === 0) {
+    doc.availableActions = underReview ? [] : (actionMap[status] || [])
+  }
+  if (doc.hasDiff == null) doc.hasDiff = false
+  return doc
+}
+
+async function submitForReview(doc) {
   try {
-    await request(`/api/admin/standard-documents/${document.id}/${action}`, { method: 'POST' })
-    notify(`文档已${actionText}`, 'success')
+    await request(`/api/admin/standard-documents/${doc.id}/submit-review`, { method: 'POST' })
+    notify('已提交审核', 'success')
     await loadStandardDocuments()
   } catch (error) {
-    notify(error.message || `文档${actionText}失败`, 'error')
+    notify(error.message || '提交审核失败', 'error')
+  }
+}
+
+async function startModify(doc) {
+  try {
+    await request(`/api/admin/standard-documents/${doc.id}/start-modify`, { method: 'POST' })
+    notify('已进入修改状态', 'success')
+    await loadStandardDocuments()
+  } catch (error) {
+    notify(error.message || '操作失败', 'error')
+  }
+}
+
+async function cancelModify(doc) {
+  if (!confirm(`确认取消修改「${doc.title}」？内容将恢复到上次发布版本。`)) return
+  try {
+    await request(`/api/admin/standard-documents/${doc.id}/cancel-modify`, { method: 'POST' })
+    notify('已取消修改，内容已恢复', 'success')
+    await loadStandardDocuments()
+  } catch (error) {
+    notify(error.message || '取消修改失败', 'error')
+  }
+}
+
+async function confirmDeleteDoc(doc) {
+  if (!confirm(`确认删除「${doc.title}」？此操作不可恢复。`)) return
+  try {
+    await request(`/api/admin/standard-documents/${doc.id}`, { method: 'DELETE' })
+    notify('已删除', 'success')
+    await loadStandardDocuments()
+  } catch (error) {
+    notify(error.message || '删除失败', 'error')
+  }
+}
+
+function openReviewDialog(doc, action) {
+  reviewTarget.value = doc
+  reviewAction.value = action
+  reviewComment.value = ''
+  showReviewDialog.value = true
+}
+
+function closeReviewDialog() {
+  showReviewDialog.value = false
+  reviewTarget.value = null
+}
+
+async function confirmReview() {
+  const doc = reviewTarget.value
+  if (!doc) return
+  const action = reviewAction.value
+  const actionText = action === 'approve' ? '通过' : '驳回'
+  try {
+    await request(`/api/admin/standard-documents/${doc.id}/${action}`, {
+      method: 'POST',
+      body: { comment: reviewComment.value || null }
+    })
+    notify(`文档已${actionText}`, 'success')
+    closeReviewDialog()
+    await loadStandardDocuments()
+  } catch (error) {
+    notify(error.message || `审核${actionText}失败`, 'error')
+  }
+}
+
+async function openDiffDialog(doc) {
+  diffTarget.value = doc
+  diffContent.value = '加载中...'
+  showDiffDialog.value = true
+  try {
+    diffContent.value = await request(`/api/admin/standard-documents/${doc.id}/diff`)
+  } catch (error) {
+    diffContent.value = '加载差异失败: ' + (error.message || '未知错误')
+  }
+}
+
+function closeDiffDialog() {
+  showDiffDialog.value = false
+  diffTarget.value = null
+  diffContent.value = ''
+}
+
+const filteredReviews = computed(() => {
+  const status = reviewFilters.status
+  if (!status) return allReviews.value
+  return allReviews.value.filter(r => r.status === status)
+})
+
+const reviewPageInfo = computed(() => {
+  const totalElements = filteredReviews.value.length
+  const totalPages = Math.max(Math.ceil(totalElements / reviewPage.size), 1)
+  const page = Math.min(reviewPage.page, totalPages - 1)
+  return { content: [], page, size: reviewPage.size, totalElements, totalPages, first: page <= 0, last: page >= totalPages - 1 }
+})
+
+const pagedReviews = computed(() => {
+  const start = reviewPageInfo.value.page * reviewPage.size
+  return filteredReviews.value.slice(start, start + reviewPage.size)
+})
+
+function changeReviewPage(page) {
+  reviewPage.page = Math.max(page, 0)
+}
+
+function reviewStatusClass(status) {
+  const map = { PENDING: 'pending-review', APPROVED: 'published', REJECTED: 'draft' }
+  return map[status] || 'off'
+}
+
+function formatTime(time) {
+  if (!time) return '-'
+  if (Array.isArray(time)) {
+    const [y, m, d, h, min] = time
+    return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')} ${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`
+  }
+  return String(time).replace('T', ' ').substring(0, 16)
+}
+
+async function loadReviews() {
+  try {
+    allReviews.value = await request('/api/admin/reviews')
+  } catch (error) {
+    allReviews.value = []
+  }
+}
+
+function applyReviewFilters() {
+  reviewPage.page = 0
+}
+
+async function openReviewDetail(record) {
+  try {
+    const detail = await request(`/api/admin/reviews/${record.id}`)
+    selectedReview.value = detail
+    selectedReviewDiff.value = detail.diff || '无差异信息'
+    reviewComment.value = ''
+  } catch (error) {
+    notify(error.message || '加载审核详情失败', 'error')
+  }
+}
+
+function closeReviewDetail() {
+  selectedReview.value = null
+  selectedReviewDiff.value = ''
+}
+
+async function reviewApprove(record) {
+  try {
+    await request(`/api/admin/reviews/${record.id}/approve`, {
+      method: 'POST',
+      body: { comment: reviewComment.value || null }
+    })
+    notify('审核已通过', 'success')
+    closeReviewDetail()
+    await loadReviews()
+    await loadStandardDocuments()
+  } catch (error) {
+    notify(error.message || '审核通过失败', 'error')
+  }
+}
+
+async function reviewReject(record) {
+  try {
+    await request(`/api/admin/reviews/${record.id}/reject`, {
+      method: 'POST',
+      body: { comment: reviewComment.value || null }
+    })
+    notify('已驳回', 'success')
+    closeReviewDetail()
+    await loadReviews()
+    await loadStandardDocuments()
+  } catch (error) {
+    notify(error.message || '驳回失败', 'error')
   }
 }
 
@@ -2079,7 +2386,8 @@ function openEditParameterDialog(parameter) {
     value: parameter.value,
     category: parameter.category || '',
     description: parameter.description || '',
-    active: parameter.active
+    active: parameter.active,
+    deploymentStandard: parameter.deploymentStandard || false
   })
   showParameterDialog.value = true
 }
