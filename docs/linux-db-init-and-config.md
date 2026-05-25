@@ -18,7 +18,7 @@
 - `APP_DB_PORT`，默认 `3306`
 - `APP_DB_NAME`，默认 `middleware_resource_manager`
 - `APP_DB_USERNAME`，默认 `root`
-- `APP_DB_PASSWORD`，默认 `SuNfgbZjdm-UnLZ4P4QH`
+- `APP_DB_PASSWORD`，默认 `OlgDqdJfehRwBUITqFpi`
 
 对应应用配置见 `src/main/resources/application.yml`：
 
@@ -27,16 +27,31 @@ spring:
   datasource:
     url: jdbc:mysql://${APP_DB_HOST:127.0.0.1}:${APP_DB_PORT:3306}/${APP_DB_NAME:middleware_resource_manager}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
     username: ${APP_DB_USERNAME:root}
-    password: ${APP_DB_PASSWORD:SuNfgbZjdm-UnLZ4P4QH}
+    password: ${APP_DB_PASSWORD:OlgDqdJfehRwBUITqFpi}
 ```
 
 ### 2.2 当前数据表
 
-当前业务实体只有 1 张主表：
+业务表由 JPA 自动维护（`ddl-auto: update`），首次启动自动创建：
 
-- `release_assets`
+| 表名 | 用途 |
+|------|------|
+| `release_assets` | 中间件资源文件 |
+| `software_categories` | 软件分类 |
+| `software_types` | 软件类型（属于某个分类） |
+| `parameter_standards` | 参数标准（独立实体，含版本管理） |
+| `standard_parameters` | 标准参数键值对（关联参数标准） |
+| `standard_documents` | 标准文档（手册/文章） |
+| `review_records` | 审核记录 |
+| `admin_accounts` | 管理员账号 |
+| `forum_posts` | 论坛帖子 |
+| `forum_comments` | 论坛评论 |
+| `forum_tags` | 论坛标签 |
+| `post_likes` | 帖子点赞 |
 
-该表由 JPA 自动维护，当前配置是：
+知识库相关表需手动执行 DDL（见第 4.3 节）。
+
+JPA 配置：
 
 ```yaml
 spring:
@@ -114,17 +129,22 @@ FLUSH PRIVILEGES;
 
 ### 4.3 初始化表结构
 
-当前项目不需要单独执行建表 SQL。
+业务表由 Hibernate 自动创建，无需手动执行 SQL。
 
-首次启动应用后，Hibernate 会根据实体 `ReleaseAsset` 自动创建或更新表结构。
+知识库相关表需手动执行 DDL：
+
+```bash
+mysql -u root -p middleware_resource_manager < src/main/resources/db/knowledge_ddl.sql
+```
 
 启动完成后，可以执行检查：
 
 ```sql
 USE middleware_resource_manager;
 SHOW TABLES;
-DESC release_assets;
 ```
+
+应至少看到：`release_assets`、`software_categories`、`software_types`、`parameter_standards`、`standard_parameters`、`standard_documents`、`review_records`、`admin_accounts`、`forum_posts`、`forum_comments`、`forum_tags`、`post_likes`、`knowledge_chunks`、`chat_sessions`、`chat_messages`。
 
 ## 5. 应用参数配置手册
 
@@ -142,36 +162,22 @@ export APP_DB_PASSWORD='ReplaceWithStrongPassword'
 
 ### 管理员账号参数
 
-当前后台账号来自应用配置：
+管理员账号存储在 `admin_accounts` 表中，密码使用 bcrypt 加密。
 
-```yaml
-app:
-  security:
-    admin:
-      username: admin
-      password: admin123
-```
+系统首次启动时，如果 `admin_accounts` 表为空，会自动初始化以下默认账号（密码均为 `admin123`）：
 
-建议上线时覆盖默认值：
+| 用户名 | 角色 |
+|--------|------|
+| `sysadmin` | 系统管理员 |
+| `mwadmin` | 中间件管理岗 |
+| `dbadmin` | 数据库管理岗 |
+| `hostadmin` | 主机管理岗 |
+| `netadmin` | 网络管理岗 |
+| `secadmin` | 网络安全岗 |
+| `devmgr` | 开发经理 |
+| `opsmgr` | 运维经理 |
 
-```bash
-export APP_ADMIN_USERNAME=deploy_admin
-export APP_ADMIN_PASSWORD='ReplaceWithAnotherStrongPassword'
-```
-
-注意：当前代码默认没有直接读取 `APP_ADMIN_USERNAME` / `APP_ADMIN_PASSWORD` 环境变量。
-
-如果要通过环境变量覆盖，推荐使用 Spring Boot 的宽松绑定变量名：
-
-```bash
-export APP_SECURITY_ADMIN_USERNAME=deploy_admin
-export APP_SECURITY_ADMIN_PASSWORD='ReplaceWithAnotherStrongPassword'
-```
-
-因为代码实际读取的是：
-
-- `app.security.admin.username`
-- `app.security.admin.password`
+**上线后必须立即修改所有默认密码。**
 
 ### 存储目录参数
 
@@ -294,8 +300,6 @@ export APP_DB_PORT=3306
 export APP_DB_NAME=middleware_resource_manager
 export APP_DB_USERNAME=middleware_mgr
 export APP_DB_PASSWORD='ReplaceWithStrongPassword'
-export APP_SECURITY_ADMIN_USERNAME=deploy_admin
-export APP_SECURITY_ADMIN_PASSWORD='ReplaceWithAnotherStrongPassword'
 export APP_STORAGE_LOCATION=/opt/middleware-resource-manager/storage
 export SERVER_PORT=8080
 
@@ -321,8 +325,6 @@ APP_DB_PORT=3306
 APP_DB_NAME=middleware_resource_manager
 APP_DB_USERNAME=middleware_mgr
 APP_DB_PASSWORD=ReplaceWithStrongPassword
-APP_SECURITY_ADMIN_USERNAME=deploy_admin
-APP_SECURITY_ADMIN_PASSWORD=ReplaceWithAnotherStrongPassword
 APP_STORAGE_LOCATION=/opt/middleware-resource-manager/storage
 SERVER_PORT=8080
 EOF
@@ -378,16 +380,14 @@ USE middleware_resource_manager;
 SHOW TABLES;
 ```
 
-应至少看到：
+应看到所有业务表（见 2.2 节）。
 
-- `release_assets`
-
-### 8.3 检查登录页
+### 8.3 检查前端页面
 
 浏览器访问：
 
-- `http://<server-ip>:8080/login`
-- `http://<server-ip>:8080/downloads`
+- `http://<server-ip>/#/home` — 门户首页
+- `http://<server-ip>/#/admin` — 登录后进入管理后台
 
 ### 8.4 检查上传目录
 
@@ -416,8 +416,6 @@ APP_DB_PORT
 APP_DB_NAME
 APP_DB_USERNAME
 APP_DB_PASSWORD
-APP_SECURITY_ADMIN_USERNAME
-APP_SECURITY_ADMIN_PASSWORD
 APP_STORAGE_LOCATION
 SERVER_PORT
 ```

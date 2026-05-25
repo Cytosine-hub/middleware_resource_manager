@@ -158,7 +158,11 @@ http://服务器IP/
 页面：
 
 - 门户首页：`http://服务器IP/#/home`
-- 软件下载：`http://服务器IP/#/downloads`
+- 下载中心：`http://服务器IP/#/downloads`
+- 标准发布：`http://服务器IP/#/standards`
+- 论坛：`http://服务器IP/#/forum`
+- 知识库：`http://服务器IP/#/knowledge`
+- 智能排查：`http://服务器IP/#/diagnostics`
 - 管理后台：`http://服务器IP/#/admin`
 
 接口验证：

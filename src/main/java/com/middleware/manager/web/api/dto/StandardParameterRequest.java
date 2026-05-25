@@ -1,12 +1,12 @@
 package com.middleware.manager.web.api.dto;
 
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Size;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 public class StandardParameterRequest {
-    @NotNull
     private Long standardDocumentId;
+
+    private Long parameterStandardId;
 
     @NotBlank
     @Size(max = 80)
@@ -36,6 +36,14 @@ public class StandardParameterRequest {
 
     public void setStandardDocumentId(Long standardDocumentId) {
         this.standardDocumentId = standardDocumentId;
+    }
+
+    public Long getParameterStandardId() {
+        return parameterStandardId;
+    }
+
+    public void setParameterStandardId(Long parameterStandardId) {
+        this.parameterStandardId = parameterStandardId;
     }
 
     public String getCode() {

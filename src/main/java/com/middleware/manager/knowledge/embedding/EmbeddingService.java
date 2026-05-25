@@ -1,0 +1,43 @@
+package com.middleware.manager.knowledge.embedding;
+
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Component
+public class EmbeddingService {
+
+    private static final Logger log = LoggerFactory.getLogger(EmbeddingService.class);
+    private final EmbeddingModel embeddingModel;
+
+    @Value("${app.embedding.max-chars:1500}")
+    private int maxChars;
+
+    public EmbeddingService(EmbeddingModel embeddingModel) {
+        this.embeddingModel = embeddingModel;
+    }
+
+    public float[] embed(String text) {
+        if (text.length() > maxChars) {
+            log.debug("Truncating text from {} to {} chars", text.length(), maxChars);
+            text = text.substring(0, maxChars);
+        }
+        log.debug("Embedding text({}): {}", text.length(), text.length() > 50 ? text.substring(0, 50) + "..." : text);
+        Embedding result = embeddingModel.embed(text).content();
+        return result.vector();
+    }
+
+    public List<float[]> embedBatch(List<String> texts) {
+        List<float[]> results = new ArrayList<>();
+        for (String text : texts) {
+            results.add(embed(text));
+        }
+        return results;
+    }
+}

@@ -1,6 +1,7 @@
 package com.middleware.manager.service;
 
 import com.middleware.manager.domain.StandardParameter;
+import com.middleware.manager.repository.ParameterStandardRepository;
 import com.middleware.manager.repository.StandardDocumentRepository;
 import com.middleware.manager.repository.StandardParameterRepository;
 import com.middleware.manager.web.api.dto.StandardParameterRequest;
@@ -16,18 +17,22 @@ import java.util.List;
 public class StandardParameterService {
     private final StandardParameterRepository repository;
     private final StandardDocumentRepository standardDocumentRepository;
+    private final ParameterStandardRepository parameterStandardRepository;
 
     public StandardParameterService(StandardParameterRepository repository,
-                                    StandardDocumentRepository standardDocumentRepository) {
+                                    StandardDocumentRepository standardDocumentRepository,
+                                    ParameterStandardRepository parameterStandardRepository) {
         this.repository = repository;
         this.standardDocumentRepository = standardDocumentRepository;
+        this.parameterStandardRepository = parameterStandardRepository;
     }
 
-    public List<StandardParameter> list(String keyword, String category, Boolean active, Long standardDocumentId) {
-        if (standardDocumentId == null) {
+    public List<StandardParameter> list(String keyword, String category, Boolean active,
+                                        Long standardDocumentId, Long parameterStandardId) {
+        if (standardDocumentId == null && parameterStandardId == null) {
             return Collections.emptyList();
         }
-        return repository.findAll(specification(keyword, category, active, standardDocumentId));
+        return repository.findAll(specification(keyword, category, active, standardDocumentId, parameterStandardId));
     }
 
     public List<StandardParameter> listActive() {
@@ -41,6 +46,13 @@ public class StandardParameterService {
         return repository.findByStandardDocumentIdAndActiveTrueOrderByCategoryAscCodeAsc(standardDocumentId);
     }
 
+    public List<StandardParameter> listActiveByParameterStandardId(Long parameterStandardId) {
+        if (parameterStandardId == null) {
+            return Collections.emptyList();
+        }
+        return repository.findByParameterStandardIdAndActiveTrueOrderByCategoryAscCodeAsc(parameterStandardId);
+    }
+
     public StandardParameter get(Long id) {
         return repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("标准参数不存在"));
@@ -48,16 +60,25 @@ public class StandardParameterService {
 
     @Transactional
     public StandardParameter create(StandardParameterRequest request) {
-        Long standardDocumentId = requireStandardDocumentId(request.getStandardDocumentId());
+        Long standardDocumentId = request.getStandardDocumentId();
+        Long parameterStandardId = request.getParameterStandardId();
+        resolveBinding(standardDocumentId, parameterStandardId);
+
         String code = normalizeCode(request.getCode());
-        if (repository.existsByStandardDocumentIdAndCodeIgnoreCase(standardDocumentId, code)) {
-            throw new IllegalArgumentException("该标准下参数编码已存在");
+        if (standardDocumentId != null) {
+            if (repository.existsByStandardDocumentIdAndCodeIgnoreCase(standardDocumentId, code)) {
+                throw new IllegalArgumentException("该标准下参数编码已存在");
+            }
+        } else {
+            if (repository.existsByParameterStandardIdAndCodeIgnoreCase(parameterStandardId, code)) {
+                throw new IllegalArgumentException("该标准下参数编码已存在");
+            }
         }
 
         StandardParameter parameter = new StandardParameter();
-        apply(parameter, request, standardDocumentId, code);
+        apply(parameter, request, standardDocumentId, parameterStandardId, code);
         StandardParameter saved = repository.save(parameter);
-        clearRenderedContent(standardDocumentId);
+        clearRenderedContent(standardDocumentId, parameterStandardId);
         return saved;
     }
 
@@ -65,18 +86,27 @@ public class StandardParameterService {
     public StandardParameter update(Long id, StandardParameterRequest request) {
         StandardParameter parameter = get(id);
         Long standardDocumentId = request.getStandardDocumentId() != null
-                ? requireStandardDocumentId(request.getStandardDocumentId())
-                : requireStandardDocumentId(parameter.getStandardDocumentId());
-        String code = normalizeCode(request.getCode());
-        repository.findByStandardDocumentIdAndCodeIgnoreCase(standardDocumentId, code)
-                .filter(existing -> !existing.getId().equals(id))
-                .ifPresent(existing -> {
-                    throw new IllegalArgumentException("该标准下参数编码已存在");
-                });
+                ? request.getStandardDocumentId()
+                : parameter.getStandardDocumentId();
+        Long parameterStandardId = request.getParameterStandardId() != null
+                ? request.getParameterStandardId()
+                : parameter.getParameterStandardId();
+        resolveBinding(standardDocumentId, parameterStandardId);
 
-        apply(parameter, request, standardDocumentId, code);
+        String code = normalizeCode(request.getCode());
+        if (standardDocumentId != null) {
+            repository.findByStandardDocumentIdAndCodeIgnoreCase(standardDocumentId, code)
+                    .filter(existing -> !existing.getId().equals(id))
+                    .ifPresent(existing -> { throw new IllegalArgumentException("该标准下参数编码已存在"); });
+        } else {
+            repository.findByParameterStandardIdAndCodeIgnoreCase(parameterStandardId, code)
+                    .filter(existing -> !existing.getId().equals(id))
+                    .ifPresent(existing -> { throw new IllegalArgumentException("该标准下参数编码已存在"); });
+        }
+
+        apply(parameter, request, standardDocumentId, parameterStandardId, code);
         StandardParameter saved = repository.save(parameter);
-        clearRenderedContent(standardDocumentId);
+        clearRenderedContent(standardDocumentId, parameterStandardId);
         return saved;
     }
 
@@ -84,21 +114,30 @@ public class StandardParameterService {
     public void delete(Long id) {
         StandardParameter parameter = get(id);
         Long standardDocumentId = parameter.getStandardDocumentId();
+        Long parameterStandardId = parameter.getParameterStandardId();
         repository.delete(parameter);
+        clearRenderedContent(standardDocumentId, parameterStandardId);
+    }
+
+    private void clearRenderedContent(Long standardDocumentId, Long parameterStandardId) {
         if (standardDocumentId != null) {
-            clearRenderedContent(standardDocumentId);
+            standardDocumentRepository.findById(standardDocumentId).ifPresent(doc -> {
+                doc.setRenderedContent(null);
+                standardDocumentRepository.save(doc);
+            });
+        }
+        if (parameterStandardId != null) {
+            parameterStandardRepository.findById(parameterStandardId).ifPresent(ps -> {
+                ps.setRenderedContent(null);
+                parameterStandardRepository.save(ps);
+            });
         }
     }
 
-    private void clearRenderedContent(Long standardDocumentId) {
-        standardDocumentRepository.findById(standardDocumentId).ifPresent(doc -> {
-            doc.setRenderedContent(null);
-            standardDocumentRepository.save(doc);
-        });
-    }
-
-    private void apply(StandardParameter parameter, StandardParameterRequest request, Long standardDocumentId, String code) {
+    private void apply(StandardParameter parameter, StandardParameterRequest request,
+                       Long standardDocumentId, Long parameterStandardId, String code) {
         parameter.setStandardDocumentId(standardDocumentId);
+        parameter.setParameterStandardId(parameterStandardId);
         parameter.setCode(code);
         parameter.setName(requireText(request.getName(), "标准参数名称不能为空"));
         parameter.setValue(requireText(request.getValue(), "标准参数值不能为空"));
@@ -108,10 +147,29 @@ public class StandardParameterService {
         parameter.setDeploymentStandard(request.isDeploymentStandard());
     }
 
-    private Specification<StandardParameter> specification(String keyword, String category, Boolean active, Long standardDocumentId) {
+    private void resolveBinding(Long standardDocumentId, Long parameterStandardId) {
+        if (standardDocumentId == null && parameterStandardId == null) {
+            throw new IllegalArgumentException("参数必须绑定标准");
+        }
+        if (standardDocumentId != null && parameterStandardId != null) {
+            throw new IllegalArgumentException("参数只能绑定一种标准类型");
+        }
+        if (standardDocumentId != null && !standardDocumentRepository.existsById(standardDocumentId)) {
+            throw new IllegalArgumentException("绑定的标准不存在");
+        }
+        if (parameterStandardId != null && !parameterStandardRepository.existsById(parameterStandardId)) {
+            throw new IllegalArgumentException("绑定的参数标准不存在");
+        }
+    }
+
+    private Specification<StandardParameter> specification(String keyword, String category, Boolean active,
+                                                           Long standardDocumentId, Long parameterStandardId) {
         Specification<StandardParameter> specification = Specification.where(null);
         if (standardDocumentId != null) {
             specification = specification.and((root, query, cb) -> cb.equal(root.get("standardDocumentId"), standardDocumentId));
+        }
+        if (parameterStandardId != null) {
+            specification = specification.and((root, query, cb) -> cb.equal(root.get("parameterStandardId"), parameterStandardId));
         }
         if (StringUtils.hasText(keyword)) {
             String pattern = "%" + keyword.trim().toLowerCase() + "%";
@@ -129,16 +187,6 @@ public class StandardParameterService {
             specification = specification.and((root, query, cb) -> cb.equal(root.get("active"), active));
         }
         return specification;
-    }
-
-    private Long requireStandardDocumentId(Long standardDocumentId) {
-        if (standardDocumentId == null) {
-            throw new IllegalArgumentException("参数必须绑定标准");
-        }
-        if (!standardDocumentRepository.existsById(standardDocumentId)) {
-            throw new IllegalArgumentException("绑定的标准不存在");
-        }
-        return standardDocumentId;
     }
 
     private String normalizeCode(String code) {

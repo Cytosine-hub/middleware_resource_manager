@@ -1,5 +1,6 @@
 package com.middleware.manager.service;
 
+import com.middleware.manager.domain.ParameterStandard;
 import com.middleware.manager.domain.ReviewRecord;
 import com.middleware.manager.domain.StandardDocument;
 import com.middleware.manager.repository.ReviewRecordRepository;
@@ -18,13 +19,16 @@ import java.util.stream.Collectors;
 public class ReviewService {
     private final ReviewRecordRepository repository;
     private final StandardDocumentService documentService;
+    private final ParameterStandardService parameterStandardService;
     private final PermissionService permissionService;
 
     public ReviewService(ReviewRecordRepository repository,
                          StandardDocumentService documentService,
+                         ParameterStandardService parameterStandardService,
                          PermissionService permissionService) {
         this.repository = repository;
         this.documentService = documentService;
+        this.parameterStandardService = parameterStandardService;
         this.permissionService = permissionService;
     }
 
@@ -57,25 +61,34 @@ public class ReviewService {
         record.setReviewedAt(LocalDateTime.now());
         record.setReviewComment(comment);
 
-        // 更新文档状态
-        StandardDocument doc = documentService.get(record.getDocumentId());
-        doc.setPendingReviewRecordId(null);
-        if (doc.getPreviousContent() == null) {
-            // 首次发布
-            doc.setVersion(VersionManager.firstPublishVersion());
-            doc.setStatus("PUBLISHED");
-            doc.setPublishedAt(LocalDateTime.now());
+        if ("PARAMETER_STANDARD".equals(record.getDocumentType())) {
+            ParameterStandard ps = parameterStandardService.get(record.getDocumentId());
+            ps.setPendingReviewRecordId(null);
+            ps.setStatus("PUBLISHED");
+            ps.setPublishedAt(LocalDateTime.now());
+            if (ps.getPreviousContent() == null) {
+                ps.setVersion(VersionManager.firstPublishVersion());
+            } else {
+                ps.setVersion(VersionManager.toPublishedVersion(ps.getVersion()));
+            }
+            ps.setPreviousContent(null);
+            parameterStandardService.save(ps);
         } else {
-            // 从修改态提交的
-            doc.setVersion(VersionManager.toPublishedVersion(doc.getVersion()));
+            StandardDocument doc = documentService.get(record.getDocumentId());
+            doc.setPendingReviewRecordId(null);
+            if (doc.getPreviousContent() == null) {
+                doc.setVersion(VersionManager.firstPublishVersion());
+            } else {
+                doc.setVersion(VersionManager.toPublishedVersion(doc.getVersion()));
+            }
             doc.setStatus("PUBLISHED");
             doc.setPublishedAt(LocalDateTime.now());
+            doc.setPreviousContent(record.getCurrentContent());
+            doc.setReviewedAt(LocalDateTime.now());
+            doc.setReviewedBy(reviewer);
+            doc.setReviewComment(comment);
+            documentService.save(doc);
         }
-        doc.setPreviousContent(record.getCurrentContent());
-        doc.setReviewedAt(LocalDateTime.now());
-        doc.setReviewedBy(reviewer);
-        doc.setReviewComment(comment);
-        documentService.save(doc);
 
         repository.save(record);
         return ReviewResponse.from(record);
@@ -92,13 +105,20 @@ public class ReviewService {
         record.setReviewedAt(LocalDateTime.now());
         record.setReviewComment(comment);
 
-        // 更新文档：清除待审核记录ID，回到原状态
-        StandardDocument doc = documentService.get(record.getDocumentId());
-        doc.setPendingReviewRecordId(null);
-        doc.setReviewedAt(LocalDateTime.now());
-        doc.setReviewedBy(reviewer);
-        doc.setReviewComment(comment);
-        documentService.save(doc);
+        if ("PARAMETER_STANDARD".equals(record.getDocumentType())) {
+            ParameterStandard ps = parameterStandardService.get(record.getDocumentId());
+            ps.setPendingReviewRecordId(null);
+            ps.setVersion(VersionManager.nextModifyingVersion(ps.getVersion()));
+            parameterStandardService.save(ps);
+        } else {
+            StandardDocument doc = documentService.get(record.getDocumentId());
+            doc.setPendingReviewRecordId(null);
+            doc.setVersion(VersionManager.nextModifyingVersion(doc.getVersion()));
+            doc.setReviewedAt(LocalDateTime.now());
+            doc.setReviewedBy(reviewer);
+            doc.setReviewComment(comment);
+            documentService.save(doc);
+        }
 
         repository.save(record);
         return ReviewResponse.from(record);

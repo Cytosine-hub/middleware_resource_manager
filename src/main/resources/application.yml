@@ -1,5 +1,9 @@
 server:
   port: 8080
+  tomcat:
+    max-http-form-post-size: 2048MB
+    # 提高 multipart 文件数量限制（默认很低）
+    # 需要通过自定义配置类设置，见 MultipartConfig
 
 logging:
   level:
@@ -20,9 +24,14 @@ spring:
     hikari:
       initialization-fail-timeout: -1
       minimum-idle: 2
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/knowledge_ddl.sql
+      continue-on-error: true
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     open-in-view: false
     properties:
       hibernate:
@@ -44,3 +53,32 @@ app:
   security:
     admin:
       default-password: admin123
+
+# ========== 知识库 & Agent 配置 ==========
+  ai:
+    base-url: https://token-plan-cn.xiaomimimo.com/v1
+    api-key: tp-c917uu165jgq2dosv8104vtxi7i8uaqb3wqkq5zxlbwm5haz
+    model: mimo-v2.5-pro
+    max-tokens: 4096
+    temperature: 0.1
+  vector:
+    type: ${VECTOR_TYPE:memory}          # memory 或 milvus
+    host: ${VECTOR_HOST:localhost}
+    port: ${VECTOR_PORT:19530}
+    collection: ${VECTOR_COLLECTION:knowledge_chunks}
+
+# LangChain4j 配置
+langchain4j:
+  open-ai:
+    chat-model:
+      base-url: https://token-plan-cn.xiaomimimo.com/v1
+      api-key: tp-c917uu165jgq2dosv8104vtxi7i8uaqb3wqkq5zxlbwm5haz
+      model-name: mimo-v2.5-pro
+      max-tokens: 4096
+      temperature: 0.1
+      log-requests: true
+      log-responses: true
+    embedding-model:
+      base-url: https://token-plan-cn.xiaomimimo.com/v1
+      api-key: tp-c917uu165jgq2dosv8104vtxi7i8uaqb3wqkq5zxlbwm5haz
+      model-name: mimo-v2.5-pro

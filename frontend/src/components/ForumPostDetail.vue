@@ -133,7 +133,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { request } from '../api'
 
-const props = defineProps({ auth: Object, postId: [String, Number], markdown: Object })
+const props = defineProps({ auth: Object, postId: [String, Number], markdown: Object, notify: { type: Function, default: (msg, type) => type === 'error' ? alert(msg) : null } })
 const emit = defineEmits(['back', 'editPost', 'login'])
 
 const post = ref(null)
@@ -237,7 +237,7 @@ async function submitComment(parentId) {
     else commentText.value = ''
     const data = await request(`/api/forum/posts/${props.postId}`)
     allComments.value = data.comments || []
-  } catch (e) { alert(e.message || '评论失败') }
+  } catch (e) { props.notify(e.message || '评论失败', 'error') }
 }
 
 function toggleReply(commentId) {

@@ -176,7 +176,21 @@ label {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-shell > header {
+  flex-shrink: 0;
+}
+
+.app-shell > main {
+  flex: 1;
+  height: 0;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .topbar {
@@ -293,7 +307,9 @@ label {
 
 .workspace {
   width: 96vw;
-  margin: 24px auto 48px;
+  margin: 0 auto;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .portal-page {
@@ -646,7 +662,7 @@ label {
 
 .standard-row {
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(120px, 0.22fr) minmax(120px, 0.22fr);
+  grid-template-columns: 1fr 140px 140px;
   gap: 14px;
   align-items: center;
   border: 1px solid #d8e1ec;

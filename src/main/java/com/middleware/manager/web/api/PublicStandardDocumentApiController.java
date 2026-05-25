@@ -37,7 +37,7 @@ public class PublicStandardDocumentApiController {
 
     @GetMapping("/all")
     public List<PublicStandardDocumentResponse> listAllPublished() {
-        return service.listAllPublished().stream()
+        return service.listAllPublic().stream()
                 .map(doc -> PublicStandardDocumentResponse.from(doc, null, java.util.Collections.emptyList()))
                 .collect(Collectors.toList());
     }
@@ -45,7 +45,14 @@ public class PublicStandardDocumentApiController {
     @GetMapping("/{id}")
     public PublicStandardDocumentResponse detail(@PathVariable Long id) {
         try {
-            StandardDocument document = service.getPublished(id);
+            StandardDocument document = service.get(id);
+            if (!"PUBLISHED".equals(document.getStatus()) && !"MODIFYING".equals(document.getStatus())) {
+                throw new IllegalArgumentException("文档不存在或未发布");
+            }
+            if ("MODIFYING".equals(document.getStatus()) && document.getPreviousContent() != null) {
+                document.setContent(document.getPreviousContent());
+                document.setRenderedContent(null);
+            }
             Long standardId = "STANDARD".equals(document.getDocumentType())
                     ? document.getId()
                     : document.getRelatedStandardDocumentId();

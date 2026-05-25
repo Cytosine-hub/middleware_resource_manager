@@ -1,6 +1,6 @@
 package com.middleware.manager.domain;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "forum_tags")

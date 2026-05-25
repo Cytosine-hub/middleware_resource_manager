@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run
 
 ```bash
-# Backend (Spring Boot 2.7.18, Java 8)
+# Backend (Spring Boot 3.5.3, Java 17)
 mvn clean package -DskipTests        # compile
 mvn spring-boot:run                  # run (starts on :8080)
 
@@ -14,6 +14,23 @@ cd frontend && npm install && npm run dev   # starts on :5173, proxies /api and 
 ```
 
 Database: MySQL 8.0 at `127.0.0.1:3306/middleware_resource_manager`, user `root`. Credentials in `~/.my.cnf`. Hibernate `ddl-auto: update` creates/alters tables automatically.
+
+**Knowledge module** (`knowledge/`) — 独立的知识库和 AI 排查模块，使用 JdbcTemplate（非 JPA）：
+- `config/` — AiConfig（AI 模型和向量数据库配置）
+- `client/` — LlmClient（已被 LangChain4j 的 ChatLanguageModel 替代，调用 OpenAI 兼容格式的大模型 API）
+- `loader/` — 文档加载器（Markdown、Tika PDF/Word、StandardDocument）
+- `splitter/` — TextSplitter（按 Markdown 标题和段落切分文档）
+- `embedding/` — EmbeddingService（调用模型 embedding 接口）
+- `store/` — VectorStore 接口 + InMemoryVectorStore（开发用）
+- `retriever/` — HybridRetriever（向量 + 关键词混合检索）
+- `entity/` — KnowledgeChunk POJO
+- `agent/` — ChatSession/ChatMessage POJO、TroubleshootAgent（RAG 排查）
+- `repository/` — JdbcTemplate 实现的数据访问层
+- `service/` — KnowledgeService（知识库核心服务）
+- `web/` — KnowledgeController、AgentController
+
+DDL 脚本：`src/main/resources/db/knowledge_ddl.sql`
+前端组件：`frontend/src/components/KnowledgePanel.vue`、`DiagnosticsPanel.vue`
 
 ## Architecture
 
@@ -26,6 +43,7 @@ Database: MySQL 8.0 at `127.0.0.1:3306/middleware_resource_manager`, user `root`
 - `config/` — SecurityConfig, StorageProperties, WarmupRunner, AccessLogFilter
 - `security/` — Role enum + PermissionService
 - `web/api/dto/` — request/response DTOs, `web/form/` — form backing objects
+- LangChain4j 集成 — 通过 `langchain4j-spring-boot-starter` 和 `langchain4j-open-ai-spring-boot-starter` 提供 LLM 和 Embedding 能力，配置在 `application.yml` 的 `langchain4j` 节点
 
 **Frontend** — single-file Vue 3 SPA (no router library):
 - `App.vue` — the entire application: hash-based routing, all admin CRUD, public download/standards pages, forum
@@ -56,9 +74,11 @@ Managers are scoped to their category — they can only manage releases/types/st
 - `SoftwareCategory` — simple name list (中间件, 数据库, 主机, 安全, 网络...)
 - `SoftwareType` — belongs to a category, has name; unique on (category, name)
 - `ReleaseAsset` — a published download file; links to SoftwareType; stored in `./storage/<middlewareName>/`
-- `StandardDocument` — STANDARD, MANUAL, or ARTICLE; links to SoftwareType
-- `StandardParameter` — key-value params attached to a StandardDocument (e.g., `{{JDK_VERSION}}`)
-- `ForumPost` / `ForumComment` / `ForumTag` — simple forum
+- `ParameterStandard` — 独立的参数标准实体，含版本管理（草稿→审核→发布→修改），表 `parameter_standards`
+- `StandardParameter` — key-value params attached to a ParameterStandard (e.g., `{{JDK_VERSION}}`)，表 `standard_parameters`
+- `StandardDocument` — MANUAL or ARTICLE; links to SoftwareType and ParameterStandard; 表 `standard_documents`
+- `ReviewRecord` — 审核记录，关联 ParameterStandard 或 StandardDocument; 表 `review_records`
+- `ForumPost` / `ForumComment` / `ForumTag` / `PostLike` — simple forum
 - `AdminAccount` — users with role, password hash, display name
 
 ## API patterns

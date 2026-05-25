@@ -47,7 +47,7 @@ const onEditorPaste = handleEditorPaste
 
 const showHelp = ref(false)
 
-const props = defineProps({ auth: Object, postId: [String, Number], markdown: Object })
+const props = defineProps({ auth: Object, postId: [String, Number], markdown: Object, notify: { type: Function, default: (msg, type) => type === 'error' ? alert(msg) : null } })
 const emit = defineEmits(['saved', 'cancel'])
 
 const form = reactive({ title: '', content: '', tags: [] })
@@ -85,7 +85,7 @@ async function save() {
       await request('/api/forum/posts', { method: 'POST', body })
     }
     emit('saved')
-  } catch (e) { alert(e.message || '保存失败') }
+  } catch (e) { props.notify(e.message || '保存失败', 'error') }
   finally { saving.value = false }
 }
 

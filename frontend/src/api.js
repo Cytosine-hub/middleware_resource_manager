@@ -37,11 +37,16 @@ export async function request(path, options = {}) {
     body = JSON.stringify(body)
   }
 
-  const response = await fetch(path, {
+  const fetchOptions = {
     method: options.method || 'GET',
     headers,
     body
-  })
+  }
+  if (options.signal) {
+    fetchOptions.signal = options.signal
+  }
+
+  const response = await fetch(path, fetchOptions)
 
   if (!response.ok) {
     let message = response.statusText || 'Request failed'

@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 public class StandardParameterResponse {
     private Long id;
     private Long standardDocumentId;
+    private Long parameterStandardId;
     private String code;
     private String name;
     private String value;
@@ -21,6 +22,7 @@ public class StandardParameterResponse {
         StandardParameterResponse response = new StandardParameterResponse();
         response.setId(parameter.getId());
         response.setStandardDocumentId(parameter.getStandardDocumentId());
+        response.setParameterStandardId(parameter.getParameterStandardId());
         response.setCode(parameter.getCode());
         response.setName(parameter.getName());
         response.setValue(parameter.getValue());
@@ -37,6 +39,8 @@ public class StandardParameterResponse {
     public void setId(Long id) { this.id = id; }
     public Long getStandardDocumentId() { return standardDocumentId; }
     public void setStandardDocumentId(Long standardDocumentId) { this.standardDocumentId = standardDocumentId; }
+    public Long getParameterStandardId() { return parameterStandardId; }
+    public void setParameterStandardId(Long parameterStandardId) { this.parameterStandardId = parameterStandardId; }
     public String getCode() { return code; }
     public void setCode(String code) { this.code = code; }
     public String getName() { return name; }

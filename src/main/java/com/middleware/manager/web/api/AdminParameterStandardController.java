@@ -1,0 +1,116 @@
+package com.middleware.manager.web.api;
+
+import com.middleware.manager.domain.ParameterStandard;
+import com.middleware.manager.security.PermissionService;
+import com.middleware.manager.service.ParameterStandardService;
+import com.middleware.manager.web.api.dto.ParameterStandardRequest;
+import com.middleware.manager.web.api.dto.ParameterStandardResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+
+import jakarta.validation.Valid;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/admin/parameter-standards")
+public class AdminParameterStandardController {
+    private final ParameterStandardService service;
+    private final PermissionService permissionService;
+
+    public AdminParameterStandardController(ParameterStandardService service,
+                                            PermissionService permissionService) {
+        this.service = service;
+        this.permissionService = permissionService;
+    }
+
+    @GetMapping
+    public List<ParameterStandardResponse> list(@RequestParam(defaultValue = "") String keyword,
+                                                @RequestParam(defaultValue = "") String status,
+                                                @RequestParam(defaultValue = "0") int page,
+                                                @RequestParam(defaultValue = "20") int size,
+                                                Authentication authentication) {
+        String category = permissionService.getManagedCategory(authentication);
+        Page<ParameterStandard> result = service.list(keyword, status, category,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
+        return result.getContent().stream()
+                .map(doc -> ParameterStandardResponse.from(doc, service.render(doc)))
+                .collect(Collectors.toList());
+    }
+
+    @GetMapping("/{id}")
+    public ParameterStandardResponse detail(@PathVariable Long id, Authentication authentication) {
+        ParameterStandard standard = checkAccess(id, authentication);
+        return ParameterStandardResponse.from(standard, service.render(standard));
+    }
+
+    @PostMapping
+    public ParameterStandardResponse create(@Valid @RequestBody ParameterStandardRequest request) {
+        ParameterStandard standard = service.create(request);
+        return ParameterStandardResponse.from(standard, service.render(standard));
+    }
+
+    @PutMapping("/{id}")
+    public ParameterStandardResponse update(@PathVariable Long id,
+                                            @Valid @RequestBody ParameterStandardRequest request,
+                                            Authentication authentication) {
+        checkAccess(id, authentication);
+        ParameterStandard standard = service.update(id, request);
+        return ParameterStandardResponse.from(standard, service.render(standard));
+    }
+
+    @DeleteMapping("/{id}")
+    public void delete(@PathVariable Long id, Authentication authentication) {
+        checkAccess(id, authentication);
+        service.delete(id);
+    }
+
+    @PostMapping("/{id}/submit-review")
+    public ParameterStandardResponse submitReview(@PathVariable Long id, Authentication authentication) {
+        checkAccess(id, authentication);
+        ParameterStandard standard = service.submitForReview(id, authentication.getName(), authentication.getName());
+        return ParameterStandardResponse.from(standard, service.render(standard));
+    }
+
+    @PostMapping("/{id}/publish")
+    public ParameterStandardResponse publish(@PathVariable Long id, Authentication authentication) {
+        checkAccess(id, authentication);
+        ParameterStandard standard = service.publish(id);
+        return ParameterStandardResponse.from(standard, service.render(standard));
+    }
+
+    @PostMapping("/{id}/start-modify")
+    public ParameterStandardResponse startModify(@PathVariable Long id, Authentication authentication) {
+        checkAccess(id, authentication);
+        ParameterStandard standard = service.startModify(id);
+        return ParameterStandardResponse.from(standard, service.render(standard));
+    }
+
+    @PostMapping("/{id}/cancel-modify")
+    public ParameterStandardResponse cancelModify(@PathVariable Long id, Authentication authentication) {
+        checkAccess(id, authentication);
+        ParameterStandard standard = service.cancelModify(id);
+        return ParameterStandardResponse.from(standard, service.render(standard));
+    }
+
+    private ParameterStandard checkAccess(Long id, Authentication authentication) {
+        ParameterStandard standard = service.get(id);
+        if (!permissionService.canManageCategory(authentication, standard.getCategory())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权操作该分类参数标准");
+        }
+        return standard;
+    }
+}

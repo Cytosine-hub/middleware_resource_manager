@@ -80,7 +80,7 @@ export function handleEditorKeydown(event) {
   }
 }
 
-export async function handleEditorPaste(event) {
+export async function handleEditorPaste(event, onError) {
   const items = event.clipboardData?.items
   if (!items) return
 
@@ -96,7 +96,8 @@ export async function handleEditorPaste(event) {
         const result = await request('/api/admin/images/upload', { method: 'POST', body: formData })
         insertAtCursor(event.target, `![](${result.url})`)
       } catch (err) {
-        alert('图片上传失败: ' + (err.message || '未知错误'))
+        const msg = '图片上传失败: ' + (err.message || '未知错误')
+        if (onError) onError(msg); else alert(msg)
       }
       return
     }

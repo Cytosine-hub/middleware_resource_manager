@@ -11,6 +11,8 @@
           <button v-if="auth.token" :class="{ active: route.name === 'standards' }" @click="goStandards()">标准发布</button>
           <button v-if="auth.token" :class="{ active: route.name === 'public' }" @click="goPublic()">下载中心</button>
           <button v-if="auth.token" :class="{ active: route.name?.startsWith('forum') }" @click="goForum()">论坛</button>
+          <button v-if="auth.token" :class="{ active: route.name === 'knowledge' }" @click="goKnowledge()">知识库</button>
+          <button v-if="auth.token" :class="{ active: route.name === 'diagnostics' }" @click="goDiagnostics()">智能排查</button>
           <button v-if="canAccessAdmin" :class="{ active: route.name === 'admin' || route.name === 'documentEditor' }" @click="goAdmin()">管理后台</button>
         </nav>
         <div class="topbar-user">
@@ -36,6 +38,7 @@
         :standard-document-options="standardDocumentOptions"
         :markdown="markdown"
         :document-id="route.documentId"
+        :notify="notify"
         @saved="onDocumentEditorSaved"
         @cancel="onDocumentEditorCancel"
       />
@@ -214,11 +217,11 @@
             <div class="tree-docs">
               <button
                 v-for="doc in filteredPublicDocuments"
-                :key="doc.id"
-                :class="['tree-doc-link', { active: String(selectedPublicStandard?.id) === String(doc.id) }]"
-                @click="openPublicStandardDetail(doc.id)"
+                :key="publicDocKey(doc)"
+                :class="['tree-doc-link', { active: selectedPublicStandardKey === publicDocKey(doc) }]"
+                @click="openPublicStandardDetail(doc.id, doc.documentType)"
               >
-                {{ doc.title }}
+                {{ displayTitle(doc) }}
               </button>
             </div>
           </aside>
@@ -226,11 +229,11 @@
             <div class="standard-detail-head">
               <div>
                 <p class="eyebrow">{{ documentTypeLabel(selectedPublicStandard.documentType) }}</p>
-                <h2>{{ selectedPublicStandard.title }}</h2>
+                <h2>{{ displayTitle(selectedPublicStandard) }}</h2>
                 <p class="muted">
                   {{ selectedPublicStandard.category || '-' }} / {{ selectedPublicStandard.software || '-' }}
                   · 软件版本：{{ selectedPublicStandard.softwareVersion || '-' }}
-                  · 标准版本：{{ selectedPublicStandard.standardVersion || '-' }}
+                  · 版本：{{ selectedPublicStandard.version || '-' }}
                 </p>
               </div>
               <span class="status ok">已发布</span>
@@ -252,13 +255,6 @@
         </div>
 
         <template v-else>
-          <div class="section-heading standards-heading">
-            <div>
-              <p class="eyebrow">Standards</p>
-              <h3>已发布标准与手册</h3>
-            </div>
-            <button class="ghost" @click="loadPublicStandards()">刷新</button>
-          </div>
           <div class="standards-grid">
             <section v-for="group in publicStandardGroups" :key="group.category" class="standard-category-section">
               <div class="standard-category-head">
@@ -271,8 +267,9 @@
               <div class="standard-list">
                 <article v-for="standard in group.standards" :key="standard.id" class="standard-row">
                   <div class="standard-row-main">
-                    <button type="button" class="standard-title-link" @click="openPublicStandardDetail(standard.id)">
-                      {{ standard.software || '-' }} / {{ standard.title }}
+                    <button type="button" class="standard-title-link" @click="openPublicStandardDetail(standard.id, 'ps')">
+                      {{ standard.software || '-' }} / {{ displayTitle(standard) }}
+                      <span v-if="standard.status === 'MODIFYING'" class="status warn" style="font-size:12px;font-weight:400;margin-left:8px">修改中</span>
                     </button>
                     <div class="manual-list">
                       <button
@@ -280,7 +277,7 @@
                         :key="doc.id"
                         type="button"
                         class="ghost related-document-link"
-                        @click="openPublicStandardDetail(doc.id)"
+                        @click="openPublicDocumentDetail(doc.id)"
                       >
                         {{ doc.title }}
                       </button>
@@ -309,6 +306,7 @@
           :auth="auth"
           :post-id="route.postId"
           :markdown="markdown"
+          :notify="notify"
           @back="goForum"
           @edit-post="goForumEdit"
           @login="goLogin"
@@ -319,10 +317,14 @@
           :auth="auth"
           :post-id="route.postId"
           :markdown="markdown"
+          :notify="notify"
           @saved="onForumPostSaved"
           @cancel="goForum"
         />
       </section>
+
+      <KnowledgePanel v-else-if="route.name === 'knowledge'" :auth="auth" :notify="notify" />
+      <DiagnosticsPanel v-else-if="route.name === 'diagnostics'" :auth="auth" />
 
       <section v-else class="workspace">
         <div v-if="!auth.token" class="login-page">
@@ -521,7 +523,7 @@
                           <th>名称</th>
                           <th>软件类型</th>
                           <th>版本</th>
-                          <th>管理版本</th>
+                          <th>标准版本</th>
                           <th>状态</th>
                           <th>编码</th>
                           <th>操作</th>
@@ -534,7 +536,7 @@
                           </td>
                           <td>{{ doc.category || '-' }}</td>
                           <td>{{ doc.softwareVersion || '-' }}</td>
-                          <td>{{ doc.version || '-' }}</td>
+                          <td>{{ (adminSection === 'standardPublish' ? (doc.version || '-') : (doc.standardVersion || '-')) }}</td>
                           <td><span :class="['status', doc._statusClass || statusClass(doc.status)]">{{ doc.statusLabel || statusLabel(doc.status) }}</span></td>
                           <td>{{ doc.code || '-' }}</td>
                           <td class="table-actions">
@@ -559,7 +561,7 @@
                   <div class="panel-title">
                     <div>
                       <h3>{{ selectedStandard.category || '-' }} / {{ selectedStandard.software || '-' }}</h3>
-                      <p class="muted">软件版本：{{ selectedStandard.softwareVersion || '-' }} · 标准版本：{{ selectedStandard.standardVersion || '-' }}</p>
+                      <p class="muted">软件版本：{{ selectedStandard.softwareVersion || '-' }} · 版本：{{ selectedStandard.version || '-' }}</p>
                     </div>
                     <div class="admin-actions">
                       <button type="button" class="ghost" @click="backToStandardList()">返回列表</button>
@@ -597,7 +599,7 @@
                   <div class="type-list">
                     <article v-for="record in pagedReviews" :key="record.id" class="parameter-item document-item">
                       <div>
-                        <strong>{{ record.documentTitle }}</strong>
+                        <strong>{{ record.documentType === 'PARAMETER_STANDARD' ? [record.category, record.software].filter(Boolean).join(' / ') : record.documentTitle }}</strong>
                         <p>
                           <span :class="['status', reviewStatusClass(record.status)]">{{ record.statusLabel }}</span>
                           V{{ record.documentVersion || '-' }} · {{ record.category || '-' }} / {{ record.software || '-' }}
@@ -651,10 +653,10 @@
                   <div class="type-list">
                     <article v-for="doc in pagedMaintenanceDocuments" :key="doc.id" class="parameter-item document-item">
                       <div>
-                        <strong>{{ doc.title }}</strong>
+                        <strong>{{ displayTitle(doc) }}</strong>
                         <p>
                           <span :class="['status', doc._statusClass || statusClass(doc.status)]">{{ doc.statusLabel || statusLabel(doc.status) }}</span>
-                          V{{ doc.version || '-' }} · {{ doc.documentType === 'ARTICLE' ? '文章' : '手册' }}
+                          V{{ doc.version || '-' }} · {{ doc.documentType === 'ARTICLE' ? '文章' : doc.documentType === 'MANUAL' ? '手册' : '参数标准' }}
                           <span v-if="doc.reviewComment" class="review-hint" :title="doc.reviewComment">（审核意见）</span>
                         </p>
                         <p>关联标准：{{ getStandardLabel(doc.relatedStandardDocumentId) }}</p>
@@ -702,9 +704,9 @@
           <label>发布日期<input v-model="releaseForm.releasedAt" type="date" /></label>
           <label class="checkline"><input v-model="releaseForm.published" type="checkbox" />发布</label>
           <label>关联标准
-            <select v-model="releaseForm.standardDocumentId">
+            <select v-model="releaseForm.standardDocumentId" :disabled="!releaseForm.category || !releaseForm.softwareTypeId">
               <option :value="null">不关联</option>
-              <option v-for="doc in standardDocumentOptions" :key="doc.id" :value="doc.id">{{ getStandardLabel(doc.id) }}</option>
+              <option v-for="doc in releaseStandardOptions" :key="doc.id" :value="doc.id">{{ getStandardLabel(doc.id) }}</option>
             </select>
           </label>
           <label class="file-field">安装包
@@ -825,9 +827,8 @@
             </select>
           </label>
           <label>软件版本<input v-model.trim="standardForm.softwareVersion" required maxlength="80" /></label>
-          <label>标准版本<input v-model.trim="standardForm.standardVersion" required maxlength="80" /></label>
           <label>编码<input v-model.trim="standardForm.code" maxlength="20" /></label>
-          <label>说明<textarea v-model.trim="standardForm.summary" maxlength="500" /></label>
+          <label v-if="adminSection !== 'standardPublish'">说明<textarea v-model.trim="standardForm.summary" maxlength="500" /></label>
         </div>
         <div class="form-actions">
           <button type="submit">保存</button>
@@ -875,12 +876,12 @@
                 :key="doc.id"
                 :class="['post-dir-item', { active: String(doc.id) === String(selectedPreviewDocument?.id) }]"
                 @click="previewDocument(doc)"
-              >{{ doc.title }}</button>
+              >{{ displayTitle(doc) }}</button>
             </div>
           </aside>
           <article class="doc-preview-main">
             <div class="post-article">
-              <h1 class="post-title">{{ selectedPreviewDocument.title }}</h1>
+              <h1 class="post-title">{{ displayTitle(selectedPreviewDocument) }}</h1>
               <div class="post-author-line">
                 <span class="post-date">{{ documentTypeLabel(selectedPreviewDocument.documentType) }}</span>
                 <span class="post-date">{{ selectedPreviewDocument.category || '-' }} / {{ selectedPreviewDocument.software || '-' }}</span>
@@ -990,7 +991,7 @@
     <div v-if="selectedReview" class="modal-backdrop" @click.self="closeReviewDetail()">
       <article class="modal-panel wide-modal">
         <div class="panel-title">
-          <h3>{{ selectedReview.documentTitle }}</h3>
+          <h3>{{ selectedReview.documentType === 'PARAMETER_STANDARD' ? [selectedReview.category, selectedReview.software].filter(Boolean).join(' / ') : selectedReview.documentTitle }}</h3>
           <button type="button" class="ghost" @click="closeReviewDetail()">关闭</button>
         </div>
         <p class="muted" style="margin: 0 0 12px">
@@ -1020,6 +1021,16 @@
     </div>
 
     <p v-if="notice" :class="['notice', notice.type]">{{ notice.message }}</p>
+
+    <div v-if="confirmDialog" class="modal-backdrop" @click.self="confirmDialog = null">
+      <div class="modal-panel" style="max-width:400px;text-align:center">
+        <p style="margin:0 0 20px;font-size:15px;line-height:1.6">{{ confirmDialog.message }}</p>
+        <div style="display:flex;gap:12px;justify-content:center">
+          <button class="ghost" @click="confirmDialog = null">取消</button>
+          <button @click="confirmDialog.onConfirm(); confirmDialog = null">确认</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1033,18 +1044,22 @@ import DocumentEditor from './components/DocumentEditor.vue'
 import ForumPostList from './components/ForumPostList.vue'
 import ForumPostDetail from './components/ForumPostDetail.vue'
 import ForumPostEditor from './components/ForumPostEditor.vue'
+import KnowledgePanel from './components/KnowledgePanel.vue'
+import DiagnosticsPanel from './components/DiagnosticsPanel.vue'
 
 function sha256(str) {
   return Promise.resolve(CryptoJS.SHA256(str).toString())
 }
 
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true })
-const route = reactive(Object.assign({ documentId: null, postId: null }, parseRoute()))
+const route = reactive(Object.assign({ documentId: null, postId: null, standardType: null }, parseRoute()))
 const notice = ref('')
+const confirmDialog = ref(null) // { message, onConfirm }
 const auth = reactive({ token: '', user: null })
 const selectedRelease = ref(null)
 const publicStandards = ref([])
 const selectedPublicStandard = ref(null)
+const selectedPublicStandardKey = computed(() => publicDocKey(selectedPublicStandard.value))
 const publicDocuments = ref([])
 const publicDocCategory = ref('全部')
 const activeStdTocId = ref('')
@@ -1109,6 +1124,7 @@ const adminPage = reactive(emptyPage(10))
 const softwareCategories = ref([])
 const softwareTypes = ref([])
 const standardDocuments = ref([])
+const allParameterStandards = ref([])
 const standardParameters = ref([])
 const userList = ref([])
 const showUserDialog = ref(false)
@@ -1151,6 +1167,8 @@ const pageTitle = computed(() => {
   if (route.name === 'standards') return '标准发布'
   if (route.name === 'documentEditor') return '文档编辑'
   if (route.name && route.name.startsWith('forum')) return 'infra论坛'
+  if (route.name === 'knowledge') return '知识库管理'
+  if (route.name === 'diagnostics') return '智能排查'
   return '管理后台'
 })
 const publicStandardHtml = computed(() => {
@@ -1186,7 +1204,9 @@ const publicDocumentGroups = computed(() => {
     docs.sort((a, b) => {
       if (a.documentType === 'STANDARD' && b.documentType !== 'STANDARD') return -1
       if (a.documentType !== 'STANDARD' && b.documentType === 'STANDARD') return 1
-      return (a.title || '').localeCompare(b.title || '')
+      const da = b.publishedAt || b.updatedAt || ''
+      const db = a.publishedAt || a.updatedAt || ''
+      return da.localeCompare(db) || (a.title || '').localeCompare(b.title || '')
     })
   }
   return Array.from(groups, ([category, documents]) => ({ category, documents }))
@@ -1206,7 +1226,9 @@ const filteredPublicDocuments = computed(() => {
   docs.sort((a, b) => {
     if (a.documentType === 'STANDARD' && b.documentType !== 'STANDARD') return -1
     if (a.documentType !== 'STANDARD' && b.documentType === 'STANDARD') return 1
-    return (a.title || '').localeCompare(b.title || '')
+    const da = b.publishedAt || b.updatedAt || ''
+    const db = a.publishedAt || a.updatedAt || ''
+    return da.localeCompare(db) || (a.title || '').localeCompare(b.title || '')
   })
   return docs
 })
@@ -1232,6 +1254,11 @@ const softwareTypeCategories = computed(() => uniqueOptions([
 const activeTypeCategories = computed(() => uniqueOptions(activeSoftwareTypes.value.map(type => type.category)))
 const releaseCategoryOptions = computed(() => releaseForm.id ? softwareTypeCategories.value : activeTypeCategories.value)
 const releaseSoftwareOptions = computed(() => softwareTypesByCategory(releaseForm.category, !releaseForm.id))
+const releaseStandardOptions = computed(() => {
+  const selectedType = softwareTypes.value.find(t => String(t.id) === String(releaseForm.softwareTypeId))
+  const softwareName = selectedType?.name || ''
+  return allParameterStandards.value.filter(s => s.category === releaseForm.category && (!softwareName || s.software === softwareName))
+})
 const importSoftwareOptions = computed(() => softwareTypesByCategory(importForm.category, true))
 const standardCategoryOptions = computed(() => standardForm.id ? softwareTypeCategories.value : activeTypeCategories.value)
 const standardSoftwareOptions = computed(() => softwareTypesByCategory(standardForm.category, !standardForm.id))
@@ -1266,7 +1293,7 @@ const pagedSoftwareTypes = computed(() => {
 const filteredStandardDocuments = computed(() => {
   const keyword = standardFilters.keyword.trim().toLowerCase()
   return standardDocuments.value.filter(doc => {
-    if (doc.documentType !== 'STANDARD') return false
+    if (adminSection.value !== 'standardPublish' && doc.documentType !== 'STANDARD') return false
     const matchesCategory = !standardFilters.category || doc.category === standardFilters.category
     const matchesManagedCategory = !managedCategory.value || doc.category === managedCategory.value
     const matchesStatus = !standardFilters.status || doc.status === standardFilters.status
@@ -1274,12 +1301,14 @@ const filteredStandardDocuments = computed(() => {
     const matchesKeyword = !keyword ||
       doc.title.toLowerCase().includes(keyword) ||
       (doc.summary || '').toLowerCase().includes(keyword) ||
-      (doc.softwareVersion || '').toLowerCase().includes(keyword) ||
-      (doc.standardVersion || '').toLowerCase().includes(keyword)
+      (doc.softwareVersion || '').toLowerCase().includes(keyword)
     return matchesCategory && matchesManagedCategory && matchesStatus && matchesSoftware && matchesKeyword
   })
 })
-const standardDocumentOptions = computed(() => standardDocuments.value.filter(doc => doc.documentType === 'STANDARD'))
+const standardDocumentOptions = computed(() => {
+  if (adminSection.value === 'standardPublish') return standardDocuments.value
+  return allParameterStandards.value
+})
 const standardDocumentCategories = computed(() => uniqueOptions(standardDocumentOptions.value.map(doc => doc.category)))
 const standardPage = computed(() => {
   const totalElements = filteredStandardDocuments.value.length
@@ -1303,9 +1332,10 @@ const pagedStandardParameters = computed(() => {
 })
 const selectedStandardParameters = computed(() => {
   if (!selectedStandard.value) return []
-  return standardParameters.value.filter(parameter =>
-    String(parameter.standardDocumentId) === String(selectedStandard.value.id)
-  )
+  return standardParameters.value.filter(parameter => {
+    const pid = parameter.parameterStandardId || parameter.standardDocumentId
+    return String(pid) === String(selectedStandard.value.id)
+  })
 })
 const maintenanceDocuments = computed(() => {
   const keyword = maintenanceDocumentFilters.keyword.trim().toLowerCase()
@@ -1401,7 +1431,6 @@ function defaultStandardForm() {
     category: '',
     softwareTypeId: '',
     softwareVersion: '',
-    standardVersion: '',
     code: '',
     summary: '',
     content: '# 参数标准\n\n'
@@ -1409,7 +1438,7 @@ function defaultStandardForm() {
 }
 
 function defaultParameterForm() {
-  return { id: null, standardDocumentId: null, code: '', name: '', value: '', category: '', description: '', active: true, deploymentStandard: false }
+  return { id: null, standardDocumentId: null, parameterStandardId: null, code: '', name: '', value: '', category: '', description: '', active: true, deploymentStandard: false }
 }
 
 function parseRoute() {
@@ -1426,11 +1455,15 @@ function parseRoute() {
   const forumPostMatch = hash.match(/^\/forum\/post\/(\d+)$/)
   if (forumPostMatch) return { name: 'forumDetail', postId: forumPostMatch[1] }
   if (hash === '/forum' || hash.startsWith('/forum')) return { name: 'forum', postId: null }
+  if (hash === '/knowledge' || hash === '/knowledge/') return { name: 'knowledge' }
+  if (hash === '/diagnostics' || hash === '/diagnostics/') return { name: 'diagnostics' }
   const detailMatch = hash.match(/^\/downloads\/(.+)$/)
   if (detailMatch) return { name: 'public', token: detailMatch[1] }
+  const standardTypeMatch = hash.match(/^\/standards\/(ps|doc)\/(\d+)$/)
+  if (standardTypeMatch) return { name: 'standards', standardId: standardTypeMatch[2], standardType: standardTypeMatch[1] }
   const standardMatch = hash.match(/^\/standards\/(\d+)$/)
-  if (standardMatch) return { name: 'standards', standardId: standardMatch[1] }
-  if (hash === '/standards') return { name: 'standards', standardId: null }
+  if (standardMatch) return { name: 'standards', standardId: standardMatch[1], standardType: null }
+  if (hash === '/standards') return { name: 'standards', standardId: null, standardType: null }
   return { name: 'public', token: null }
 }
 
@@ -1439,6 +1472,7 @@ function syncRoute() {
   route.name = next.name
   route.token = next.token
   route.standardId = next.standardId
+  route.standardType = next.standardType
   route.documentId = next.documentId
   route.postId = next.postId
   updateDocumentTitle()
@@ -1462,7 +1496,7 @@ function syncRoute() {
   } else if (route.name === 'standards') {
     if (route.standardId) {
       loadPublicDocuments()
-      loadPublicStandardDetail(route.standardId)
+      loadPublicStandardDetail(route.standardId, route.standardType)
     } else {
       selectedPublicStandard.value = null
       loadPublicStandards()
@@ -1476,6 +1510,7 @@ function syncRoute() {
     loadSoftwareTypes()
     loadSoftwareCategories()
     loadStandardModule()
+    loadAllParameterStandards()
   }
 }
 
@@ -1498,27 +1533,46 @@ async function loadDetail(token) {
 }
 
 async function loadPublicStandards() {
-  publicStandards.value = await request('/api/public/standards', { token: null })
+  publicStandards.value = await request('/api/public/parameter-standards?size=100', { token: null })
 }
 
 async function loadPublicDocuments() {
   try {
-    publicDocuments.value = await request('/api/public/standards/all', { token: null })
+    const [standards, docs] = await Promise.all([
+      request('/api/public/parameter-standards?size=100', { token: null }).catch(() => []),
+      request('/api/public/standards/all', { token: null }).catch(() => [])
+    ])
+    const taggedStandards = (standards || []).map(s => ({ ...s, documentType: 'STANDARD' }))
+    publicDocuments.value = [...taggedStandards, ...(docs || [])]
   } catch {
     publicDocuments.value = []
   }
 }
 
-async function loadPublicStandardDetail(id) {
+async function loadPublicStandardDetail(id, type) {
   standardsLoading.value = true
   activeStdTocId.value = ''
   try {
-    selectedPublicStandard.value = await request(`/api/public/standards/${id}`, { token: null })
+    if (type === 'doc') {
+      selectedPublicStandard.value = await request(`/api/public/standards/${id}`, { token: null })
+    } else if (type === 'ps') {
+      selectedPublicStandard.value = await request(`/api/public/parameter-standards/${id}`, { token: null })
+    } else {
+      try {
+        selectedPublicStandard.value = await request(`/api/public/parameter-standards/${id}`, { token: null })
+      } catch {
+        selectedPublicStandard.value = await request(`/api/public/standards/${id}`, { token: null })
+      }
+    }
     await nextTick()
     initStdScrollSpy()
   } finally {
     standardsLoading.value = false
   }
+}
+
+function openPublicDocumentDetail(id) {
+  window.location.hash = `#/standards/doc/${id}`
 }
 
 async function loadAdmin() {
@@ -1547,7 +1601,8 @@ async function loadStandardModule() {
 }
 
 async function loadStandardDocuments() {
-  const data = await request('/api/admin/standard-documents')
+  const apiBase = standardApiBase()
+  const data = await request(apiBase)
   standardDocuments.value = Array.isArray(data) ? data.map(normalizeDoc) : []
   if (selectedStandard.value) {
     selectedStandard.value = standardDocuments.value.find(doc => doc.id === selectedStandard.value.id) || null
@@ -1561,19 +1616,29 @@ async function loadStandardDocuments() {
   }
 }
 
-async function loadStandardParameters(standardDocumentId = selectedStandard.value?.id) {
-  if (!standardDocumentId) {
+async function loadAllParameterStandards() {
+  try {
+    const data = await request('/api/admin/parameter-standards')
+    allParameterStandards.value = Array.isArray(data) ? data.filter(d => d.status === 'PUBLISHED') : []
+  } catch {
+    allParameterStandards.value = []
+  }
+}
+
+async function loadStandardParameters(targetId = selectedStandard.value?.id) {
+  if (!targetId) {
     standardParameters.value = []
     return
   }
-  standardParameters.value = await fetchStandardParameters(standardDocumentId)
+  standardParameters.value = await fetchStandardParameters(targetId)
   if (parameterFilters.page >= parameterPage.value.totalPages) {
     parameterFilters.page = Math.max(parameterPage.value.totalPages - 1, 0)
   }
 }
 
-function fetchStandardParameters(standardDocumentId) {
-  return request(`/api/admin/standard-parameters?standardDocumentId=${encodeURIComponent(standardDocumentId)}`)
+function fetchStandardParameters(targetId) {
+  const paramName = adminSection.value === 'standardPublish' ? 'parameterStandardId' : 'standardDocumentId'
+  return request(`/api/admin/standard-parameters?${paramName}=${encodeURIComponent(targetId)}`)
 }
 
 async function login() {
@@ -1603,10 +1668,24 @@ function logout(showMessage = true) {
   clearAuth()
   auth.token = ''
   auth.user = null
+  loginForm.username = ''
   loginForm.password = ''
+  selectedRelease.value = null
+  selectedPublicStandard.value = null
+  selectedStandard.value = null
+  editing.value = false
+  showPassword.value = false
+  adminSection.value = 'files'
+  Object.assign(adminFilters, { keyword: '', platform: '', published: '', page: 0, size: 10 })
+  Object.assign(releaseForm, defaultReleaseForm())
+  Object.assign(typeForm, defaultTypeForm())
+  Object.assign(standardForm, defaultStandardForm())
+  Object.assign(userForm, { username: '', displayName: '', password: '', role: '开发经理' })
+  userFormTarget.value = null
   if (showMessage) {
     notify('已退出')
   }
+  window.location.hash = '#/home'
 }
 
 function goPublic() {
@@ -1636,6 +1715,8 @@ function goForumNew() {
   window.location.hash = '#/forum/new'
 }
 function goForumEdit(id) { window.location.hash = `#/forum/edit/${id}` }
+function goKnowledge() { window.location.hash = '#/knowledge' }
+function goDiagnostics() { window.location.hash = '#/diagnostics' }
 function onForumPostSaved() { goForum() }
 
 function handleDownload(url) {
@@ -1657,9 +1738,9 @@ function goDocumentEditorEdit(id) {
 
 function onDocumentEditorSaved() {
   notify('文档已保存', 'success')
+  adminSection.value = 'documentMaintenance'
   loadStandardDocuments()
   window.location.hash = '#/admin'
-  setTimeout(() => { adminSection.value = 'documentMaintenance' }, 0)
 }
 
 function onDocumentEditorCancel() {
@@ -1675,8 +1756,9 @@ function closeDetail() {
   window.location.hash = '#/downloads'
 }
 
-function openPublicStandardDetail(id) {
-  window.location.hash = `#/standards/${id}`
+function openPublicStandardDetail(id, docType) {
+  const prefix = (docType === 'MANUAL' || docType === 'ARTICLE') ? 'doc' : 'ps'
+  window.location.hash = `#/standards/${prefix}/${id}`
 }
 
 function closePublicStandardDetail() {
@@ -1694,9 +1776,10 @@ function openPortalModule(name) {
 }
 
 function documentTypeLabel(type) {
-  if (type === 'STANDARD') return '标准'
+  if (type === 'STANDARD' || type === 'PARAMETER_STANDARD') return '参数标准'
   if (type === 'ARTICLE') return '文章'
-  return '手册'
+  if (type === 'MANUAL') return '手册'
+  return '参数标准'
 }
 
 function formatDate(value) {
@@ -1770,6 +1853,7 @@ function switchAdminSection(section) {
     loadSoftwareTypes()
     loadSoftwareCategories()
     loadStandardModule()
+    loadAllParameterStandards()
   } else if (section === 'users') {
     loadUsers()
   } else if (section === 'reviews') {
@@ -1778,6 +1862,7 @@ function switchAdminSection(section) {
     loadAdmin()
     loadSoftwareTypes()
     loadSoftwareCategories()
+    loadAllParameterStandards()
   }
 }
 
@@ -1963,11 +2048,23 @@ function findSoftwareTypeIdByCategoryAndName(category, name) {
 }
 
 function getStandardLabel(id) {
-  const standard = standardDocuments.value.find(doc => String(doc.id) === String(id))
+  const standard = allParameterStandards.value.find(doc => String(doc.id) === String(id)) ||
+    standardDocuments.value.find(doc => String(doc.id) === String(id))
   if (!standard) return '-'
-  return [standard.category, standard.software, standard.softwareVersion, standard.standardVersion]
-    .filter(Boolean)
-    .join(' / ')
+  return [standard.category, standard.software, standard.softwareVersion].filter(Boolean).join(' / ') +
+    (standard.version ? ` · V${standard.version}` : '')
+}
+
+function displayTitle(doc) {
+  if (!doc) return ''
+  if (doc.documentType === 'MANUAL' || doc.documentType === 'ARTICLE') return doc.title
+  return [doc.category, doc.software, doc.version].filter(Boolean).join(' / ') || doc.title
+}
+
+function publicDocKey(doc) {
+  if (!doc) return ''
+  const prefix = (doc.documentType === 'MANUAL' || doc.documentType === 'ARTICLE') ? 'doc' : 'ps'
+  return prefix + ':' + doc.id
 }
 
 function findStandardDocument(id) {
@@ -2042,7 +2139,9 @@ async function saveType() {
 }
 
 async function deleteType(type) {
-  if (!confirm(`确认删除类型 ${type.category} / ${type.name}？`)) return
+  confirmAction(`确认删除类型 ${type.category} / ${type.name}？`, () => doDeleteType(type))
+}
+async function doDeleteType(type) {
   try {
     await request(`/api/admin/software-types/${type.id}`, { method: 'DELETE' })
     notify('类型已删除', 'success')
@@ -2064,7 +2163,6 @@ function openEditStandardDialog(document) {
     category: selectedType?.category || document.category || '',
     softwareTypeId: selectedType?.id || '',
     softwareVersion: document.softwareVersion || '',
-    standardVersion: document.standardVersion || '',
     code: document.code || '',
     summary: document.summary || '',
     content: document.content || '# 参数标准\n\n'
@@ -2078,7 +2176,7 @@ function closeStandardDialog() {
 }
 
 function buildStandardTitle(selectedType) {
-  return [selectedType?.category, selectedType?.name, standardForm.softwareVersion, standardForm.standardVersion]
+  return [selectedType?.category, selectedType?.name, standardForm.softwareVersion]
     .filter(Boolean)
     .join(' / ')
 }
@@ -2089,22 +2187,23 @@ async function saveStandard() {
     notify('请选择软件类型')
     return
   }
+  const apiBase = standardApiBase()
   const body = {
     id: standardForm.id,
     title: buildStandardTitle(selectedType),
-    documentType: 'STANDARD',
-    summary: standardForm.summary,
     softwareTypeId: selectedType.id,
     category: selectedType.category,
     software: selectedType.name,
     softwareVersion: standardForm.softwareVersion,
-    standardVersion: standardForm.standardVersion,
     code: standardForm.code,
     content: standardForm.content || '# 参数标准\n\n'
   }
+  if (adminSection.value !== 'standardPublish') {
+    body.summary = standardForm.summary
+  }
   const actionText = standardForm.id ? '修改' : '新增'
   try {
-    await request(standardForm.id ? `/api/admin/standard-documents/${standardForm.id}` : '/api/admin/standard-documents', {
+    await request(standardForm.id ? `${apiBase}/${standardForm.id}` : apiBase, {
       method: standardForm.id ? 'PUT' : 'POST',
       body
     })
@@ -2148,9 +2247,13 @@ function normalizeDoc(doc) {
   return doc
 }
 
+function standardApiBase() {
+  return adminSection.value === 'standardPublish' ? '/api/admin/parameter-standards' : '/api/admin/standard-documents'
+}
+
 async function submitForReview(doc) {
   try {
-    await request(`/api/admin/standard-documents/${doc.id}/submit-review`, { method: 'POST' })
+    await request(`${standardApiBase()}/${doc.id}/submit-review`, { method: 'POST' })
     notify('已提交审核', 'success')
     await loadStandardDocuments()
   } catch (error) {
@@ -2160,7 +2263,7 @@ async function submitForReview(doc) {
 
 async function startModify(doc) {
   try {
-    await request(`/api/admin/standard-documents/${doc.id}/start-modify`, { method: 'POST' })
+    await request(`${standardApiBase()}/${doc.id}/start-modify`, { method: 'POST' })
     notify('已进入修改状态', 'success')
     await loadStandardDocuments()
   } catch (error) {
@@ -2169,9 +2272,11 @@ async function startModify(doc) {
 }
 
 async function cancelModify(doc) {
-  if (!confirm(`确认取消修改「${doc.title}」？内容将恢复到上次发布版本。`)) return
+  confirmAction(`确认取消修改「${displayTitle(doc)}」？内容将恢复到上次发布版本。`, () => doCancelModify(doc))
+}
+async function doCancelModify(doc) {
   try {
-    await request(`/api/admin/standard-documents/${doc.id}/cancel-modify`, { method: 'POST' })
+    await request(`${standardApiBase()}/${doc.id}/cancel-modify`, { method: 'POST' })
     notify('已取消修改，内容已恢复', 'success')
     await loadStandardDocuments()
   } catch (error) {
@@ -2180,9 +2285,11 @@ async function cancelModify(doc) {
 }
 
 async function confirmDeleteDoc(doc) {
-  if (!confirm(`确认删除「${doc.title}」？此操作不可恢复。`)) return
+  confirmAction(`确认删除「${displayTitle(doc)}」？此操作不可恢复。`, () => doDeleteDoc(doc))
+}
+async function doDeleteDoc(doc) {
   try {
-    await request(`/api/admin/standard-documents/${doc.id}`, { method: 'DELETE' })
+    await request(`${standardApiBase()}/${doc.id}`, { method: 'DELETE' })
     notify('已删除', 'success')
     await loadStandardDocuments()
   } catch (error) {
@@ -2208,7 +2315,7 @@ async function confirmReview() {
   const action = reviewAction.value
   const actionText = action === 'approve' ? '通过' : '驳回'
   try {
-    await request(`/api/admin/standard-documents/${doc.id}/${action}`, {
+    await request(`${standardApiBase()}/${doc.id}/${action}`, {
       method: 'POST',
       body: { comment: reviewComment.value || null }
     })
@@ -2373,14 +2480,16 @@ function openCreateParameterDialog() {
     notify('请先选择标准')
     return
   }
-  Object.assign(parameterForm, defaultParameterForm(), { standardDocumentId: selectedStandard.value.id })
+  const bindingField = adminSection.value === 'standardPublish' ? 'parameterStandardId' : 'standardDocumentId'
+  Object.assign(parameterForm, defaultParameterForm(), { [bindingField]: selectedStandard.value.id })
   showParameterDialog.value = true
 }
 
 function openEditParameterDialog(parameter) {
+  const bindingField = adminSection.value === 'standardPublish' ? 'parameterStandardId' : 'standardDocumentId'
   Object.assign(parameterForm, {
     id: parameter.id,
-    standardDocumentId: parameter.standardDocumentId || selectedStandard.value?.id || null,
+    [bindingField]: parameter[bindingField] || selectedStandard.value?.id || null,
     code: parameter.code,
     name: parameter.name,
     value: parameter.value,
@@ -2398,14 +2507,15 @@ function closeParameterDialog() {
 }
 
 async function saveParameter() {
-  const targetStandardId = selectedStandard.value?.id || parameterForm.standardDocumentId
+  const bindingField = adminSection.value === 'standardPublish' ? 'parameterStandardId' : 'standardDocumentId'
+  const targetStandardId = selectedStandard.value?.id || parameterForm[bindingField]
   if (!targetStandardId) {
     notify('参数必须绑定到标准')
     return
   }
   const body = {
     ...parameterForm,
-    standardDocumentId: targetStandardId
+    [bindingField]: targetStandardId
   }
   const actionText = parameterForm.id ? '修改' : '新增'
   try {
@@ -2457,6 +2567,10 @@ function notify(message, type = 'info') {
   window.setTimeout(() => {
     if (notice.value?.message === message) notice.value = ''
   }, 3200)
+}
+
+function confirmAction(message, onConfirm) {
+  confirmDialog.value = { message, onConfirm }
 }
 
 // ── User management ──
@@ -2531,7 +2645,9 @@ async function resetUserPassword(user) {
 }
 
 async function deleteUserAccount(user) {
-  if (!confirm(`确认删除用户 ${user.username}？此操作不可撤销。`)) return
+  confirmAction(`确认删除用户 ${user.username}？此操作不可撤销。`, () => doDeleteUser(user))
+}
+async function doDeleteUser(user) {
   try {
     await request(`/api/admin/users/${user.id}`, { method: 'DELETE' })
     notify('用户已删除', 'success')

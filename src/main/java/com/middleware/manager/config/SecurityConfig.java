@@ -22,36 +22,32 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .cors()
-                .and()
-                .csrf()
-                    .ignoringAntMatchers("/api/**")
-                .and()
-                .exceptionHandling()
-                    .defaultAuthenticationEntryPointFor(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
-                            new AntPathRequestMatcher("/api/**"))
-                .and()
-                .authorizeRequests()
-                    // 图片文件公开访问（markdown 预览中 img 标签无 Auth header）
-                    .antMatchers("/files/images/**").permitAll()
-                    // 文件下载：需登录
-                    .antMatchers("/files/**").authenticated()
-                    // 论坛：读公开，写需登录
-                    .antMatchers(HttpMethod.GET, "/api/forum/**").permitAll()
-                    .antMatchers("/api/forum/**").authenticated()
-                    // 公开接口
-                    .antMatchers("/api/public/**").permitAll()
-                    // 登录
-                    .antMatchers("/api/auth/**").authenticated()
-                    // 用户管理：仅系统管理员
-                    .antMatchers("/api/admin/users/**").hasRole("SYS_ADMIN")
-                    // 管理后台：管理员+管理岗
-                    .antMatchers("/api/admin/**").hasAnyRole("SYS_ADMIN", "MIDDLEWARE_MGR", "DATABASE_MGR", "HOST_MGR", "NETWORK_MGR", "SECURITY_MGR")
-                    .anyRequest().authenticated()
-                .and()
-                .httpBasic()
-                    .authenticationEntryPoint((request, response, authException) ->
-                            response.sendError(HttpStatus.UNAUTHORIZED.value(), HttpStatus.UNAUTHORIZED.getReasonPhrase()));
+                .cors(cors -> {})
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
+                .exceptionHandling(ex -> ex
+                        .defaultAuthenticationEntryPointFor(
+                                new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                                new AntPathRequestMatcher("/api/**")))
+                .authorizeHttpRequests(auth -> auth
+                        // 图片文件公开访问（markdown 预览中 img 标签无 Auth header）
+                        .requestMatchers("/files/images/**").permitAll()
+                        // 文件下载：需登录
+                        .requestMatchers("/files/**").authenticated()
+                        // 论坛：读公开，写需登录
+                        .requestMatchers(HttpMethod.GET, "/api/forum/**").permitAll()
+                        .requestMatchers("/api/forum/**").authenticated()
+                        // 公开接口
+                        .requestMatchers("/api/public/**").permitAll()
+                        // 登录
+                        .requestMatchers("/api/auth/**").authenticated()
+                        // 用户管理：仅系统管理员
+                        .requestMatchers("/api/admin/users/**").hasRole("SYS_ADMIN")
+                        // 管理后台：管理员+管理岗
+                        .requestMatchers("/api/admin/**").hasAnyRole("SYS_ADMIN", "MIDDLEWARE_MGR", "DATABASE_MGR", "HOST_MGR", "NETWORK_MGR", "SECURITY_MGR")
+                        .anyRequest().authenticated())
+                .httpBasic(basic -> basic
+                        .authenticationEntryPoint((request, response, authException) ->
+                                response.sendError(HttpStatus.UNAUTHORIZED.value(), HttpStatus.UNAUTHORIZED.getReasonPhrase())));
         return http.build();
     }
 

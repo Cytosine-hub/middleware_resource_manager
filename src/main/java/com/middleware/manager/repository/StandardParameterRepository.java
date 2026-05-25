@@ -15,4 +15,10 @@ public interface StandardParameterRepository extends JpaRepository<StandardParam
     List<StandardParameter> findByStandardDocumentIdAndActiveTrueOrderByCategoryAscCodeAsc(Long standardDocumentId);
 
     boolean existsByStandardDocumentIdAndCodeIgnoreCase(Long standardDocumentId, String code);
+
+    List<StandardParameter> findByParameterStandardIdAndActiveTrueOrderByCategoryAscCodeAsc(Long parameterStandardId);
+
+    boolean existsByParameterStandardIdAndCodeIgnoreCase(Long parameterStandardId, String code);
+
+    Optional<StandardParameter> findByParameterStandardIdAndCodeIgnoreCase(Long parameterStandardId, String code);
 }

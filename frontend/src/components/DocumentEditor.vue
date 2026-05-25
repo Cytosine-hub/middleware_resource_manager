@@ -42,7 +42,7 @@
         <div class="meta-dialog-grid">
           <label>标题<input v-model.trim="metaForm.title" required maxlength="160" placeholder="文档标题" /></label>
           <label>类型
-            <select v-model="metaForm.documentType" required>
+            <select v-model="metaForm.documentType" disabled>
               <option value="MANUAL">手册</option>
               <option value="ARTICLE">文章</option>
             </select>
@@ -63,7 +63,7 @@
             <select v-model="metaForm.relatedStandardDocumentId" :disabled="!metaForm.category || !metaForm.software" required>
               <option value="">请选择</option>
               <option v-for="std in metaStandardOptions" :key="std.id" :value="std.id">
-                {{ std.softwareVersion || '-' }} / {{ std.standardVersion || '-' }}
+                {{ [std.category, std.software, std.softwareVersion].filter(Boolean).join(' / ') }} · V{{ std.version || '-' }}
               </option>
             </select>
           </label>
@@ -86,7 +86,7 @@ import MarkdownHelp from './MarkdownHelp.vue'
 import { handleEditorKeydown, handleEditorPaste } from '../editor-utils'
 
 const onEditorKeydown = handleEditorKeydown
-const onEditorPaste = handleEditorPaste
+const onEditorPaste = (e) => handleEditorPaste(e, (msg) => props.notify(msg, 'error'))
 
 const showHelp = ref(false)
 
@@ -96,7 +96,8 @@ const props = defineProps({
   softwareTypes: { type: Array, required: true },
   standardDocumentOptions: { type: Array, required: true },
   markdown: { type: Object, required: true },
-  documentId: { type: [String, Number], default: null }
+  documentId: { type: [String, Number], default: null },
+  notify: { type: Function, default: (msg, type) => type === 'error' ? alert(msg) : null }
 })
 
 const emit = defineEmits(['saved', 'cancel'])
@@ -124,8 +125,10 @@ const metaStandardOptions = computed(() =>
 )
 
 const metaStandardLabel = computed(() => {
-  if (!documentForm.softwareVersion && !documentForm.standardVersion) return '未关联标准'
-  return [documentForm.softwareVersion, documentForm.standardVersion].filter(Boolean).join(' / ') || '未关联标准'
+  if (!documentForm.relatedStandardDocumentId) return '未关联标准'
+  const std = findStandardDocument(documentForm.relatedStandardDocumentId)
+  if (!std) return '未关联标准'
+  return [std.category, std.software, std.softwareVersion].filter(Boolean).join(' / ') + (std.version ? ` · V${std.version}` : '')
 })
 
 function defaultDocumentForm() {
@@ -181,7 +184,7 @@ function onMetaSoftwareChange() {
 }
 
 function applyMeta() {
-  if (!metaForm.relatedStandardDocumentId) return alert('请选择关联标准')
+  if (!metaForm.relatedStandardDocumentId) { props.notify('请选择关联标准', 'error'); return }
   const std = findStandardDocument(metaForm.relatedStandardDocumentId)
   Object.assign(documentForm, {
     title: metaForm.title,
@@ -190,8 +193,7 @@ function applyMeta() {
     relatedStandardDocumentId: metaForm.relatedStandardDocumentId,
     category: std?.category || metaForm.category,
     software: std?.software || metaForm.software,
-    softwareVersion: std?.softwareVersion || metaForm.softwareVersion || '',
-    standardVersion: std?.standardVersion || metaForm.standardVersion || ''
+    softwareVersion: std?.softwareVersion || metaForm.softwareVersion || ''
   })
   showMetaDialog.value = false
   loadStandardParameters(documentForm.relatedStandardDocumentId)
@@ -227,7 +229,7 @@ watch(() => [documentForm.relatedStandardDocumentId, documentForm.content], () =
 }, { deep: false })
 
 async function handleSave() {
-  if (!documentForm.relatedStandardDocumentId) return alert('请先设置文档信息（关联标准）')
+  if (!documentForm.relatedStandardDocumentId) { props.notify('请先设置文档信息（关联标准）', 'error'); return }
   saving.value = true
   try {
     const body = { ...documentForm }
@@ -237,15 +239,14 @@ async function handleSave() {
     )
     emit('saved')
   } catch (error) {
-    alert(error.message || '保存失败')
+    props.notify(error.message || '保存失败', 'error')
   } finally { saving.value = false }
 }
 
 async function loadDocument(id) {
   try {
-    const allDocs = await request('/api/admin/standard-documents')
-    const doc = allDocs.find(d => String(d.id) === String(id))
-    if (!doc) { alert('文档不存在'); emit('cancel'); return }
+    const doc = await request(`/api/admin/standard-documents/${id}`)
+    if (!doc) { props.notify('文档不存在', 'error'); emit('cancel'); return }
     const relatedStandard = doc.relatedStandardDocumentId ? findStandardDocument(doc.relatedStandardDocumentId) : null
     Object.assign(documentForm, {
       id: doc.id, title: doc.title, documentType: doc.documentType,
@@ -253,7 +254,6 @@ async function loadDocument(id) {
       category: relatedStandard?.category || doc.category || '',
       software: relatedStandard?.software || doc.software || '',
       softwareVersion: relatedStandard?.softwareVersion || doc.softwareVersion || '',
-      standardVersion: relatedStandard?.standardVersion || doc.standardVersion || '',
       status: doc.status || 'DRAFT',
       version: doc.version || '',
       canEdit: doc.canEdit !== false,
@@ -262,7 +262,7 @@ async function loadDocument(id) {
     if (doc.relatedStandardDocumentId) await loadStandardParameters(doc.relatedStandardDocumentId)
     else renderPreview()
   } catch (error) {
-    alert('加载文档失败: ' + (error.message || '未知错误'))
+    props.notify('加载文档失败: ' + (error.message || '未知错误'), 'error')
     emit('cancel')
   }
 }
