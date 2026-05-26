@@ -1,0 +1,28 @@
+name: connection-pool-troubleshoot
+description: "排查数据库/Redis 连接池耗尽问题"
+trigger:
+  keywords:
+    - "连接池"
+    - "connection pool"
+    - "连接耗尽"
+    - "connection refused"
+    - "连接超时"
+    - "pool exhausted"
+steps:
+  - tool: knowledge_search
+    args:
+      query: "连接池耗尽排查 connection pool exhausted 连接泄漏"
+      top_k: "5"
+    description: "检索知识库中的连接池排查经验"
+  - tool: search_logs
+    args:
+      query: "connection pool exhausted OR connection timeout OR Cannot get a connection"
+      service: "{{service}}"
+      timerange: "1h"
+    description: "搜索连接池相关日志"
+  - tool: query_metrics
+    args:
+      promql: "hikaricp_connections_active{service='{{service}}'}"
+      start: "1h ago"
+    description: "查看连接池活跃连接数趋势"
+  - prompt: "综合以上数据，分析连接池耗尽的根因（连接泄漏/并发过高/连接池配置过小/下游服务响应慢），给出修复建议"

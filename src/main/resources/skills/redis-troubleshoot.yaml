@@ -1,0 +1,28 @@
+name: redis-troubleshoot
+description: "排查 Redis 相关问题（超时、慢查询、内存满）"
+trigger:
+  keywords:
+    - "Redis超时"
+    - "Redis慢"
+    - "Redis连接"
+    - "redis timeout"
+    - "redis slow"
+    - "Redis内存"
+steps:
+  - tool: knowledge_search
+    args:
+      query: "Redis 排查 超时 慢查询 内存满 连接池"
+      top_k: "5"
+    description: "检索知识库中的 Redis 排查经验"
+  - tool: search_logs
+    args:
+      query: "redis timeout OR redis connection refused OR MOVED OR CLUSTERDOWN"
+      service: "{{service}}"
+      timerange: "1h"
+    description: "搜索 Redis 相关错误日志"
+  - tool: query_metrics
+    args:
+      promql: "redis_connected_clients"
+      start: "1h ago"
+    description: "查看 Redis 连接数"
+  - prompt: "综合以上数据，分析 Redis 问题根因（网络延迟/慢查询/内存满/连接数耗尽/集群故障），给出修复建议"

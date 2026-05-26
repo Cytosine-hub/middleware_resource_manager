@@ -1,0 +1,22 @@
+name: disk-troubleshoot
+description: "排查磁盘空间不足问题"
+trigger:
+  keywords:
+    - "磁盘满"
+    - "磁盘空间"
+    - "disk full"
+    - "no space"
+    - "空间不足"
+steps:
+  - tool: knowledge_search
+    args:
+      query: "磁盘空间不足排查 日志清理 大文件"
+      top_k: "5"
+    description: "检索知识库中的磁盘排查经验"
+  - tool: search_logs
+    args:
+      query: "No space left on device OR disk full OR IOException"
+      service: "{{service}}"
+      timerange: "1h"
+    description: "搜索磁盘相关错误日志"
+  - prompt: "综合以上数据，分析磁盘满的根因（日志未清理/临时文件堆积/数据增长过快），给出清理和预防建议"

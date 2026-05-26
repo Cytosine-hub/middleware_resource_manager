@@ -98,6 +98,12 @@
             <artifactId>langchain4j-open-ai-spring-boot-starter</artifactId>
             <version>1.0.0-beta5</version>
         </dependency>
+
+        <!-- Jackson YAML：用于解析 Skill YAML 配置文件 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

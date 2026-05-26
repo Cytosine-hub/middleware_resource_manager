@@ -1,0 +1,27 @@
+name: oom-troubleshoot
+description: "排查 JVM OOM（内存溢出）问题"
+trigger:
+  keywords:
+    - "OOM"
+    - "OutOfMemoryError"
+    - "内存溢出"
+    - "heap space"
+    - "内存不足"
+steps:
+  - tool: knowledge_search
+    args:
+      query: "JVM OOM 排查 heap dump 内存溢出 分析"
+      top_k: "5"
+    description: "检索知识库中的 OOM 排查经验"
+  - tool: query_metrics
+    args:
+      promql: "process_memory_usage{service='{{service}}'}"
+      start: "30m ago"
+    description: "查看内存使用趋势"
+  - tool: search_logs
+    args:
+      query: "OutOfMemoryError OR Java heap space OR GC overhead limit exceeded"
+      service: "{{service}}"
+      timerange: "1h"
+    description: "搜索 OOM 相关日志"
+  - prompt: "综合以上数据，分析 OOM 根因（内存泄漏/GC配置不当/堆大小不足），给出修复建议"

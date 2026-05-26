@@ -1,0 +1,28 @@
+name: cpu-high-troubleshoot
+description: "排查 CPU 使用率过高问题"
+trigger:
+  keywords:
+    - "CPU高"
+    - "CPU飙高"
+    - "CPU使用率"
+    - "cpu high"
+    - "CPU 100"
+    - "CPU满"
+steps:
+  - tool: knowledge_search
+    args:
+      query: "CPU使用率高排查 线程死循环 死锁 GC频繁"
+      top_k: "5"
+    description: "检索知识库中的 CPU 高排查经验"
+  - tool: query_metrics
+    args:
+      promql: "process_cpu_usage{service='{{service}}'}"
+      start: "30m ago"
+    description: "查看 CPU 使用趋势"
+  - tool: search_logs
+    args:
+      query: "Deadlock OR StackOverflowError OR thread BLOCKED"
+      service: "{{service}}"
+      timerange: "1h"
+    description: "搜索线程异常日志"
+  - prompt: "综合以上数据，分析 CPU 高的根因（死循环/死锁/GC频繁/并发过高），给出修复建议"
