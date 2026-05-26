@@ -207,6 +207,27 @@ public class MilvusVectorStore implements VectorStore {
     }
 
     @Override
+    public long count() {
+        try {
+            io.milvus.param.collection.GetCollectionStatisticsParam param =
+                    io.milvus.param.collection.GetCollectionStatisticsParam.newBuilder()
+                            .withCollectionName(config.getVectorCollection())
+                            .build();
+            R<io.milvus.grpc.GetCollectionStatisticsResponse> resp = client.getCollectionStatistics(param);
+            if (resp.getStatus() == R.Status.Success.getCode() && resp.getData() != null) {
+                String statsJson = resp.getData().getStatsList().stream()
+                        .filter(kv -> "row_count".equals(kv.getKey()))
+                        .map(io.milvus.grpc.KeyValuePair::getValue)
+                        .findFirst().orElse("0");
+                return Long.parseLong(statsJson);
+            }
+        } catch (Exception e) {
+            log.warn("[Milvus] Failed to get count: {}", e.getMessage());
+        }
+        return 0;
+    }
+
+    @Override
     public void delete(String id) {
         client.delete(DeleteParam.newBuilder()
                 .withCollectionName(config.getVectorCollection())

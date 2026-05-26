@@ -27,7 +27,7 @@ app:
   embedding:
     max-chars: 300
   vector:
-    type: memory
+    type: milvus
     host: localhost
     port: 19530
     collection: knowledge_chunks

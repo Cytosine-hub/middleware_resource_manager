@@ -3,6 +3,8 @@ package com.middleware.manager.service;
 import com.middleware.manager.domain.*;
 import com.middleware.manager.repository.*;
 import com.middleware.manager.domain.PostLike;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -15,6 +17,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class ForumService {
+    private static final Logger log = LoggerFactory.getLogger(ForumService.class);
     private final ForumPostRepository postRepo;
     private final ForumTagRepository tagRepo;
     private final ForumCommentRepository commentRepo;
@@ -25,13 +28,19 @@ public class ForumService {
         this.tagRepo = tagRepo;
         this.commentRepo = commentRepo;
         this.postLikeRepo = postLikeRepo;
+        try {
+            postRepo.addFulltextIndex();
+            log.info("Forum FULLTEXT index created");
+        } catch (Exception e) {
+            log.debug("Forum FULLTEXT index already exists or creation skipped: {}", e.getMessage());
+        }
     }
 
     public Page<ForumPost> listPosts(String keyword, String tag, int page, int size) {
         int s = Math.min(Math.max(size, 1), 50);
         PageRequest pr = PageRequest.of(Math.max(page, 0), s, Sort.by(Sort.Direction.DESC, "createdAt"));
         if (StringUtils.hasText(keyword) || StringUtils.hasText(tag)) {
-            String kw = StringUtils.hasText(keyword) ? keyword.trim() : null;
+            String kw = StringUtils.hasText(keyword) ? sanitizeFulltext(keyword.trim()) : null;
             String tg = StringUtils.hasText(tag) ? tag.trim() : null;
             return postRepo.search(kw, tg, pr);
         }
@@ -187,5 +196,9 @@ public class ForumService {
         ForumTag tag = tagRepo.findByNameIgnoreCase(trimmed).orElseGet(() -> tagRepo.save(new ForumTag(trimmed)));
         tag.setPostCount(tag.getPostCount() + 1);
         return tagRepo.save(tag);
+    }
+
+    private String sanitizeFulltext(String keyword) {
+        return keyword.replaceAll("[+\\-<>()~*\"@%_]", " ").trim().replaceAll("\\s+", " ");
     }
 }

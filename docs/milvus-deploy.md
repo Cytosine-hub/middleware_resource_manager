@@ -19,24 +19,36 @@ Milvus 是生产环境的向量数据库，用于存储知识库文档的 embedd
 
 ### 3.1 Docker 单机部署（推荐中小规模）
 
+> **注意**：Milvus v2.6+ 的 embedded etcd 模式存在兼容问题，需要单独部署 etcd。
+
 ```bash
 # 拉取镜像
-docker pull milvusdb/milvus:v2.4-latest
+docker pull milvusdb/milvus:latest
+docker pull quay.io/coreos/etcd:v3.5.18
 
-# 创建数据目录
-mkdir -p /data/milvus
+# 启动 etcd
+docker run -d --name milvus_etcd \
+  -p 2379:2379 -p 2380:2380 \
+  --restart always \
+  quay.io/coreos/etcd:v3.5.18 \
+  etcd -listen-client-urls=http://0.0.0.0:2379 \
+       -advertise-client-urls=http://0.0.0.0:2379
 
-# 启动 Milvus Standalone
-docker run -d \
-  --name milvus \
-  -p 19530:19530 \
-  -p 9091:9091 \
-  -v /data/milvus:/var/lib/milvus \
-  -e ETCD_USE_EMBED=true \
+# 启动 Milvus Standalone（连接外部 etcd）
+docker run -d --name milvus \
+  --link milvus_etcd:etcd \
+  -p 19530:19530 -p 9091:9091 \
+  -e ETCD_ENDPOINTS=etcd:2379 \
   -e COMMON_STORAGETYPE=local \
   --restart always \
-  milvusdb/milvus:v2.4-latest \
+  milvusdb/milvus:latest \
   milvus run standalone
+```
+
+验证：
+```bash
+curl http://localhost:9091/healthz
+# 返回 OK 即成功
 ```
 
 ### 3.2 Docker Compose 部署
@@ -47,17 +59,26 @@ docker run -d \
 version: '3.5'
 
 services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.18
+    container_name: milvus_etcd
+    command: etcd -listen-client-urls=http://0.0.0.0:2379 -advertise-client-urls=http://0.0.0.0:2379
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    restart: always
+
   milvus:
-    image: milvusdb/milvus:v2.4-latest
+    image: milvusdb/milvus:latest
     container_name: milvus
     command: milvus run standalone
+    depends_on:
+      - etcd
     ports:
       - "19530:19530"
       - "9091:9091"
-    volumes:
-      - /data/milvus:/var/lib/milvus
     environment:
-      - ETCD_USE_EMBED=true
+      - ETCD_ENDPOINTS=etcd:2379
       - COMMON_STORAGETYPE=local
     restart: always
     deploy:
@@ -89,11 +110,12 @@ Docker Hub 网络不通时，可配置镜像加速器或使用代理：
 # 方式二：通过代理拉取
 export HTTP_PROXY=http://proxy-server:port
 export HTTPS_PROXY=http://proxy-server:port
-docker pull milvusdb/milvus:v2.4-latest
+docker pull milvusdb/milvus:latest
+docker pull quay.io/coreos/etcd:v3.5.18
 
 # 方式三：离线导入（在有网络的机器上导出，传输到目标机器）
 # 导出
-docker save milvusdb/milvus:v2.4-latest -o milvus-v2.4.tar
+docker save milvusdb/milvus:latest quay.io/coreos/etcd:v3.5.18 -o milvus-images.tar
 # 传输到目标机器后导入
 docker load -i milvus-v2.4.tar
 ```
@@ -229,29 +251,31 @@ docker run -d \
 
 ```bash
 # 备份数据
-docker stop milvus
+docker stop milvus milvus_etcd
 tar czf /backup/milvus_backup.tar.gz /data/milvus
 
 # 拉取新版本
-docker pull milvusdb/milvus:v2.5-latest
+docker pull milvusdb/milvus:latest
 
-# 用新版本启动（数据目录不变）
+# 用新版本启动（确保 etcd 也在运行）
+docker start milvus_etcd
 docker rm milvus
 docker run -d --name milvus \
+  --link milvus_etcd:etcd \
   -p 19530:19530 -p 9091:9091 \
-  -v /data/milvus:/var/lib/milvus \
+  -e ETCD_ENDPOINTS=etcd:2379 \
+  -e COMMON_STORAGETYPE=local \
   --restart always \
-  milvusdb/milvus:v2.5-latest \
+  milvusdb/milvus:latest \
   milvus run standalone
 ```
 
 ### 9.2 从 InMemoryVectorStore 迁移到 Milvus
 
-切换 `app.vector.type` 为 `milvus` 后，需要重新导入知识库文档：
+切换 `app.vector.type` 为 `milvus` 后，重启应用即可自动迁移向量数据。
 
-1. 启动应用，连接 Milvus
-2. 进入知识库管理页面
-3. 批量上传所有文档
-4. 或从标准文档重新导入
+`VectorStoreRebuildRunner` 会在启动时检测向量库是否已有数据：
+- **向量库为空**：自动从 MySQL `knowledge_chunks` 表读取已有切片，调用 Embedding 模型重新生成向量并写入 Milvus
+- **向量库已有数据**：跳过重建，不重复处理
 
-向量数据不会自动迁移，需要通过重新导入生成。
+因此首次切换到 Milvus 后只需重启一次，后续重启不会重复执行重建。

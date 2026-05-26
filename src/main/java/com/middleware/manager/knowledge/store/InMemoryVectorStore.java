@@ -57,6 +57,11 @@ public class InMemoryVectorStore implements VectorStore {
         // No-op for in-memory store
     }
 
+    @Override
+    public long count() {
+        return vectors.size();
+    }
+
     private float cosineSimilarity(float[] a, float[] b) {
         if (a == null || b == null || a.length != b.length) {
             return 0.0f;

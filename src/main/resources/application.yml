@@ -53,6 +53,9 @@ app:
   security:
     admin:
       default-password: admin123
+  modules:
+    knowledge-enabled: ${KNOWLEDGE_ENABLED:true}
+    diagnostics-enabled: ${DIAGNOSTICS_ENABLED:true}
 
 # ========== 知识库 & Agent 配置 ==========
   ai:
@@ -62,7 +65,7 @@ app:
     max-tokens: 4096
     temperature: 0.1
   vector:
-    type: ${VECTOR_TYPE:memory}          # memory 或 milvus
+    type: ${VECTOR_TYPE:milvus}          # memory 或 milvus
     host: ${VECTOR_HOST:localhost}
     port: ${VECTOR_PORT:19530}
     collection: ${VECTOR_COLLECTION:knowledge_chunks}

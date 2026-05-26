@@ -11,8 +11,8 @@
           <button v-if="auth.token" :class="{ active: route.name === 'standards' }" @click="goStandards()">标准发布</button>
           <button v-if="auth.token" :class="{ active: route.name === 'public' }" @click="goPublic()">下载中心</button>
           <button v-if="auth.token" :class="{ active: route.name?.startsWith('forum') }" @click="goForum()">论坛</button>
-          <button v-if="auth.token" :class="{ active: route.name === 'knowledge' }" @click="goKnowledge()">知识库</button>
-          <button v-if="auth.token" :class="{ active: route.name === 'diagnostics' }" @click="goDiagnostics()">智能排查</button>
+          <button v-if="auth.token && siteConfig.knowledgeEnabled" :class="{ active: route.name === 'knowledge' }" @click="goKnowledge()">知识库</button>
+          <button v-if="auth.token && siteConfig.diagnosticsEnabled" :class="{ active: route.name === 'diagnostics' }" @click="goDiagnostics()">智能排查</button>
           <button v-if="canAccessAdmin" :class="{ active: route.name === 'admin' || route.name === 'documentEditor' }" @click="goAdmin()">管理后台</button>
         </nav>
         <div class="topbar-user">
@@ -174,7 +174,7 @@
               <div><dt>文件大小</dt><dd>{{ formatBytes(selectedRelease.fileSize) }}</dd></div>
               <div><dt>下载次数</dt><dd>{{ selectedRelease.downloadCount }}</dd></div>
             </dl>
-            <a class="primary-link" href="#" @click.prevent="handleDownload(selectedRelease.downloadUrl)">下载文件</a>
+            <a class="primary-link" href="#" @click.prevent="handleDownload(selectedRelease.downloadUrl, selectedRelease.originalFileName)">下载文件</a>
           </article>
         </div>
 
@@ -190,7 +190,7 @@
                 <span>{{ formatBytes(release.fileSize) }}</span>
                 <div class="card-actions">
                   <button class="ghost" @click="openDetail(release.downloadToken)">详情</button>
-                  <a class="download-button" href="#" @click.prevent="handleDownload(release.downloadUrl)">下载</a>
+                  <a class="download-button" href="#" @click.prevent="handleDownload(release.downloadUrl, release.originalFileName)">下载</a>
                 </div>
               </div>
             </article>
@@ -323,8 +323,8 @@
         />
       </section>
 
-      <KnowledgePanel v-else-if="route.name === 'knowledge'" :auth="auth" :notify="notify" />
-      <DiagnosticsPanel v-else-if="route.name === 'diagnostics'" :auth="auth" />
+      <KnowledgePanel v-else-if="route.name === 'knowledge' && siteConfig.knowledgeEnabled" :auth="auth" :notify="notify" />
+      <DiagnosticsPanel v-else-if="route.name === 'diagnostics' && siteConfig.diagnosticsEnabled" :auth="auth" />
 
       <section v-else class="workspace">
         <div v-if="!auth.token" class="login-page">
@@ -678,6 +678,18 @@
         </template>
       </section>
       </template>
+
+      <div v-if="downloading" class="download-progress-overlay">
+        <div class="download-progress-card">
+          <div class="download-progress-title">正在下载：{{ downloadFileName }}</div>
+          <div class="progress-track large">
+            <div class="progress-fill" :style="{ width: downloadProgress + '%' }"></div>
+          </div>
+          <div class="download-progress-info">
+            <span>{{ downloadProgress }}%</span>
+          </div>
+        </div>
+      </div>
     </main>
 
     <div v-if="editing" class="modal-backdrop" @click.self="cancelEdit()">
@@ -718,9 +730,15 @@
           </label>
           <label class="wide">说明<textarea v-model.trim="releaseForm.description" maxlength="2000" /></label>
         </div>
+        <div v-if="uploading" class="upload-progress-bar">
+          <div class="progress-track">
+            <div class="progress-fill" :style="{ width: uploadProgress + '%' }"></div>
+          </div>
+          <span class="progress-text">上传中 {{ uploadProgress }}%</span>
+        </div>
         <div class="form-actions">
-          <button type="submit">保存</button>
-          <button type="button" class="ghost" @click="cancelEdit()">取消</button>
+          <button type="submit" :disabled="uploading">{{ uploading ? '上传中...' : '保存' }}</button>
+          <button type="button" class="ghost" @click="cancelEdit()" :disabled="uploading">取消</button>
         </div>
       </form>
     </div>
@@ -1056,6 +1074,12 @@ const route = reactive(Object.assign({ documentId: null, postId: null, standardT
 const notice = ref('')
 const confirmDialog = ref(null) // { message, onConfirm }
 const auth = reactive({ token: '', user: null })
+const siteConfig = reactive({ knowledgeEnabled: true, diagnosticsEnabled: true })
+const uploading = ref(false)
+const uploadProgress = ref(0)
+const downloading = ref(false)
+const downloadProgress = ref(0)
+const downloadFileName = ref('')
 const selectedRelease = ref(null)
 const publicStandards = ref([])
 const selectedPublicStandard = ref(null)
@@ -1719,13 +1743,48 @@ function goKnowledge() { window.location.hash = '#/knowledge' }
 function goDiagnostics() { window.location.hash = '#/diagnostics' }
 function onForumPostSaved() { goForum() }
 
-function handleDownload(url) {
+function handleDownload(url, fileName) {
   if (!auth.token) {
     notify('请先登录后再下载文件')
     window.location.hash = '#/admin'
     return
   }
-  window.open(fileUrl(url), '_blank')
+  if (downloading.value) {
+    notify('有文件正在下载中，请等待完成', 'error')
+    return
+  }
+  downloading.value = true
+  downloadProgress.value = 0
+  downloadFileName.value = fileName || '文件'
+
+  fetch(fileUrl(url), {
+    headers: { 'Authorization': 'Basic ' + auth.token }
+  }).then(async resp => {
+    if (!resp.ok) throw new Error('下载失败')
+    const contentLength = +(resp.headers.get('Content-Length') || 0)
+    const reader = resp.body.getReader()
+    const chunks = []
+    let received = 0
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      chunks.push(value)
+      received += value.length
+      if (contentLength > 0) downloadProgress.value = Math.round(received / contentLength * 100)
+    }
+    const blob = new Blob(chunks)
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = downloadFileName.value
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }).catch(err => {
+    notify(err.message || '下载失败', 'error')
+  }).finally(() => {
+    downloading.value = false
+    downloadProgress.value = 0
+    downloadFileName.value = ''
+  })
 }
 
 function goDocumentEditor() {
@@ -1935,16 +1994,44 @@ async function saveRelease() {
     formData.append('file', releaseForm.file)
   }
 
+  const url = releaseForm.id ? `/api/admin/releases/${releaseForm.id}` : '/api/admin/releases'
+  const method = releaseForm.id ? 'PUT' : 'POST'
+
+  uploading.value = true
+  uploadProgress.value = 0
+
   try {
-    await request(releaseForm.id ? `/api/admin/releases/${releaseForm.id}` : '/api/admin/releases', {
-      method: releaseForm.id ? 'PUT' : 'POST',
-      body: formData
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) uploadProgress.value = Math.round(e.loaded / e.total * 100)
+      }
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(JSON.parse(xhr.responseText || 'null'))
+        } else {
+          let message = '保存失败'
+          try {
+            const payload = JSON.parse(xhr.responseText)
+            const fieldErrors = payload.fieldErrors ? Object.values(payload.fieldErrors).filter(Boolean) : []
+            message = fieldErrors.length ? fieldErrors.join('；') : (payload.message || message)
+          } catch {}
+          reject(new Error(message))
+        }
+      }
+      xhr.onerror = () => reject(new Error('网络错误'))
+      xhr.open(method, url)
+      xhr.setRequestHeader('Authorization', 'Basic ' + auth.token)
+      xhr.send(formData)
     })
     notify('资源已保存', 'success')
     cancelEdit()
     await loadAdmin()
   } catch (error) {
     notify(error.message || '保存失败', 'error')
+  } finally {
+    uploading.value = false
+    uploadProgress.value = 0
   }
 }
 
@@ -2667,12 +2754,27 @@ window.addEventListener('unhandledrejection', (event) => {
   event.preventDefault()
 })
 
+async function loadSiteConfig() {
+  try {
+    const cfg = await request('/api/public/config', { token: null })
+    siteConfig.knowledgeEnabled = cfg.knowledgeEnabled !== false
+    siteConfig.diagnosticsEnabled = cfg.diagnosticsEnabled !== false
+  } catch { /* use defaults */ }
+}
+
 onMounted(() => {
+  loadSiteConfig()
   const saved = getSavedAuth()
   if (saved) {
     auth.token = saved.token
     auth.user = saved.user
   }
   syncRoute()
+  window.addEventListener('beforeunload', (e) => {
+    if (uploading.value) {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+  })
 })
 </script>

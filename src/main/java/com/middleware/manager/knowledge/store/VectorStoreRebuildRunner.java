@@ -7,7 +7,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -16,13 +15,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 启动时自动重建 InMemoryVectorStore。
- * 从 MySQL knowledge_chunks 表读取已有切片，重新生成 embedding 写入内存向量库。
- * 仅在 app.vector.type=memory 时生效，生产环境（milvus）不执行。
+ * 启动时自动重建向量库。
+ * 从 MySQL knowledge_chunks 表读取已有切片，重新生成 embedding 写入向量库。
+ * 切换向量存储类型（memory/milvus）后，重启即可自动迁移向量数据。
  */
 @Component
 @Order(10)
-@ConditionalOnProperty(name = "app.vector.type", havingValue = "memory")
 public class VectorStoreRebuildRunner implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(VectorStoreRebuildRunner.class);
@@ -46,6 +44,12 @@ public class VectorStoreRebuildRunner implements ApplicationRunner {
 
     private void rebuild() {
         try {
+            long existingCount = vectorStore.count();
+            if (existingCount > 0) {
+                log.info("[VectorRebuild] Vector store already has {} entries, skip rebuild.", existingCount);
+                return;
+            }
+
             List<KnowledgeChunk> chunks = chunkRepository.findAll();
             if (chunks.isEmpty()) {
                 log.info("[VectorRebuild] No chunks in database, skip.");

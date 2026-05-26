@@ -13,6 +13,8 @@ public interface VectorStore {
 
     void createCollection();
 
+    long count();
+
     class VectorSearchResult {
         private String id;
         private float score;

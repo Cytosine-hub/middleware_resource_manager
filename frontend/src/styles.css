@@ -2126,3 +2126,73 @@ td.row-actions {
     display: none;
   }
 }
+
+/* ── 上传/下载进度条 ── */
+.upload-progress-bar {
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-track {
+  flex: 1;
+  height: 6px;
+  background: #e3e9f1;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-track.large {
+  height: 10px;
+  border-radius: 5px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #2356a5;
+  border-radius: inherit;
+  transition: width 0.2s ease;
+}
+
+.progress-text {
+  font-size: 13px;
+  color: #4a5568;
+  white-space: nowrap;
+  min-width: 70px;
+  text-align: right;
+}
+
+.download-progress-overlay {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 200;
+}
+
+.download-progress-card {
+  background: #fff;
+  border: 1px solid #e3e9f1;
+  border-radius: 10px;
+  padding: 16px 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  min-width: 300px;
+}
+
+.download-progress-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #182033;
+  margin-bottom: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.download-progress-info {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #4a5568;
+}

@@ -8,6 +8,7 @@
 | MySQL | 8.0+ | 现有数据库，复用 |
 | Milvus | 2.4+ | 向量数据库，可选（不部署则使用内存向量库） |
 | LLM API | OpenAI 兼容格式 | 需要 API Key（当前使用 mimo-v2.5-pro） |
+| Embedding 模型 | OpenAI 兼容格式 | 本地 Ollama BGE-large（localhost:11434）或远程 API |
 
 ## 二、部署架构
 
@@ -44,9 +45,28 @@ curl http://localhost:9091/healthz
 # 返回 {"status":"healthy"} 即成功
 ```
 
-### 3.2 获取 LLM API Key
+### 3.2 获取 LLM API Key 与 Embedding 模型
 
-当前项目使用 OpenAI 兼容格式的 LLM API。在 `application.yml` 中配置：
+当前项目使用 OpenAI 兼容格式的 LLM API。对话模型和 Embedding 模型可分开配置。
+
+**本地开发（local profile）**：Embedding 使用本地 Ollama BGE-large 模型：
+
+```yaml
+# application-local.yml
+langchain4j:
+  open-ai:
+    embedding-model:
+      base-url: http://localhost:11434/v1
+      api-key: ollama
+      model-name: bge-large
+```
+
+前置条件：安装 Ollama 并下载 bge-large 模型：
+```bash
+ollama pull bge-large
+```
+
+**生产环境**：在 `application.yml` 或环境变量中配置：
 
 ```yaml
 langchain4j:
@@ -55,6 +75,10 @@ langchain4j:
       base-url: https://your-llm-api/v1
       api-key: your-api-key
       model-name: your-model-name
+    embedding-model:
+      base-url: https://your-embedding-api/v1
+      api-key: your-api-key
+      model-name: bge-large   # 或其他 embedding 模型，维度需匹配 VECTOR_DIM=1024
 ```
 
 也可通过环境变量覆盖（见 3.4 节）。
