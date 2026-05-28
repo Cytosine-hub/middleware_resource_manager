@@ -378,6 +378,7 @@
                   <span v-for="cat in parseCategories(cmd.categories)" :key="cat" class="command-cat-tag">{{ cat }}</span>
                   <div style="margin-left:auto;display:flex;gap:6px">
                     <button class="ghost" @click.stop="copyCommand(cmd.commandFormat)">复制</button>
+                    <button v-if="auth.token" class="ghost" @click.stop="openEditCommandDialog(cmd)">编辑</button>
                     <button v-if="auth.token" class="danger" @click.stop="deleteCommand(cmd)">删除</button>
                   </div>
                 </div>
@@ -394,7 +395,7 @@
         <div v-if="showCommandDialog" class="modal-backdrop" @click.self="closeCommandDialog()">
           <form class="modal-panel" @submit.prevent="saveCommand()">
             <div class="panel-title">
-              <h3>新增常用命令</h3>
+              <h3>{{ cmdForm.id ? '编辑常用命令' : '新增常用命令' }}</h3>
               <button type="button" class="ghost" @click="closeCommandDialog()">关闭</button>
             </div>
             <div class="form-grid single">
@@ -1325,7 +1326,7 @@ const standardTocItems = computed(() => {
 const filteredCommands = computed(() => {
   let list = cmdCommands.value
   if (selectedCmdType.value != null) {
-    list = list.filter(c => c.middlewareType?.id === selectedCmdType.value)
+    list = list.filter(c => c.middlewareTypeId === selectedCmdType.value)
   }
   if (cmdSearch.value) {
     const q = cmdSearch.value.toLowerCase()
@@ -1344,7 +1345,8 @@ function getTypeName(typeId) {
 }
 
 function getCmdTypeName(cmd) {
-  return cmd.middlewareType?.name || ''
+  const t = cmdTypes.value.find(x => x.id === cmd.middlewareTypeId)
+  return t ? t.name : ''
 }
 
 function parseCategories(cats) {
@@ -1380,6 +1382,18 @@ function openCreateCommandDialog() {
   showCommandDialog.value = true
 }
 
+function openEditCommandDialog(cmd) {
+  Object.assign(cmdForm, {
+    id: cmd.id,
+    middlewareTypeId: cmd.middlewareTypeId,
+    commandFormat: cmd.commandFormat || '',
+    briefDescription: cmd.briefDescription || '',
+    detailedDescription: cmd.detailedDescription || '',
+    categories: (() => { try { return JSON.parse(cmd.categories).join(', ') } catch { return '' } })()
+  })
+  showCommandDialog.value = true
+}
+
 function closeCommandDialog() {
   showCommandDialog.value = false
   Object.assign(cmdForm, defaultCommandForm())
@@ -1395,9 +1409,10 @@ async function saveCommand() {
     categories: cats,
     sortOrder: 0
   }
+  const isEdit = !!cmdForm.id
   try {
-    const res = await fetch('/api/middleware-commands', {
-      method: 'POST',
+    const res = await fetch(isEdit ? `/api/middleware-commands/${cmdForm.id}` : '/api/middleware-commands', {
+      method: isEdit ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(body)
     })
