@@ -228,7 +228,7 @@
               </div>
               <span class="status ok">已发布</span>
             </div>
-            <div v-if="selectedPublicStandard.documentType === 'STANDARD' && relatedDocsForStandard.length > 0" class="doc-nav-list">
+            <div v-if="selectedPublicStandard.documentType !== 'MANUAL' && selectedPublicStandard.documentType !== 'ARTICLE' && relatedDocsForStandard.length > 0" class="doc-nav-list">
               <a
                 v-for="doc in relatedDocsForStandard"
                 :key="publicDocKey(doc)"
