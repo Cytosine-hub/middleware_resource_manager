@@ -5,15 +5,25 @@
     <select id="findByDownloadTokenAndPublishedTrue" resultType="ReleaseAsset">SELECT * FROM release_assets WHERE download_token = #{downloadToken} AND published = true</select>
     <select id="existsByStoredFileNameIgnoreCase" resultType="boolean">SELECT COUNT(*) > 0 FROM release_assets WHERE LOWER(stored_file_name) = LOWER(#{storedFileName})</select>
     <select id="existsBySoftwareTypeId" resultType="boolean">SELECT COUNT(*) > 0 FROM release_assets WHERE software_type_id = #{softwareTypeId}</select>
+    <select id="existsByMiddlewareNameIgnoreCaseAndVersionIgnoreCaseAndOriginalFileNameIgnoreCase" resultType="boolean">SELECT COUNT(*) > 0 FROM release_assets WHERE LOWER(middleware_name) = LOWER(#{middlewareName}) AND LOWER(version) = LOWER(#{version}) AND LOWER(original_file_name) = LOWER(#{originalFileName})</select>
     <select id="findWithFilter" resultType="ReleaseAsset">
-        SELECT * FROM release_assets
+        SELECT ra.* FROM release_assets ra
+        <if test="category != null and category != ''">
+            INNER JOIN software_types st ON ra.software_type_id = st.id
+        </if>
         <where>
-            <if test="published != null">AND published = #{published}</if>
+            <if test="published != null">AND ra.published = #{published}</if>
             <if test="keyword != null and keyword != ''">
-                AND (middleware_name LIKE CONCAT('%',#{keyword},'%') OR description LIKE CONCAT('%',#{keyword},'%') OR original_file_name LIKE CONCAT('%',#{keyword},'%'))
+                AND (ra.middleware_name LIKE CONCAT('%',#{keyword},'%') OR ra.description LIKE CONCAT('%',#{keyword},'%') OR ra.original_file_name LIKE CONCAT('%',#{keyword},'%'))
+            </if>
+            <if test="category != null and category != ''">
+                AND st.category = #{category}
+            </if>
+            <if test="platform != null and platform != ''">
+                AND ra.platform = #{platform}
             </if>
         </where>
-        ORDER BY created_at DESC
+        ORDER BY ra.created_at DESC
     </select>
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO release_assets (middleware_name, software_type_id, version, platform, description, released_at, published, download_token, original_file_name, stored_file_name, content_type, file_size, download_count, standard_document_id, created_at, updated_at)

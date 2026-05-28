@@ -25,6 +25,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -130,6 +131,7 @@ public class ReleaseService {
                 entity.setContentType(storedFile.contentType());
                 entity.setFileSize(storedFile.size());
                 entity.setDownloadCount(0);
+                entity.setDownloadToken(UUID.randomUUID().toString().replace("-", ""));
                 entity.setCreatedAt(LocalDateTime.now());
                 entity.setUpdatedAt(LocalDateTime.now());
 
@@ -161,6 +163,7 @@ public class ReleaseService {
         entity.setContentType(storedFile.contentType());
         entity.setFileSize(storedFile.size());
         entity.setDownloadCount(0);
+        entity.setDownloadToken(UUID.randomUUID().toString().replace("-", ""));
         entity.setCreatedAt(LocalDateTime.now());
         entity.setUpdatedAt(LocalDateTime.now());
         releaseAssetMapper.insert(entity);
