@@ -218,7 +218,6 @@
           <article class="standards-detail-content">
             <div class="standard-detail-head">
               <div>
-                <p class="eyebrow">{{ documentTypeLabel(selectedPublicStandard.documentType) }}</p>
                 <h2>{{ displayTitle(selectedPublicStandard) }}</h2>
                 <p class="muted">
                   {{ selectedPublicStandard.category || '-' }} / {{ selectedPublicStandard.software || '-' }}
