@@ -1345,6 +1345,12 @@ manual-list button.ghost.related-document-link:hover {
   overflow: auto;
 }
 
+.review-detail-modal {
+  width: min(90vw, 1400px);
+  max-height: 90vh;
+  overflow: auto;
+}
+
 .form-modal {
   width: min(760px, calc(100vw - 32px));
 }
@@ -1603,7 +1609,7 @@ td.row-actions {
 .diff-view {
   max-height: 60vh;
   overflow: auto;
-  background: #1e1e2e;
+  background: #f0f0f0;
   border-radius: 6px;
   padding: 16px;
 }
@@ -1612,10 +1618,31 @@ td.row-actions {
   font-family: Consolas, "SFMono-Regular", "Fira Code", monospace;
   font-size: 13px;
   line-height: 1.6;
-  color: #cdd6f4;
+  color: #333;
   margin: 0;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.diff-line {
+  display: block;
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.diff-line-add {
+  background: #dafbe1;
+  color: #1a7f37;
+}
+
+.diff-line-del {
+  background: #ffebe9;
+  color: #cf222e;
+}
+
+.diff-line-info {
+  color: #656d76;
+  font-style: italic;
 }
 
 .review-meta {

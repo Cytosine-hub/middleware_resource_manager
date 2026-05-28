@@ -1099,7 +1099,7 @@
     </div>
 
     <div v-if="selectedReview" class="modal-backdrop" @click.self="closeReviewDetail()">
-      <article class="modal-panel wide-modal">
+      <article class="modal-panel review-detail-modal">
         <div class="panel-title">
           <h3>{{ selectedReview.documentType === 'PARAMETER_STANDARD' ? [selectedReview.category, selectedReview.software].filter(Boolean).join(' / ') : selectedReview.documentTitle }}</h3>
           <button type="button" class="ghost" @click="closeReviewDetail()">关闭</button>
@@ -1115,7 +1115,8 @@
         </div>
         <div class="diff-view">
           <h4>版本差异对比</h4>
-          <pre class="diff-content" v-text="selectedReviewDiff"></pre>
+          <pre class="diff-content"><template v-for="(line, idx) in diffLines" :key="idx"><span :class="['diff-line', line.startsWith('+') ? 'diff-line-add' : line.startsWith('-') ? 'diff-line-del' : line.startsWith('@@') ? 'diff-line-info' : '' ]">{{ line }}</span>
+</template></pre>
         </div>
         <div v-if="selectedReview.status === 'PENDING' && isSysAdmin" class="review-actions-panel">
           <div class="form-grid single">
@@ -1229,6 +1230,7 @@ const diffContent = ref('')
 const allReviews = ref([])
 const selectedReview = ref(null)
 const selectedReviewDiff = ref('')
+const diffLines = computed(() => selectedReviewDiff.value ? selectedReviewDiff.value.split('\n') : [])
 const reviewFilters = reactive({ status: '' })
 const reviewPage = reactive({ page: 0, size: 10 })
 
