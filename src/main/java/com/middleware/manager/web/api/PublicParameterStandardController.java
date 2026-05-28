@@ -52,6 +52,12 @@ public class PublicParameterStandardController {
             standard.setContent(standard.getPreviousContent());
             standard.setRenderedContent(null);
         }
-        return ParameterStandardResponse.from(standard, service.render(standard));
+        ParameterStandardResponse resp = ParameterStandardResponse.from(standard, service.render(standard));
+        List<StandardDocumentResponse> relatedDocs = documentService
+                .listPublishedRelatedDocuments(standard.getId()).stream()
+                .map(rd -> StandardDocumentResponse.from(rd, null))
+                .collect(Collectors.toList());
+        resp.setRelatedDocuments(relatedDocs);
+        return resp;
     }
 }

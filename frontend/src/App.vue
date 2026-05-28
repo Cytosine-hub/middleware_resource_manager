@@ -108,23 +108,13 @@
         </div>
         <div class="portal-grid portal-tools-grid">
           <article class="portal-card portal-tool">
-            <div class="portal-icon tool-icon">库</div>
-            <div><h3>知识库</h3><p>运维文档、故障案例、技术方案和经验总结。</p></div>
-            <button class="ghost">查看</button>
-          </article>
-          <article class="portal-card portal-tool">
             <div class="portal-icon tool-icon">监</div>
             <div><h3>监控面板</h3><p>服务器性能、中间件状态、告警信息统一查看。</p></div>
             <button class="ghost">查看</button>
           </article>
-          <article class="portal-card portal-tool">
-            <div class="portal-icon tool-icon">端</div>
-            <div><h3>远程终端</h3><p>Web SSH 终端，快速连接服务器和管理中间件。</p></div>
-            <button class="ghost">打开</button>
-          </article>
-          <article class="portal-card portal-tool">
-            <div class="portal-icon tool-icon">备</div>
-            <div><h3>备份管理</h3><p>数据库与配置文件定时备份、恢复和版本管理。</p></div>
+          <article class="portal-card portal-tool" @click="goCommands()">
+            <div class="portal-icon tool-icon">令</div>
+            <div><h3>常用命令</h3><p>中间件常用运维命令速查手册。</p></div>
             <button class="ghost">查看</button>
           </article>
         </div>
@@ -238,9 +228,45 @@
               </div>
               <span class="status ok">已发布</span>
             </div>
-            <p v-if="selectedPublicStandard.summary" class="description">{{ selectedPublicStandard.summary }}</p>
-            <div v-if="standardsLoading" class="loading-panel"><div class="spinner"></div><p>加载中...</p></div>
-            <div v-else class="markdown-preview public-document" v-html="publicStandardHtml"></div>
+            <div v-if="relatedDocsForStandard.length > 0" class="doc-nav-list">
+              <a
+                v-for="doc in relatedDocsForStandard"
+                :key="publicDocKey(doc)"
+                class="doc-nav-link"
+                href="#"
+                @click.prevent="openPublicStandardDetail(doc.id, doc.documentType)"
+              >
+                <span class="doc-nav-title">{{ displayTitle(doc) }}</span>
+                <span class="doc-nav-meta muted">{{ documentTypeLabel(doc.documentType) }} · v{{ doc.version || '-' }}</span>
+              </a>
+            </div>
+            <div v-else class="muted" style="padding:16px 0">暂无关联文档</div>
+
+            <div v-if="publicStandardParams.length > 0" class="public-params-section">
+              <div class="public-params-header">
+                <h3>参数列表</h3>
+                <input v-model.trim="publicParamSearch" placeholder="搜索参数..." class="public-params-search" @input="publicParamPage.page = 0" />
+              </div>
+              <div class="public-params-count muted">共 {{ filteredPublicParams.length }} 项参数</div>
+              <div class="public-params-table">
+                <div class="public-param-thead">
+                  <span class="col-name">参数名称</span>
+                  <span class="col-value">参数值</span>
+                  <span class="col-desc">说明</span>
+                </div>
+                <article v-for="param in pagedPublicParams" :key="param.id" class="public-param-item">
+                  <div class="public-param-row">
+                    <span class="public-param-name">{{ param.name }}</span>
+                    <span class="public-param-value">{{ param.value }}</span>
+                    <span class="public-param-desc-cell">
+                      {{ param.description || '-' }}
+                      <span v-if="param.deploymentStandard" class="status ok" style="font-size:11px;padding:1px 6px;margin-left:6px">部署标准</span>
+                    </span>
+                  </div>
+                </article>
+              </div>
+              <Pagination :page="publicParamPage" @change="(p) => publicParamPage.page = p" />
+            </div>
           </article>
           <aside class="post-toc-panel" v-if="standardTocItems.length">
             <h4 class="toc-title">文档大纲</h4>
@@ -325,6 +351,68 @@
 
       <KnowledgePanel v-else-if="route.name === 'knowledge' && siteConfig.knowledgeEnabled" :auth="auth" :notify="notify" />
       <DiagnosticsPanel v-else-if="route.name === 'diagnostics' && siteConfig.diagnosticsEnabled" :auth="auth" />
+
+      <section v-else-if="route.name === 'commands'" class="workspace commands-page">
+        <div class="toolbar">
+          <button class="ghost" @click="goHome()">← 返回首页</button>
+          <h2 style="margin-left:12px;flex:1">常用命令</h2>
+          <input v-model.trim="cmdSearch" placeholder="搜索命令..." style="max-width:260px" />
+          <button v-if="auth.token" @click="openCreateCommandDialog()">新增命令</button>
+        </div>
+        <div class="commands-layout">
+          <aside class="commands-sidebar">
+            <div class="type-list">
+              <button :class="{ active: selectedCmdType === null }" @click="selectedCmdType = null">全部</button>
+              <button v-for="t in cmdTypes" :key="t.id" :class="{ active: selectedCmdType === t.id }" @click="selectedCmdType = t.id">{{ t.name }}</button>
+            </div>
+          </aside>
+          <main class="commands-main">
+            <div class="command-list">
+              <article v-for="cmd in filteredCommands" :key="cmd.id" class="command-card" @click="cmd._expanded = !cmd._expanded">
+                <div class="command-header">
+                  <span class="command-type-tag">{{ getCmdTypeName(cmd) }}</span>
+                  <span class="command-brief">{{ cmd.briefDescription }}</span>
+                  <span v-for="cat in parseCategories(cmd.categories)" :key="cat" class="command-cat-tag">{{ cat }}</span>
+                  <div style="margin-left:auto;display:flex;gap:6px">
+                    <button class="ghost" @click.stop="copyCommand(cmd.commandFormat)">复制</button>
+                    <button v-if="auth.token" class="danger" @click.stop="deleteCommand(cmd)">删除</button>
+                  </div>
+                </div>
+                <pre class="command-code">{{ cmd.commandFormat }}</pre>
+                <div v-if="cmd._expanded && cmd.detailedDescription" class="command-detail">
+                  <div v-html="formatDetail(cmd.detailedDescription)"></div>
+                </div>
+              </article>
+              <p v-if="filteredCommands.length === 0" class="empty-state">暂无匹配的命令。</p>
+            </div>
+          </main>
+        </div>
+
+        <div v-if="showCommandDialog" class="modal-backdrop" @click.self="closeCommandDialog()">
+          <form class="modal-panel" @submit.prevent="saveCommand()">
+            <div class="panel-title">
+              <h3>新增常用命令</h3>
+              <button type="button" class="ghost" @click="closeCommandDialog()">关闭</button>
+            </div>
+            <div class="form-grid single">
+              <label>所属类型
+                <select v-model="cmdForm.middlewareTypeId" required>
+                  <option value="" disabled>请选择</option>
+                  <option v-for="t in cmdTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
+                </select>
+              </label>
+              <label>命令格式<textarea v-model.trim="cmdForm.commandFormat" required rows="4" placeholder="如: redis-cli -h $HOST -p $PORT info"></textarea></label>
+              <label>简要说明<input v-model.trim="cmdForm.briefDescription" required maxlength="500" placeholder="如: 查看基础信息" /></label>
+              <label>详细说明<textarea v-model.trim="cmdForm.detailedDescription" rows="6" placeholder="命令的详细说明、参数解释等"></textarea></label>
+              <label>分类标签<input v-model.trim="cmdForm.categories" placeholder="多个标签用逗号分隔，如: 基础,常用,查询" /></label>
+            </div>
+            <div class="form-actions">
+              <button type="submit">保存</button>
+              <button type="button" class="ghost" @click="closeCommandDialog()">取消</button>
+            </div>
+          </form>
+        </div>
+      </section>
 
       <section v-else class="workspace">
         <div v-if="!auth.token" class="login-page">
@@ -1087,6 +1175,9 @@ const selectedPublicStandardKey = computed(() => publicDocKey(selectedPublicStan
 const publicDocuments = ref([])
 const publicDocCategory = ref('全部')
 const activeStdTocId = ref('')
+const publicStandardParams = ref([])
+const publicParamSearch = ref('')
+const publicParamPage = reactive({ page: 0, size: 10, totalPages: 0, totalElements: 0, first: true, last: true })
 
 let stdScrollHandler = null
 function initStdScrollSpy() {
@@ -1165,6 +1256,15 @@ const typeForm = reactive(defaultTypeForm())
 const standardForm = reactive(defaultStandardForm())
 const parameterForm = reactive(defaultParameterForm())
 
+// ── 常用命令 ──
+const cmdTypes = ref([])
+const cmdCommands = ref([])
+const selectedCmdType = ref(null)
+const cmdSearch = ref('')
+const showCommandDialog = ref(false)
+function defaultCommandForm() { return { id: null, middlewareTypeId: '', commandFormat: '', briefDescription: '', detailedDescription: '', categories: '' } }
+const cmdForm = reactive(defaultCommandForm())
+
 // ── RBAC helpers ──
 const currentUserRole = computed(() => auth.user?.role || '')
 const isSysAdmin = computed(() => currentUserRole.value === '系统管理员')
@@ -1193,6 +1293,7 @@ const pageTitle = computed(() => {
   if (route.name && route.name.startsWith('forum')) return 'infra论坛'
   if (route.name === 'knowledge') return '知识库管理'
   if (route.name === 'diagnostics') return '智能排查'
+  if (route.name === 'commands') return '常用命令'
   return '管理后台'
 })
 const publicStandardHtml = computed(() => {
@@ -1217,6 +1318,115 @@ const standardTocItems = computed(() => {
   }
   return items
 })
+
+const filteredCommands = computed(() => {
+  let list = cmdCommands.value
+  if (selectedCmdType.value != null) {
+    list = list.filter(c => c.middlewareType?.id === selectedCmdType.value)
+  }
+  if (cmdSearch.value) {
+    const q = cmdSearch.value.toLowerCase()
+    list = list.filter(c =>
+      (c.commandFormat && c.commandFormat.toLowerCase().includes(q)) ||
+      (c.briefDescription && c.briefDescription.toLowerCase().includes(q)) ||
+      (c.detailedDescription && c.detailedDescription.toLowerCase().includes(q))
+    )
+  }
+  return list
+})
+
+function getTypeName(typeId) {
+  const t = cmdTypes.value.find(x => x.id === typeId)
+  return t ? t.name : ''
+}
+
+function getCmdTypeName(cmd) {
+  return cmd.middlewareType?.name || ''
+}
+
+function parseCategories(cats) {
+  if (!cats) return []
+  try { return JSON.parse(cats) } catch { return [] }
+}
+
+function formatDetail(text) {
+  if (!text) return ''
+  return text.replace(/\n/g, '<br>').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+}
+
+function copyCommand(text) {
+  navigator.clipboard.writeText(text).then(() => notify('已复制到剪贴板')).catch(() => {})
+}
+
+async function loadCmdTypes() {
+  try {
+    const res = await fetch('/api/middleware-commands/types')
+    if (res.ok) cmdTypes.value = await res.json()
+  } catch {}
+}
+
+async function loadCmdCommands() {
+  try {
+    const res = await fetch('/api/middleware-commands')
+    if (res.ok) cmdCommands.value = (await res.json()).map(c => ({ ...c, _expanded: false }))
+  } catch {}
+}
+
+function openCreateCommandDialog() {
+  Object.assign(cmdForm, defaultCommandForm())
+  showCommandDialog.value = true
+}
+
+function closeCommandDialog() {
+  showCommandDialog.value = false
+  Object.assign(cmdForm, defaultCommandForm())
+}
+
+async function saveCommand() {
+  const cats = cmdForm.categories ? JSON.stringify(cmdForm.categories.split(/[,，]/).map(s => s.trim()).filter(Boolean)) : null
+  const body = {
+    middlewareTypeId: cmdForm.middlewareTypeId,
+    commandFormat: cmdForm.commandFormat,
+    briefDescription: cmdForm.briefDescription,
+    detailedDescription: cmdForm.detailedDescription,
+    categories: cats,
+    sortOrder: 0
+  }
+  try {
+    const res = await fetch('/api/middleware-commands', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(body)
+    })
+    if (res.ok) {
+      notify('命令已保存')
+      closeCommandDialog()
+      loadCmdCommands()
+    } else {
+      const err = await res.json().catch(() => ({}))
+      notify(err.message || '保存失败')
+    }
+  } catch { notify('网络错误') }
+}
+
+async function deleteCommand(cmd) {
+  if (!confirm(`确定删除命令：${cmd.briefDescription}？`)) return
+  try {
+    const res = await fetch(`/api/middleware-commands/${cmd.id}`, {
+      method: 'DELETE',
+      headers: authHeaders()
+    })
+    if (res.ok) {
+      notify('已删除')
+      loadCmdCommands()
+    }
+  } catch { notify('网络错误') }
+}
+
+function authHeaders() {
+  return auth.token ? { Authorization: `Basic ${auth.token}` } : {}
+}
+
 const publicDocumentGroups = computed(() => {
   const groups = new Map()
   for (const doc of publicDocuments.value) {
@@ -1255,6 +1465,10 @@ const filteredPublicDocuments = computed(() => {
     return da.localeCompare(db) || (a.title || '').localeCompare(b.title || '')
   })
   return docs
+})
+
+const relatedDocsForStandard = computed(() => {
+  return selectedPublicStandard.value?.relatedDocuments || []
 })
 
 const publicStandardGroups = computed(() => {
@@ -1488,6 +1702,7 @@ function parseRoute() {
   const standardMatch = hash.match(/^\/standards\/(\d+)$/)
   if (standardMatch) return { name: 'standards', standardId: standardMatch[1], standardType: null }
   if (hash === '/standards') return { name: 'standards', standardId: null, standardType: null }
+  if (hash === '/commands' || hash.startsWith('/commands')) return { name: 'commands' }
   return { name: 'public', token: null }
 }
 
@@ -1510,6 +1725,9 @@ function syncRoute() {
   }
   if (route.name === 'home') {
     loadPublic()
+  } else if (route.name === 'commands') {
+    loadCmdTypes()
+    loadCmdCommands()
   } else if (route.name === 'public') {
     if (route.token) {
       loadDetail(route.token)
@@ -1579,13 +1797,17 @@ async function loadPublicStandardDetail(id, type) {
   try {
     if (type === 'doc') {
       selectedPublicStandard.value = await request(`/api/public/standards/${id}`, { token: null })
+      publicStandardParams.value = []
     } else if (type === 'ps') {
       selectedPublicStandard.value = await request(`/api/public/parameter-standards/${id}`, { token: null })
+      await loadPublicStandardParams(id)
     } else {
       try {
         selectedPublicStandard.value = await request(`/api/public/parameter-standards/${id}`, { token: null })
+        await loadPublicStandardParams(id)
       } catch {
         selectedPublicStandard.value = await request(`/api/public/standards/${id}`, { token: null })
+        publicStandardParams.value = []
       }
     }
     await nextTick()
@@ -1598,6 +1820,43 @@ async function loadPublicStandardDetail(id, type) {
 function openPublicDocumentDetail(id) {
   window.location.hash = `#/standards/doc/${id}`
 }
+
+async function loadPublicStandardParams(standardId) {
+  publicParamSearch.value = ''
+  publicParamPage.page = 0
+  try {
+    const list = await request(`/api/public/standard-parameters?parameterStandardId=${standardId}`, { token: null })
+    publicStandardParams.value = list.filter(p => p.active !== false)
+  } catch {
+    publicStandardParams.value = []
+  }
+}
+
+const filteredPublicParams = computed(() => {
+  let list = publicStandardParams.value
+  if (publicParamSearch.value) {
+    const q = publicParamSearch.value.toLowerCase()
+    list = list.filter(p =>
+      (p.code && p.code.toLowerCase().includes(q)) ||
+      (p.name && p.name.toLowerCase().includes(q)) ||
+      (p.description && p.description.toLowerCase().includes(q)) ||
+      (p.category && p.category.toLowerCase().includes(q))
+    )
+  }
+  return list
+})
+
+const pagedPublicParams = computed(() => {
+  const total = filteredPublicParams.value.length
+  const totalPages = Math.max(1, Math.ceil(total / publicParamPage.size))
+  publicParamPage.totalPages = totalPages
+  publicParamPage.totalElements = total
+  publicParamPage.first = publicParamPage.page <= 0
+  publicParamPage.last = publicParamPage.page >= totalPages - 1
+  if (publicParamPage.page >= totalPages) publicParamPage.page = Math.max(0, totalPages - 1)
+  const start = publicParamPage.page * publicParamPage.size
+  return filteredPublicParams.value.slice(start, start + publicParamPage.size)
+})
 
 async function loadAdmin() {
   const query = `keyword=${encodeURIComponent(adminFilters.keyword)}&platform=${encodeURIComponent(adminFilters.platform)}&page=${adminFilters.page}&size=${adminFilters.size}${adminPublishedParam.value}`
@@ -1741,6 +2000,7 @@ function goForumNew() {
 function goForumEdit(id) { window.location.hash = `#/forum/edit/${id}` }
 function goKnowledge() { window.location.hash = '#/knowledge' }
 function goDiagnostics() { window.location.hash = '#/diagnostics' }
+function goCommands() { window.location.hash = '#/commands' }
 function onForumPostSaved() { goForum() }
 
 function handleDownload(url, fileName) {

@@ -833,10 +833,15 @@ label {
   letter-spacing: 0;
 }
 
-.related-document-link {
+manual-list button.ghost.related-document-link {
   justify-content: flex-start;
   min-height: 34px;
   text-align: left;
+  color: #2356a5 !important;
+  background: #e8eef8 !important;
+}
+manual-list button.ghost.related-document-link:hover {
+  background: #dbe7f7 !important;
 }
 
 .public-document {
@@ -856,6 +861,33 @@ label {
   color: #3f4c5e;
   line-height: 1.65;
   white-space: pre-wrap;
+}
+
+.doc-nav-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px 24px;
+  padding: 12px 0;
+}
+.doc-nav-link {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+  color: #2356a5;
+  text-decoration: none;
+  cursor: pointer;
+}
+.doc-nav-link:hover {
+  color: #1a4689;
+  text-decoration: underline;
+}
+.doc-nav-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+.doc-nav-meta {
+  font-size: 12px;
 }
 
 .card-footer,
@@ -2195,4 +2227,225 @@ td.row-actions {
   margin-top: 6px;
   font-size: 13px;
   color: #4a5568;
+}
+
+/* ── 常用命令页面 ── */
+.commands-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.commands-page .toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+.commands-page .toolbar h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #182033;
+}
+.commands-page .toolbar input {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.commands-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+.commands-sidebar {
+  width: 180px;
+  min-width: 180px;
+  border-right: 1px solid #e2e8f0;
+  background: #f8fafc;
+  overflow-y: auto;
+  padding: 12px 0;
+}
+.commands-sidebar .type-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.commands-sidebar .type-list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: #4a5568;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.commands-sidebar .type-list button:hover {
+  background: #e2e8f0;
+  color: #182033;
+}
+.commands-sidebar .type-list button.active {
+  background: #e0e7ff;
+  color: #3730a3;
+  font-weight: 600;
+}
+.commands-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px;
+}
+.command-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.command-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 18px;
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+.command-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.command-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.command-type-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #e0e7ff;
+  color: #3730a3;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.command-brief {
+  font-size: 14px;
+  font-weight: 500;
+  color: #182033;
+}
+.command-cat-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  background: #f1f5f9;
+  color: #64748b;
+  border-radius: 3px;
+  font-size: 11px;
+}
+.command-code {
+  margin: 10px 0 0;
+  padding: 10px 14px;
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.command-detail {
+  margin-top: 10px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #4a5568;
+  line-height: 1.6;
+}
+
+/* ── 公共参数列表 ── */
+.public-params-section {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 2px solid #e2e8f0;
+}
+.public-params-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.public-params-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #182033;
+  margin: 0;
+}
+.public-params-search {
+  max-width: 240px;
+  padding: 5px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.public-params-count {
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.public-params-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.public-params-table {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.public-param-thead {
+  display: flex;
+  align-items: center;
+  background: #f1f5f9;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+}
+.public-param-thead .col-name { flex: 0 0 180px; }
+.public-param-thead .col-value { flex: 0 0 260px; }
+.public-param-thead .col-desc { flex: 1; }
+.public-param-item {
+  background: #fff;
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.public-param-item:last-child { border-bottom: none; }
+.public-param-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.public-param-name {
+  flex: 0 0 180px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #182033;
+}
+.public-param-value {
+  flex: 0 0 260px;
+  font-size: 13px;
+  color: #3730a3;
+}
+.public-param-desc {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+.public-param-desc-cell {
+  flex: 1;
+  font-size: 13px;
+  color: #64748b;
 }
