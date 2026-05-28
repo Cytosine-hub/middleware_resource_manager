@@ -1889,7 +1889,8 @@ async function loadStandardModule() {
 async function loadStandardDocuments() {
   const apiBase = standardApiBase()
   const data = await request(apiBase)
-  standardDocuments.value = Array.isArray(data) ? data.map(normalizeDoc) : []
+  const list = Array.isArray(data) ? data : (data?.content ?? [])
+  standardDocuments.value = list.map(normalizeDoc)
   if (selectedStandard.value) {
     selectedStandard.value = standardDocuments.value.find(doc => doc.id === selectedStandard.value.id) || null
   }
@@ -1905,7 +1906,8 @@ async function loadStandardDocuments() {
 async function loadAllParameterStandards() {
   try {
     const data = await request('/api/admin/parameter-standards')
-    allParameterStandards.value = Array.isArray(data) ? data.filter(d => d.status === 'PUBLISHED') : []
+    const list = Array.isArray(data) ? data : (data?.content ?? [])
+    allParameterStandards.value = list.filter(d => d.status === 'PUBLISHED')
   } catch {
     allParameterStandards.value = []
   }

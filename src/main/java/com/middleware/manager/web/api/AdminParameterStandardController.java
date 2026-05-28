@@ -3,9 +3,11 @@ package com.middleware.manager.web.api;
 import com.middleware.manager.domain.ParameterStandard;
 import com.middleware.manager.security.PermissionService;
 import com.middleware.manager.service.ParameterStandardService;
+import com.middleware.manager.service.StandardDocumentService;
 import com.middleware.manager.web.api.dto.PageResult;
 import com.middleware.manager.web.api.dto.ParameterStandardRequest;
 import com.middleware.manager.web.api.dto.ParameterStandardResponse;
+import com.middleware.manager.web.api.dto.StandardDocumentResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -20,17 +22,21 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/admin/parameter-standards")
 public class AdminParameterStandardController {
     private final ParameterStandardService service;
+    private final StandardDocumentService documentService;
     private final PermissionService permissionService;
 
     public AdminParameterStandardController(ParameterStandardService service,
+                                            StandardDocumentService documentService,
                                             PermissionService permissionService) {
         this.service = service;
+        this.documentService = documentService;
         this.permissionService = permissionService;
     }
 
@@ -44,7 +50,15 @@ public class AdminParameterStandardController {
         var pageInfo = service.list(keyword, status, category, page, size);
         PageResult<ParameterStandardResponse> result = new PageResult<>();
         result.setContent(pageInfo.getList().stream()
-                .map(doc -> ParameterStandardResponse.from(doc, service.render(doc)))
+                .map(doc -> {
+                    ParameterStandardResponse resp = ParameterStandardResponse.from(doc, service.render(doc));
+                    List<StandardDocumentResponse> relatedDocs = documentService.listPublishedRelatedDocuments(doc.getId())
+                            .stream()
+                            .map(rd -> StandardDocumentResponse.from(rd, null))
+                            .collect(Collectors.toList());
+                    resp.setRelatedDocuments(relatedDocs);
+                    return resp;
+                })
                 .collect(Collectors.toList()));
         result.setPage(pageInfo.getPageNum() - 1);
         result.setSize(pageInfo.getPageSize());
@@ -58,7 +72,13 @@ public class AdminParameterStandardController {
     @GetMapping("/{id}")
     public ParameterStandardResponse detail(@PathVariable Long id, Authentication authentication) {
         ParameterStandard standard = checkAccess(id, authentication);
-        return ParameterStandardResponse.from(standard, service.render(standard));
+        ParameterStandardResponse resp = ParameterStandardResponse.from(standard, service.render(standard));
+        List<StandardDocumentResponse> relatedDocs = documentService.listPublishedRelatedDocuments(standard.getId())
+                .stream()
+                .map(rd -> StandardDocumentResponse.from(rd, null))
+                .collect(Collectors.toList());
+        resp.setRelatedDocuments(relatedDocs);
+        return resp;
     }
 
     @PostMapping
