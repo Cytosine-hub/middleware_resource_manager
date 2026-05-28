@@ -228,7 +228,7 @@
               </div>
               <span class="status ok">已发布</span>
             </div>
-            <div v-if="relatedDocsForStandard.length > 0" class="doc-nav-list">
+            <div v-if="selectedPublicStandard.documentType === 'STANDARD' && relatedDocsForStandard.length > 0" class="doc-nav-list">
               <a
                 v-for="doc in relatedDocsForStandard"
                 :key="publicDocKey(doc)"
@@ -240,7 +240,6 @@
                 <span class="doc-nav-meta muted">{{ documentTypeLabel(doc.documentType) }} · v{{ doc.version || '-' }}</span>
               </a>
             </div>
-            <div v-else class="muted" style="padding:16px 0">暂无关联文档</div>
 
             <div v-if="standardsLoading" class="loading-panel"><div class="spinner"></div><p>加载中...</p></div>
             <div v-else class="markdown-preview public-document" v-html="publicStandardHtml"></div>
