@@ -13,14 +13,14 @@ public interface ForumPostRepository extends JpaRepository<ForumPost, Long> {
 
     @Query(value = "SELECT DISTINCT p.* FROM forum_posts p " +
            "LEFT JOIN forum_post_tags fpt ON p.id = fpt.post_id " +
-           "LEFT JOIN forum_tags t ON fpt.tags_id = t.id " +
+           "LEFT JOIN forum_tags t ON fpt.tag_id = t.id " +
            "WHERE p.status = 'PUBLISHED' " +
            "AND (:keyword IS NULL OR MATCH(p.title, p.content) AGAINST(:keyword IN BOOLEAN MODE)) " +
            "AND (:tag IS NULL OR LOWER(t.name) = LOWER(:tag)) " +
            "ORDER BY p.created_at DESC",
            countQuery = "SELECT COUNT(DISTINCT p.id) FROM forum_posts p " +
            "LEFT JOIN forum_post_tags fpt ON p.id = fpt.post_id " +
-           "LEFT JOIN forum_tags t ON fpt.tags_id = t.id " +
+           "LEFT JOIN forum_tags t ON fpt.tag_id = t.id " +
            "WHERE p.status = 'PUBLISHED' " +
            "AND (:keyword IS NULL OR MATCH(p.title, p.content) AGAINST(:keyword IN BOOLEAN MODE)) " +
            "AND (:tag IS NULL OR LOWER(t.name) = LOWER(:tag))",

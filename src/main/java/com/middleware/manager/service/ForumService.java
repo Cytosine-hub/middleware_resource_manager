@@ -38,7 +38,7 @@ public class ForumService {
 
     public Page<ForumPost> listPosts(String keyword, String tag, int page, int size) {
         int s = Math.min(Math.max(size, 1), 50);
-        PageRequest pr = PageRequest.of(Math.max(page, 0), s, Sort.by(Sort.Direction.DESC, "createdAt"));
+        PageRequest pr = PageRequest.of(Math.max(page, 0), s);
         if (StringUtils.hasText(keyword) || StringUtils.hasText(tag)) {
             String kw = StringUtils.hasText(keyword) ? sanitizeFulltext(keyword.trim()) : null;
             String tg = StringUtils.hasText(tag) ? tag.trim() : null;
