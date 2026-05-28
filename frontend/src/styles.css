@@ -1339,13 +1339,13 @@ manual-list button.ghost.related-document-link:hover {
   line-height: 1.6;
 }
 
-.wide-modal {
+.modal-panel.wide-modal {
   width: min(82vw, 1100px);
   max-height: 88vh;
   overflow: auto;
 }
 
-.review-detail-modal {
+.modal-panel.review-detail-modal {
   width: min(90vw, 1400px);
   max-height: 90vh;
   overflow: auto;
