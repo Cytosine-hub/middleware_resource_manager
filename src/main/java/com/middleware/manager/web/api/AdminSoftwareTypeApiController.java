@@ -47,7 +47,7 @@ public class AdminSoftwareTypeApiController {
     @PostMapping
     public SoftwareTypeResponse create(@Valid @RequestBody SoftwareTypeRequest request,
                                         Authentication authentication) {
-        checkTypeCategoryAccess(request.getCategory(), authentication);
+        checkSysAdmin(authentication);
         return SoftwareTypeResponse.from(softwareTypeService.create(request));
     }
 
@@ -55,24 +55,19 @@ public class AdminSoftwareTypeApiController {
     public SoftwareTypeResponse update(@PathVariable Long id,
                                        @Valid @RequestBody SoftwareTypeRequest request,
                                        Authentication authentication) {
-        checkTypeAccess(id, authentication);
+        checkSysAdmin(authentication);
         return SoftwareTypeResponse.from(softwareTypeService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Long id, Authentication authentication) {
-        checkTypeAccess(id, authentication);
+        checkSysAdmin(authentication);
         softwareTypeService.delete(id);
     }
 
-    private void checkTypeAccess(Long id, Authentication authentication) {
-        SoftwareType type = softwareTypeService.get(id);
-        checkTypeCategoryAccess(type.getCategory(), authentication);
-    }
-
-    private void checkTypeCategoryAccess(String category, Authentication authentication) {
-        if (!permissionService.canManageCategory(authentication, category)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权操作该分类类型");
+    private void checkSysAdmin(Authentication authentication) {
+        if (!permissionService.isAdmin(authentication)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅系统管理员可操作类型管理");
         }
     }
 }

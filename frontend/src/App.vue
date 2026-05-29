@@ -456,7 +456,7 @@
               </div>
               <nav class="side-nav" aria-label="Admin">
                 <button :class="{ active: adminSection === 'files' }" @click="switchAdminSection('files')">文件管理</button>
-                <button :class="{ active: adminSection === 'types' }" @click="switchAdminSection('types')">类型管理</button>
+                <button v-if="isSysAdmin" :class="{ active: adminSection === 'types' }" @click="switchAdminSection('types')">类型管理</button>
                 <button :class="{ active: adminSection === 'standardPublish' }" @click="switchAdminSection('standardPublish')">参数标准</button>
                 <button :class="{ active: adminSection === 'documentMaintenance' }" @click="switchAdminSection('documentMaintenance')">标准文档</button>
                 <button :class="{ active: adminSection === 'reviews' }" @click="switchAdminSection('reviews')">审核管理</button>

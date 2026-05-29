@@ -82,10 +82,12 @@ public class AdminReleaseApiController {
         if (bindingResult.hasErrors()) {
             throw new BindException(bindingResult);
         }
-        String category = permissionService.getManagedCategory(authentication);
-        if (category != null && form.getSoftwareTypeId() != null) {
-            // 管理岗只能创建自己分类的资源
-            // 由前端控制器分类选择，此处不再强制校验以保证系统管理员可跨分类
+        String managedCategory = permissionService.getManagedCategory(authentication);
+        if (managedCategory != null && form.getSoftwareTypeId() != null) {
+            SoftwareType type = softwareTypeMapper.findById(form.getSoftwareTypeId());
+            if (type != null && !managedCategory.equals(type.getCategory())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "只能操作本岗位分类的资源");
+            }
         }
         ReleaseAsset created = releaseService.create(form);
         return ReleaseResponse.from(created, loadSoftwareType(created));
@@ -105,7 +107,15 @@ public class AdminReleaseApiController {
     }
 
     @PostMapping("/import")
-    public ReleaseService.BatchImportResult batchImport(@Valid @RequestBody BatchImportForm form) {
+    public ReleaseService.BatchImportResult batchImport(@Valid @RequestBody BatchImportForm form,
+                                                        Authentication authentication) {
+        String managedCategory = permissionService.getManagedCategory(authentication);
+        if (managedCategory != null && form.getSoftwareTypeId() != null) {
+            SoftwareType type = softwareTypeMapper.findById(form.getSoftwareTypeId());
+            if (type != null && !managedCategory.equals(type.getCategory())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "只能操作本岗位分类的资源");
+            }
+        }
         return releaseService.batchImport(form);
     }
 
