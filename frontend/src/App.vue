@@ -735,7 +735,7 @@
                 </div>
               </section>
 
-              <section v-else class="utility-panel type-panel">
+              <section v-else-if="adminSection === 'documentMaintenance'" class="utility-panel type-panel">
                 <div class="filters document-filters">
                   <select v-model="maintenanceDocumentFilters.documentType" @change="applyMaintenanceDocumentFilters()">
                     <option value="">全部类型</option>
