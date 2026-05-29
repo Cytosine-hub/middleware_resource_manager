@@ -1148,10 +1148,10 @@
               <span class="revision-author">审核人：{{ rev.revisedBy || '-' }}</span>
             </div>
             <p v-if="rev.revisionComment" class="revision-comment">审核意见：{{ rev.revisionComment }}</p>
-            <details class="revision-content-detail">
-              <summary>查看内容</summary>
-              <pre class="revision-content">{{ rev.content }}</pre>
-            </details>
+            <div class="revision-content-block">
+              <div v-if="rev.content" class="revision-rendered" v-html="renderMarkdown(rev.content)"></div>
+              <div v-else class="empty-state" style="padding:12px 0;font-size:13px">无内容快照</div>
+            </div>
           </div>
         </div>
       </article>
@@ -2818,6 +2818,11 @@ function changeReviewPage(page) {
 function reviewStatusClass(status) {
   const map = { PENDING: 'pending-review', APPROVED: 'published', REJECTED: 'draft' }
   return map[status] || 'off'
+}
+
+function renderMarkdown(text) {
+  if (!text) return ''
+  try { return markdown.render(text) } catch { return '<pre>' + text + '</pre>' }
 }
 
 function formatTime(time) {

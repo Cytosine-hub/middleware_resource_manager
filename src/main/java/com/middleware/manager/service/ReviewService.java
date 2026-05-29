@@ -4,8 +4,10 @@ import com.middleware.manager.domain.DocumentRevision;
 import com.middleware.manager.domain.ParameterStandard;
 import com.middleware.manager.domain.ReviewRecord;
 import com.middleware.manager.domain.StandardDocument;
+import com.middleware.manager.domain.StandardParameter;
 import com.middleware.manager.repository.DocumentRevisionMapper;
 import com.middleware.manager.repository.ReviewRecordMapper;
+import com.middleware.manager.repository.StandardParameterMapper;
 import com.middleware.manager.security.PermissionService;
 import com.middleware.manager.web.api.dto.ReviewResponse;
 import org.springframework.security.core.Authentication;
@@ -24,17 +26,20 @@ public class ReviewService {
     private final ParameterStandardService parameterStandardService;
     private final PermissionService permissionService;
     private final DocumentRevisionMapper revisionMapper;
+    private final StandardParameterMapper parameterMapper;
 
     public ReviewService(ReviewRecordMapper mapper,
                          StandardDocumentService documentService,
                          ParameterStandardService parameterStandardService,
                          PermissionService permissionService,
-                         DocumentRevisionMapper revisionMapper) {
+                         DocumentRevisionMapper revisionMapper,
+                         StandardParameterMapper parameterMapper) {
         this.mapper = mapper;
         this.documentService = documentService;
         this.parameterStandardService = parameterStandardService;
         this.permissionService = permissionService;
         this.revisionMapper = revisionMapper;
+        this.parameterMapper = parameterMapper;
     }
 
     public List<ReviewResponse> listReviews(Authentication authentication) {
@@ -82,7 +87,9 @@ public class ReviewService {
                 ps.setVersion(VersionManager.toPublishedVersion(ps.getVersion()));
             }
             publishedVersion = ps.getVersion();
-            content = ps.getContent();
+            // 序列化参数列表
+            List<StandardParameter> params = parameterMapper.findByParameterStandardIdAndActiveTrueOrderByCategoryAscCodeAsc(ps.getId());
+            content = serializeParameters(ps, params);
             renderedContent = ps.getRenderedContent();
             ps.setPreviousContent(null);
             parameterStandardService.save(ps);
@@ -188,6 +195,37 @@ public class ReviewService {
                 sb.append("+ ").append(newLine).append("\n");
             } else {
                 sb.append("  ").append(oldLine).append("\n");
+            }
+        }
+        return sb.toString();
+    }
+
+    private String serializeParameters(ParameterStandard ps, List<StandardParameter> params) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("# ").append(ps.getTitle()).append("\n");
+        sb.append("分类：").append(ps.getCategory() != null ? ps.getCategory() : "-").append("\n");
+        sb.append("软件：").append(ps.getSoftware() != null ? ps.getSoftware() : "-").append("\n");
+        sb.append("软件版本：").append(ps.getSoftwareVersion() != null ? ps.getSoftwareVersion() : "-").append("\n");
+        sb.append("\n## 参数列表\n\n");
+        if (params.isEmpty()) {
+            sb.append("（暂无参数）\n");
+        } else {
+            for (StandardParameter p : params) {
+                sb.append("- **").append(p.getCode()).append("**");
+                sb.append(" = ").append(p.getValue());
+                if (p.getName() != null && !p.getName().equals(p.getCode())) {
+                    sb.append(" （").append(p.getName()).append("）");
+                }
+                if (p.getCategory() != null) {
+                    sb.append(" [").append(p.getCategory()).append("]");
+                }
+                if (p.isDeploymentStandard()) {
+                    sb.append(" *部署标准*");
+                }
+                sb.append("\n");
+                if (p.getDescription() != null && !p.getDescription().isEmpty()) {
+                    sb.append("  说明：").append(p.getDescription()).append("\n");
+                }
             }
         }
         return sb.toString();

@@ -2544,24 +2544,48 @@ td.row-actions {
   font-size: 13px;
   color: #475569;
 }
-.revision-content-detail {
-  margin-top: 8px;
-}
-.revision-content-detail summary {
-  cursor: pointer;
-  font-size: 13px;
-  color: #1a56db;
-  user-select: none;
-}
-.revision-content {
-  margin-top: 8px;
-  padding: 12px;
+.revision-content-block {
+  margin-top: 10px;
+  padding: 12px 16px;
   background: #fff;
   border: 1px solid #e3e9f1;
   border-radius: 6px;
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 400px;
+  max-height: 500px;
   overflow-y: auto;
+}
+.revision-rendered {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #334155;
+}
+.revision-rendered h1, .revision-rendered h2, .revision-rendered h3 {
+  font-size: 14px;
+  margin: 8px 0 4px;
+  color: #1e293b;
+}
+.revision-rendered p {
+  margin: 4px 0;
+}
+.revision-rendered ul, .revision-rendered ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+.revision-rendered li {
+  margin: 2px 0;
+}
+.revision-rendered strong {
+  color: #1e293b;
+}
+.revision-rendered code {
+  background: #f1f5f9;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.revision-rendered pre {
+  background: #f8fafc;
+  padding: 10px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 12px;
 }
