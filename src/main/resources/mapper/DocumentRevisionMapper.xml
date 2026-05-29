@@ -12,6 +12,7 @@
         <result property="renderedContent" column="rendered_content"/>
         <result property="revisionComment" column="revision_comment"/>
         <result property="revisedBy" column="revised_by"/>
+        <result property="submittedBy" column="submitted_by"/>
         <result property="revisedAt" column="revised_at"/>
         <result property="category" column="category"/>
         <result property="software" column="software"/>
@@ -25,9 +26,9 @@
 
     <insert id="insert" parameterType="com.middleware.manager.domain.DocumentRevision" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO document_revisions (document_id, document_type, version, content, rendered_content,
-                                        revision_comment, revised_by, revised_at, category, software)
+                                        revision_comment, revised_by, submitted_by, revised_at, category, software)
         VALUES (#{documentId}, #{documentType}, #{version}, #{content}, #{renderedContent},
-                #{revisionComment}, #{revisedBy}, #{revisedAt}, #{category}, #{software})
+                #{revisionComment}, #{revisedBy}, #{submittedBy}, #{revisedAt}, #{category}, #{software})
     </insert>
 
 </mapper>

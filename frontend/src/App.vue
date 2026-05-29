@@ -1145,6 +1145,7 @@
             <div class="revision-header">
               <span class="revision-version">V{{ rev.version }}</span>
               <span class="revision-time">{{ formatTime(rev.revisedAt) }}</span>
+              <span class="revision-author">提交人：{{ rev.submittedBy || '-' }}</span>
               <span class="revision-author">修订人：{{ rev.revisedBy || '-' }}</span>
             </div>
             <p v-if="rev.revisionComment" class="revision-comment">审核意见：{{ rev.revisionComment }}</p>

@@ -18,6 +18,7 @@ public class DocumentRevision {
     private String renderedContent;
     private String revisionComment;
     private String revisedBy;
+    private String submittedBy;
     private LocalDateTime revisedAt;
     private String category;
     private String software;

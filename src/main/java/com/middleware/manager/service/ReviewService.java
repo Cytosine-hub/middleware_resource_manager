@@ -122,6 +122,7 @@ public class ReviewService {
         revision.setRenderedContent(renderedContent);
         revision.setRevisionComment(comment);
         revision.setRevisedBy(reviewer);
+        revision.setSubmittedBy(record.getSubmitterUsername());
         revision.setRevisedAt(LocalDateTime.now());
         revision.setCategory(record.getCategory());
         revision.setSoftware(record.getSoftware());
