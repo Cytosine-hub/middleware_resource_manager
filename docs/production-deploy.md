@@ -68,11 +68,21 @@ npm run build
 
 ### 4.2 数据库初始化
 
+首次部署使用全量脚本：
+
 ```bash
-mysql -u root -p < src/main/resources/db/knowledge_ddl.sql
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS middleware_resource_manager"
+mysql -u root middleware_resource_manager < release/db/full_schema.sql
+mysql -u root middleware_resource_manager < release/db/seed_data.sql
 ```
 
-Hibernate `ddl-auto: update` 会自动创建/更新业务表。
+后续升级使用增量脚本（按版本顺序执行）：
+
+```bash
+mysql -u root middleware_resource_manager < release/db/upgrade-v1.0.4.sql
+```
+
+> 应用启动时 MyBatis 不会自动建表，必须手动执行 DDL 脚本。
 
 ### 4.3 启动后端
 
@@ -304,6 +314,39 @@ tail -f /opt/middleware-resource-manager/backend/logs/middleware-resource-manage
 ```
 
 ## 10. 更新部署
+
+### 10.1 增量升级（推荐）
+
+每次发布包含增量升级脚本 `release/db/upgrade-vX.X.X.sql`，只需执行自上次版本以来的脚本。
+
+```bash
+# 1. 执行增量数据库升级（如有）
+mysql -u root middleware_resource_manager < db/upgrade-v1.0.4.sql
+
+# 2. 替换后端 JAR
+sudo systemctl stop middleware-resource-manager
+cp backend/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar /opt/middleware-resource-manager/backend/
+sudo systemctl start middleware-resource-manager
+
+# 3. 替换前端
+rm -rf /opt/middleware-resource-manager/frontend/dist
+cp -r frontend/dist /opt/middleware-resource-manager/frontend/
+sudo systemctl reload nginx
+```
+
+> 增量 SQL 使用 `CREATE TABLE IF NOT EXISTS` 和 `INSERT IGNORE`，重复执行不会产生副作用。部分 `ALTER TABLE` 语句如已执行会报 Duplicate 错误，可安全忽略。
+
+### 10.2 全量部署（全新安装）
+
+首次部署或需要重建数据库时，使用 `release/db/full_schema.sql` + `release/db/seed_data.sql`：
+
+```bash
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS middleware_resource_manager"
+mysql -u root middleware_resource_manager < db/full_schema.sql
+mysql -u root middleware_resource_manager < db/seed_data.sql
+```
+
+### 10.3 仅构建替换
 
 ```bash
 # 构建新版本
