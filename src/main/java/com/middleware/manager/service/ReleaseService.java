@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -38,13 +39,16 @@ public class ReleaseService {
     private final ReleaseAssetMapper releaseAssetMapper;
     private final StorageService storageService;
     private final SoftwareTypeService softwareTypeService;
+    private final StandardPackageService standardPackageService;
 
     public ReleaseService(ReleaseAssetMapper releaseAssetMapper,
                           StorageService storageService,
-                          SoftwareTypeService softwareTypeService) {
+                          SoftwareTypeService softwareTypeService,
+                          StandardPackageService standardPackageService) {
         this.releaseAssetMapper = releaseAssetMapper;
         this.storageService = storageService;
         this.softwareTypeService = softwareTypeService;
+        this.standardPackageService = standardPackageService;
     }
 
     public PageInfo<ReleaseAsset> listAdminReleases(String keyword, String platform, Boolean published, String category, int page, int size) {
@@ -157,18 +161,44 @@ public class ReleaseService {
         ReleaseAsset entity = new ReleaseAsset();
         applyForm(entity, form);
 
-        StorageService.StoredFile storedFile = storageService.store(form.getFile(), entity.getMiddlewareName());
-        entity.setOriginalFileName(storedFile.originalFileName());
-        entity.setStoredFileName(storedFile.storedFileName());
-        entity.setContentType(storedFile.contentType());
-        entity.setFileSize(storedFile.size());
-        entity.setDownloadCount(0);
-        entity.setDownloadToken(UUID.randomUUID().toString().replace("-", ""));
-        entity.setCreatedAt(LocalDateTime.now());
-        entity.setUpdatedAt(LocalDateTime.now());
-        releaseAssetMapper.insert(entity);
-        LOGGER.info("release created id={} middleware={} version={} published={} file={}",
-                entity.getId(), entity.getMiddlewareName(), entity.getVersion(), entity.isPublished(), entity.getOriginalFileName());
+        boolean isStdPkg = form.isStandardPackage() && form.getParameterStandardId() != null;
+        entity.setStandardPackage(isStdPkg);
+        entity.setParameterStandardId(isStdPkg ? form.getParameterStandardId() : null);
+
+        if (isStdPkg) {
+            // 标准包：先保存元数据，再异步处理
+            entity.setOriginalFileName(form.getFile().getOriginalFilename());
+            entity.setStoredFileName("pending");
+            entity.setContentType(form.getFile().getContentType());
+            entity.setFileSize(form.getFile().getSize());
+            entity.setPackageStatus("PENDING");
+            entity.setDownloadCount(0);
+            entity.setDownloadToken(UUID.randomUUID().toString().replace("-", ""));
+            entity.setCreatedAt(LocalDateTime.now());
+            entity.setUpdatedAt(LocalDateTime.now());
+            releaseAssetMapper.insert(entity);
+
+            // 保存模板并启动异步处理
+            try (InputStream is = form.getFile().getInputStream()) {
+                standardPackageService.saveTemplateAndProcessAsync(entity, is);
+            } catch (IOException ex) {
+                throw new IllegalStateException("读取上传文件失败", ex);
+            }
+        } else {
+            StorageService.StoredFile storedFile = storageService.store(form.getFile(), entity.getMiddlewareName());
+            entity.setOriginalFileName(storedFile.originalFileName());
+            entity.setStoredFileName(storedFile.storedFileName());
+            entity.setContentType(storedFile.contentType());
+            entity.setFileSize(storedFile.size());
+            entity.setDownloadCount(0);
+            entity.setDownloadToken(UUID.randomUUID().toString().replace("-", ""));
+            entity.setCreatedAt(LocalDateTime.now());
+            entity.setUpdatedAt(LocalDateTime.now());
+            releaseAssetMapper.insert(entity);
+        }
+
+        LOGGER.info("release created id={} middleware={} version={} published={} standardPackage={}",
+                entity.getId(), entity.getMiddlewareName(), entity.getVersion(), entity.isPublished(), entity.isStandardPackage());
         return entity;
     }
 
@@ -258,6 +288,8 @@ public class ReleaseService {
         entity.setReleasedAt(form.getReleasedAt());
         entity.setPublished(form.isPublished());
         entity.setStandardDocumentId(form.getStandardDocumentId());
+        entity.setStandardPackage(form.isStandardPackage());
+        entity.setParameterStandardId(form.isStandardPackage() ? form.getParameterStandardId() : null);
     }
 
     private SoftwareType resolveSoftwareType(Long softwareTypeId) {

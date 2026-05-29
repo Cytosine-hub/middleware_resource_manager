@@ -90,6 +90,12 @@ INSERT IGNORE INTO system_settings (setting_key, setting_value, description) VAL
 ('knowledge-enabled', 'true', '知识库模块开关'),
 ('diagnostics-enabled', 'true', '智能排查模块开关');
 
+-- 标准包相关字段（release_assets 表扩展，如已存在会报 Duplicate column 可忽略）
+ALTER TABLE release_assets ADD COLUMN standard_package BOOLEAN NOT NULL DEFAULT false COMMENT '是否为标准包';
+ALTER TABLE release_assets ADD COLUMN parameter_standard_id BIGINT COMMENT '关联的参数标准ID';
+ALTER TABLE release_assets ADD COLUMN package_status VARCHAR(20) DEFAULT NULL COMMENT '标准包状态: PENDING/PROCESSING/SUCCESS/FAILED';
+ALTER TABLE release_assets ADD COLUMN package_error TEXT DEFAULT NULL COMMENT '标准包生成错误信息';
+
 -- 文档修订记录表
 CREATE TABLE IF NOT EXISTS document_revisions (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,

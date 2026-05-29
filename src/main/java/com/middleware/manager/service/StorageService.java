@@ -53,6 +53,27 @@ public class StorageService {
         return new StoredFile(storedFileName, originalFileName, file.getContentType(), file.getSize());
     }
 
+    public StoredFile store(Path filePath, String middlewareName) {
+        if (!Files.exists(filePath)) {
+            throw new IllegalArgumentException("文件不存在");
+        }
+
+        String originalFileName = filePath.getFileName().toString();
+        String extension = resolveExtension(originalFileName);
+        String storedFileName = resolveCategory(middlewareName) + "/" + UUID.randomUUID() + extension;
+        Path destination = resolveStoragePath(storedFileName);
+
+        try {
+            Files.createDirectories(destination.getParent());
+            Files.copy(filePath, destination, StandardCopyOption.REPLACE_EXISTING);
+            long size = Files.size(filePath);
+            String contentType = Files.probeContentType(filePath);
+            return new StoredFile(storedFileName, originalFileName, contentType, size);
+        } catch (IOException ex) {
+            throw new IllegalStateException("文件保存失败", ex);
+        }
+    }
+
     public StoredFile importFile(Path sourceFile, String middlewareName) {
         Path normalizedSource = sourceFile.toAbsolutePath().normalize();
         if (!Files.exists(normalizedSource) || !Files.isRegularFile(normalizedSource)) {

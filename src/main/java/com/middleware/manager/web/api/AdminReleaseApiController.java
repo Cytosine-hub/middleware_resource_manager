@@ -5,6 +5,7 @@ import com.middleware.manager.domain.SoftwareType;
 import com.middleware.manager.repository.SoftwareTypeMapper;
 import com.middleware.manager.security.PermissionService;
 import com.middleware.manager.service.ReleaseService;
+import com.middleware.manager.service.StandardPackageService;
 import com.middleware.manager.web.api.dto.PageResult;
 import com.middleware.manager.web.api.dto.ReleaseResponse;
 import com.middleware.manager.web.form.BatchImportForm;
@@ -37,12 +38,15 @@ public class AdminReleaseApiController {
     private final ReleaseService releaseService;
     private final PermissionService permissionService;
     private final SoftwareTypeMapper softwareTypeMapper;
+    private final StandardPackageService standardPackageService;
 
     public AdminReleaseApiController(ReleaseService releaseService, PermissionService permissionService,
-                                     SoftwareTypeMapper softwareTypeMapper) {
+                                     SoftwareTypeMapper softwareTypeMapper,
+                                     StandardPackageService standardPackageService) {
         this.releaseService = releaseService;
         this.permissionService = permissionService;
         this.softwareTypeMapper = softwareTypeMapper;
+        this.standardPackageService = standardPackageService;
     }
 
     @GetMapping
@@ -133,6 +137,17 @@ public class AdminReleaseApiController {
         releaseService.unpublish(id);
         ReleaseAsset asset = releaseService.getAdminRelease(id);
         return ReleaseResponse.from(asset, loadSoftwareType(asset));
+    }
+
+    @PostMapping("/{id}/regenerate-package")
+    public ReleaseResponse regeneratePackage(@PathVariable Long id, Authentication authentication) {
+        ReleaseAsset asset = checkAccess(id, authentication);
+        if (!asset.isStandardPackage()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该资源不是标准包");
+        }
+        standardPackageService.processAsync(asset);
+        ReleaseAsset refreshed = releaseService.getAdminRelease(id);
+        return ReleaseResponse.from(refreshed, loadSoftwareType(refreshed));
     }
 
     @DeleteMapping("/{id}")

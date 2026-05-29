@@ -27,6 +27,10 @@ public class ReleaseAsset {
     private long fileSize;
     private long downloadCount;
     private Long standardDocumentId;
+    private boolean standardPackage;
+    private Long parameterStandardId;
+    private String packageStatus;
+    private String packageError;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

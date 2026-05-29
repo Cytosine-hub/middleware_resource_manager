@@ -559,9 +559,15 @@
                           <td :title="release.middlewareName">{{ release.middlewareName }}</td>
                           <td :title="release.version">{{ release.version }}</td>
                           <td :title="release.platform || '-'">{{ release.platform || '-' }}</td>
-                          <td><span :class="['status', release.published ? 'ok' : 'off']">{{ release.published ? '已发布' : '未发布' }}</span></td>
+                          <td>
+                            <span :class="['status', release.published ? 'ok' : 'off']">{{ release.published ? '已发布' : '未发布' }}</span>
+                            <span v-if="release.standardPackage" :class="['status', packageStatusClass(release.packageStatus)]" style="margin-left:4px">{{ packageStatusLabel(release.packageStatus) }}</span>
+                          </td>
                           <td :title="release.standardDocumentId ? getStandardLabel(release.standardDocumentId) : '-'">{{ release.standardDocumentId ? getStandardLabel(release.standardDocumentId) : '-' }}</td>
-                          <td :title="release.originalFileName">{{ release.originalFileName }}</td>
+                          <td :title="release.originalFileName">
+                            {{ release.originalFileName }}
+                            <span v-if="release.standardPackage && release.packageStatus === 'FAILED'" class="package-error-hint" :title="release.packageError">⚠</span>
+                          </td>
                           <td>{{ release.downloadCount }}</td>
                           <td class="row-actions">
                             <button
@@ -571,6 +577,7 @@
                               @click="startEdit(release)"
                             >编辑</button>
                             <button class="ghost" @click="togglePublish(release)">{{ release.published ? '下架' : '发布' }}</button>
+                            <button v-if="release.standardPackage && (release.packageStatus === 'FAILED' || release.packageStatus === 'SUCCESS')" class="ghost" @click="regeneratePackage(release)">重新生成</button>
                             <button
                               class="danger"
                               :disabled="release.published"
@@ -846,6 +853,13 @@
             <select v-model="releaseForm.standardDocumentId" :disabled="!releaseForm.category || !releaseForm.softwareTypeId">
               <option :value="null">不关联</option>
               <option v-for="doc in releaseStandardOptions" :key="doc.id" :value="doc.id">{{ getStandardLabel(doc.id) }}</option>
+            </select>
+          </label>
+          <label class="checkline"><input v-model="releaseForm.standardPackage" type="checkbox" />标准包</label>
+          <label v-if="releaseForm.standardPackage">关联参数标准
+            <select v-model="releaseForm.parameterStandardId" :disabled="!releaseForm.category || !releaseForm.softwareTypeId">
+              <option :value="null">请选择参数标准</option>
+              <option v-for="ps in releaseParameterStandardOptions" :key="ps.id" :value="ps.id">{{ ps.title }}</option>
             </select>
           </label>
           <label class="file-field">安装包
@@ -1597,6 +1611,11 @@ const releaseStandardOptions = computed(() => {
   const softwareName = selectedType?.name || ''
   return allParameterStandards.value.filter(s => s.category === releaseForm.category && (!softwareName || s.software === softwareName))
 })
+const releaseParameterStandardOptions = computed(() => {
+  const selectedType = softwareTypes.value.find(t => String(t.id) === String(releaseForm.softwareTypeId))
+  const softwareName = selectedType?.name || ''
+  return allParameterStandards.value.filter(s => s.status === 'PUBLISHED' && s.category === releaseForm.category && (!softwareName || s.software === softwareName))
+})
 const importSoftwareOptions = computed(() => softwareTypesByCategory(importForm.category, true))
 const standardCategoryOptions = computed(() => standardForm.id ? softwareTypeCategories.value : activeTypeCategories.value)
 const standardSoftwareOptions = computed(() => softwareTypesByCategory(standardForm.category, !standardForm.id))
@@ -1752,7 +1771,7 @@ function softwareTypesByCategory(category, onlyActive = false) {
 }
 
 function defaultReleaseForm() {
-  return { id: null, category: '', softwareTypeId: '', middlewareName: '', version: '', platform: '', description: '', releasedAt: todayString(), published: false, file: null, originalFileName: '', standardDocumentId: null }
+  return { id: null, category: '', softwareTypeId: '', middlewareName: '', version: '', platform: '', description: '', releasedAt: todayString(), published: false, file: null, originalFileName: '', standardDocumentId: null, standardPackage: false, parameterStandardId: null }
 }
 
 function defaultImportForm() {
@@ -2326,7 +2345,9 @@ function startEdit(release) {
     published: release.published,
     file: null,
     originalFileName: release.originalFileName || '',
-    standardDocumentId: release.standardDocumentId || null
+    standardDocumentId: release.standardDocumentId || null,
+    standardPackage: release.standardPackage || false,
+    parameterStandardId: release.parameterStandardId || null
   })
   editing.value = true
 }
@@ -2356,6 +2377,10 @@ async function saveRelease() {
     formData.append(key, releaseForm[key] ?? '')
   }
   formData.append('softwareTypeId', releaseForm.softwareTypeId)
+  formData.append('standardPackage', releaseForm.standardPackage)
+  if (releaseForm.standardPackage && releaseForm.parameterStandardId) {
+    formData.append('parameterStandardId', releaseForm.parameterStandardId)
+  }
   if (releaseForm.file) {
     formData.append('file', releaseForm.file)
   }
@@ -2409,6 +2434,16 @@ async function togglePublish(release) {
     await loadAdmin()
   } catch (error) {
     notify(error.message || `资源${actionText}失败`, 'error')
+  }
+}
+
+async function regeneratePackage(release) {
+  try {
+    await request(`/api/admin/releases/${release.id}/regenerate-package`, { method: 'POST' })
+    notify('标准包已提交重新生成', 'success')
+    await loadAdmin()
+  } catch (error) {
+    notify(error.message || '重新生成失败', 'error')
   }
 }
 
@@ -2675,6 +2710,16 @@ function statusLabel(status) {
 
 function statusClass(status) {
   const map = { DRAFT: 'draft', PENDING_REVIEW: 'pending-review', PUBLISHED: 'published', MODIFYING: 'modifying' }
+  return map[status] || 'off'
+}
+
+function packageStatusLabel(status) {
+  const map = { PENDING: '待生成', PROCESSING: '生成中', SUCCESS: '已生成', FAILED: '生成失败' }
+  return map[status] || ''
+}
+
+function packageStatusClass(status) {
+  const map = { PENDING: 'off', PROCESSING: 'pending-review', SUCCESS: 'ok', FAILED: 'error' }
   return map[status] || 'off'
 }
 

@@ -2601,3 +2601,16 @@ td.row-actions {
   overflow-x: auto;
   font-size: 12px;
 }
+
+/* 标准包状态 */
+.package-error-hint {
+  cursor: help;
+  color: #dc2626;
+  font-size: 14px;
+  margin-left: 4px;
+}
+.status.error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}

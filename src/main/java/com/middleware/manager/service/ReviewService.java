@@ -27,19 +27,22 @@ public class ReviewService {
     private final PermissionService permissionService;
     private final DocumentRevisionMapper revisionMapper;
     private final StandardParameterMapper parameterMapper;
+    private final StandardPackageService standardPackageService;
 
     public ReviewService(ReviewRecordMapper mapper,
                          StandardDocumentService documentService,
                          ParameterStandardService parameterStandardService,
                          PermissionService permissionService,
                          DocumentRevisionMapper revisionMapper,
-                         StandardParameterMapper parameterMapper) {
+                         StandardParameterMapper parameterMapper,
+                         StandardPackageService standardPackageService) {
         this.mapper = mapper;
         this.documentService = documentService;
         this.parameterStandardService = parameterStandardService;
         this.permissionService = permissionService;
         this.revisionMapper = revisionMapper;
         this.parameterMapper = parameterMapper;
+        this.standardPackageService = standardPackageService;
     }
 
     public List<ReviewResponse> listReviews(Authentication authentication) {
@@ -93,6 +96,8 @@ public class ReviewService {
             renderedContent = ps.getRenderedContent();
             ps.setPreviousContent(null);
             parameterStandardService.save(ps);
+            // 重新生成关联的标准包
+            standardPackageService.regenerateByParameterStandard(ps.getId());
         } else {
             StandardDocument doc = documentService.get(record.getDocumentId());
             doc.setPendingReviewRecordId(null);

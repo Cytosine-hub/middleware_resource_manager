@@ -27,6 +27,11 @@ public class ReleaseResponse {
     private String downloadUrl;
     private Long standardDocumentId;
     private String standardDocumentTitle;
+    private boolean standardPackage;
+    private Long parameterStandardId;
+    private String parameterStandardTitle;
+    private String packageStatus;
+    private String packageError;
 
     public static ReleaseResponse from(ReleaseAsset asset) {
         return from(asset, null);
@@ -55,6 +60,10 @@ public class ReleaseResponse {
         response.setUpdatedAt(asset.getUpdatedAt());
         response.setDownloadUrl("/files/" + asset.getDownloadToken());
         response.setStandardDocumentId(asset.getStandardDocumentId());
+        response.setStandardPackage(asset.isStandardPackage());
+        response.setParameterStandardId(asset.getParameterStandardId());
+        response.setPackageStatus(asset.getPackageStatus());
+        response.setPackageError(asset.getPackageError());
         return response;
     }
 
@@ -206,4 +215,14 @@ public class ReleaseResponse {
     public void setStandardDocumentId(Long standardDocumentId) { this.standardDocumentId = standardDocumentId; }
     public String getStandardDocumentTitle() { return standardDocumentTitle; }
     public void setStandardDocumentTitle(String standardDocumentTitle) { this.standardDocumentTitle = standardDocumentTitle; }
+    public boolean isStandardPackage() { return standardPackage; }
+    public void setStandardPackage(boolean standardPackage) { this.standardPackage = standardPackage; }
+    public Long getParameterStandardId() { return parameterStandardId; }
+    public void setParameterStandardId(Long parameterStandardId) { this.parameterStandardId = parameterStandardId; }
+    public String getParameterStandardTitle() { return parameterStandardTitle; }
+    public void setParameterStandardTitle(String parameterStandardTitle) { this.parameterStandardTitle = parameterStandardTitle; }
+    public String getPackageStatus() { return packageStatus; }
+    public void setPackageStatus(String packageStatus) { this.packageStatus = packageStatus; }
+    public String getPackageError() { return packageError; }
+    public void setPackageError(String packageError) { this.packageError = packageError; }
 }

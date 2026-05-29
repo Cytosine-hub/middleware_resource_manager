@@ -34,6 +34,10 @@ public class ReleaseForm {
 
     private MultipartFile file;
 
+    private boolean standardPackage;
+
+    private Long parameterStandardId;
+
     public Long getSoftwareTypeId() {
         return softwareTypeId;
     }
@@ -104,5 +108,21 @@ public class ReleaseForm {
 
     public void setFile(MultipartFile file) {
         this.file = file;
+    }
+
+    public boolean isStandardPackage() {
+        return standardPackage;
+    }
+
+    public void setStandardPackage(boolean standardPackage) {
+        this.standardPackage = standardPackage;
+    }
+
+    public Long getParameterStandardId() {
+        return parameterStandardId;
+    }
+
+    public void setParameterStandardId(Long parameterStandardId) {
+        this.parameterStandardId = parameterStandardId;
     }
 }

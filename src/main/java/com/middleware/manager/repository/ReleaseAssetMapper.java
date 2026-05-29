@@ -34,4 +34,6 @@ public interface ReleaseAssetMapper {
     int deleteById(@Param("id") Long id);
 
     int incrementDownloadCount(@Param("id") Long id);
+
+    List<ReleaseAsset> findByParameterStandardId(@Param("parameterStandardId") Long parameterStandardId);
 }
