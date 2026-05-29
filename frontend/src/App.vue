@@ -1816,7 +1816,7 @@ function syncRoute() {
   route.documentId = next.documentId
   route.postId = next.postId
   updateDocumentTitle()
-  if (route.name === 'documentEditor' || route.name === 'forum' || route.name === 'forumDetail' || route.name === 'forumEditor') {
+  if (route.name === 'documentEditor' || route.name === 'forum' || route.name === 'forumDetail' || route.name === 'forumEditor' || route.name === 'forumMine') {
     if (route.name === 'documentEditor' && auth.token) {
       loadSoftwareTypes()
       loadSoftwareCategories()
