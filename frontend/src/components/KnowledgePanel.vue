@@ -161,12 +161,8 @@
           </div>
           <div v-if="previewLoading" class="empty-state">加载中...</div>
           <template v-else>
-            <!-- PDF 预览 -->
-            <div v-if="previewType === 'pdf'" class="preview-file">
-              <iframe :src="previewFileUrl" class="pdf-viewer"></iframe>
-            </div>
             <!-- Markdown 预览 -->
-            <div v-else-if="previewType === 'markdown'" class="preview-file">
+            <div v-if="previewType === 'markdown'" class="preview-file">
               <div class="markdown-body" v-html="previewHtml"></div>
             </div>
             <!-- Word 预览 -->
@@ -322,15 +318,16 @@ async function handlePreviewDoc(doc) {
     const authHeaders = { 'Authorization': `Bearer ${localStorage.getItem('mrm.token')}` }
 
     if (fn.endsWith('.pdf')) {
-      previewType.value = 'pdf'
       const resp = await fetch(fileUrl, { headers: authHeaders })
       if (resp.ok) {
         const blob = await resp.blob()
-        revokePreviewBlobUrl()
-        previewFileUrl.value = URL.createObjectURL(blob)
-      } else {
-        previewType.value = 'chunks'
+        const blobUrl = URL.createObjectURL(blob)
+        window.open(blobUrl, '_blank')
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000)
       }
+      showPreviewModal.value = false
+      previewLoading.value = false
+      return
     } else if (fn.endsWith('.md')) {
       previewType.value = 'markdown'
       const resp = await fetch(fileUrl, { headers: authHeaders })
@@ -964,12 +961,6 @@ async function initGraph() {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   margin-bottom: 12px;
-}
-
-.pdf-viewer {
-  width: 100%;
-  height: 65vh;
-  border: none;
 }
 
 .markdown-body,
