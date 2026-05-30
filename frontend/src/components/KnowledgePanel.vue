@@ -153,11 +153,11 @@
       </div>
 
       <!-- 文档预览弹窗 -->
-      <div v-if="showPreviewModal" class="modal-backdrop" @click.self="showPreviewModal = false">
+      <div v-if="showPreviewModal" class="modal-backdrop" @click.self="closePreview">
         <div class="modal-panel preview-modal">
           <div class="preview-header">
             <h3>{{ previewDoc.title || '文档预览' }}</h3>
-            <button class="close-btn" @click="showPreviewModal = false">&times;</button>
+            <button class="close-btn" @click="closePreview">&times;</button>
           </div>
           <div v-if="previewLoading" class="empty-state">加载中...</div>
           <template v-else>
@@ -183,7 +183,7 @@
           </template>
           <div class="modal-actions" v-if="!previewLoading">
             <span class="preview-meta">{{ previewDoc.sourceType }} · {{ previewDoc.totalChunks }} 个切片</span>
-            <button class="ghost" @click="showPreviewModal = false">关闭</button>
+            <button class="ghost" @click="closePreview">关闭</button>
           </div>
         </div>
       </div>
@@ -287,6 +287,18 @@ function clearUploadFiles() {
   uploadResults.value = null
 }
 
+function revokePreviewBlobUrl() {
+  if (previewFileUrl.value && previewFileUrl.value.startsWith('blob:')) {
+    URL.revokeObjectURL(previewFileUrl.value)
+  }
+  previewFileUrl.value = ''
+}
+
+function closePreview() {
+  revokePreviewBlobUrl()
+  showPreviewModal.value = false
+}
+
 function getDocIcon(sourceType) {
   if (sourceType === 'UPLOAD') return '📄'
   if (sourceType === 'STANDARD_DOC') return '📋'
@@ -307,18 +319,26 @@ async function handlePreviewDoc(doc) {
 
     const fn = (data.storedFileName || '').toLowerCase()
     const fileUrl = `/api/knowledge/docs/file?${q}`
+    const authHeaders = { 'Authorization': `Bearer ${localStorage.getItem('mrm.token')}` }
 
     if (fn.endsWith('.pdf')) {
       previewType.value = 'pdf'
-      previewFileUrl.value = fileUrl
+      const resp = await fetch(fileUrl, { headers: authHeaders })
+      if (resp.ok) {
+        const blob = await resp.blob()
+        revokePreviewBlobUrl()
+        previewFileUrl.value = URL.createObjectURL(blob)
+      } else {
+        previewType.value = 'chunks'
+      }
     } else if (fn.endsWith('.md')) {
       previewType.value = 'markdown'
-      const resp = await fetch(fileUrl, { headers: { 'Authorization': `Bearer ${localStorage.getItem('mrm.token')}` } })
+      const resp = await fetch(fileUrl, { headers: authHeaders })
       const text = await resp.text()
       previewHtml.value = renderMarkdown(text)
     } else if (fn.endsWith('.doc') || fn.endsWith('.docx')) {
       previewType.value = 'word'
-      const htmlResp = await fetch(`/api/knowledge/docs/html?${q}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('mrm.token')}` } })
+      const htmlResp = await fetch(`/api/knowledge/docs/html?${q}`, { headers: authHeaders })
       if (htmlResp.ok) {
         previewHtml.value = await htmlResp.text()
       } else {
@@ -329,7 +349,7 @@ async function handlePreviewDoc(doc) {
     }
   } catch (e) {
     props.notify('预览失败：' + (e.message || '未知错误'), 'error')
-    showPreviewModal.value = false
+    closePreview()
   } finally {
     previewLoading.value = false
   }
