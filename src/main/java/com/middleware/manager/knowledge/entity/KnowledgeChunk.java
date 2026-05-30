@@ -13,6 +13,7 @@ public class KnowledgeChunk {
     private String software;
     private int chunkIndex;
     private String vectorId;
+    private String storedFileName;
     private LocalDateTime createdAt;
 
     public KnowledgeChunk() {
@@ -90,6 +91,14 @@ public class KnowledgeChunk {
 
     public void setVectorId(String vectorId) {
         this.vectorId = vectorId;
+    }
+
+    public String getStoredFileName() {
+        return storedFileName;
+    }
+
+    public void setStoredFileName(String storedFileName) {
+        this.storedFileName = storedFileName;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -133,16 +133,34 @@
       <!-- 文档预览弹窗 -->
       <div v-if="showPreviewModal" class="modal-backdrop" @click.self="showPreviewModal = false">
         <div class="modal-panel preview-modal">
-          <h3>{{ previewDoc.title || '文档预览' }}</h3>
-          <p>{{ previewDoc.sourceType }} · {{ previewDoc.totalChunks }} 个切片</p>
-          <div v-if="previewLoading" class="empty-state">加载中...</div>
-          <div v-else class="preview-chunks">
-            <div v-for="(chunk, i) in previewDoc.chunks" :key="i" class="preview-chunk">
-              <div class="chunk-header">切片 #{{ chunk.chunkIndex + 1 }}</div>
-              <pre class="chunk-content">{{ chunk.content }}</pre>
-            </div>
+          <div class="preview-header">
+            <h3>{{ previewDoc.title || '文档预览' }}</h3>
+            <button class="close-btn" @click="showPreviewModal = false">&times;</button>
           </div>
-          <div class="modal-actions">
+          <div v-if="previewLoading" class="empty-state">加载中...</div>
+          <template v-else>
+            <!-- PDF 预览 -->
+            <div v-if="previewType === 'pdf'" class="preview-file">
+              <iframe :src="previewFileUrl" class="pdf-viewer"></iframe>
+            </div>
+            <!-- Markdown 预览 -->
+            <div v-else-if="previewType === 'markdown'" class="preview-file">
+              <div class="markdown-body" v-html="previewHtml"></div>
+            </div>
+            <!-- Word 预览 -->
+            <div v-else-if="previewType === 'word'" class="preview-file">
+              <div class="word-body" v-html="previewHtml"></div>
+            </div>
+            <!-- 切片预览（导入的标准文档等无原文件的情况） -->
+            <div v-else class="preview-chunks">
+              <div v-for="(chunk, i) in previewDoc.chunks" :key="i" class="preview-chunk">
+                <div class="chunk-header">切片 #{{ chunk.chunkIndex + 1 }}</div>
+                <pre class="chunk-content">{{ chunk.content }}</pre>
+              </div>
+            </div>
+          </template>
+          <div class="modal-actions" v-if="!previewLoading">
+            <span class="preview-meta">{{ previewDoc.sourceType }} · {{ previewDoc.totalChunks }} 个切片</span>
             <button class="ghost" @click="showPreviewModal = false">关闭</button>
           </div>
         </div>
@@ -194,6 +212,9 @@ const deleting = ref(false)
 const showPreviewModal = ref(false)
 const previewLoading = ref(false)
 const previewDoc = ref({ title: '', sourceType: '', chunks: [], totalChunks: 0 })
+const previewType = ref('chunks') // 'pdf' | 'markdown' | 'word' | 'chunks'
+const previewFileUrl = ref('')
+const previewHtml = ref('')
 
 // 知识图谱
 const graphContainer = ref(null)
@@ -238,17 +259,59 @@ function getDocIcon(sourceType) {
 async function handlePreviewDoc(doc) {
   showPreviewModal.value = true
   previewLoading.value = true
-  previewDoc.value = { title: doc.source_title, sourceType: doc.source_type, chunks: [], totalChunks: 0 }
+  previewType.value = 'chunks'
+  previewFileUrl.value = ''
+  previewHtml.value = ''
+  previewDoc.value = { title: doc.source_title, sourceType: doc.source_type, chunks: [], totalChunks: 0, storedFileName: null }
   try {
     const q = `title=${encodeURIComponent(doc.source_title)}&sourceType=${encodeURIComponent(doc.source_type)}`
     const data = await request(`/api/knowledge/docs/preview?${q}`)
     previewDoc.value = data
+
+    const fn = (data.storedFileName || '').toLowerCase()
+    const fileUrl = `/api/knowledge/docs/file?${q}`
+
+    if (fn.endsWith('.pdf')) {
+      previewType.value = 'pdf'
+      previewFileUrl.value = fileUrl
+    } else if (fn.endsWith('.md')) {
+      previewType.value = 'markdown'
+      const resp = await fetch(fileUrl, { headers: { 'Authorization': `Bearer ${localStorage.getItem('mrm.token')}` } })
+      const text = await resp.text()
+      previewHtml.value = renderMarkdown(text)
+    } else if (fn.endsWith('.doc') || fn.endsWith('.docx')) {
+      previewType.value = 'word'
+      const htmlResp = await fetch(`/api/knowledge/docs/html?${q}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('mrm.token')}` } })
+      if (htmlResp.ok) {
+        previewHtml.value = await htmlResp.text()
+      } else {
+        previewType.value = 'chunks'
+      }
+    } else {
+      previewType.value = 'chunks'
+    }
   } catch (e) {
     props.notify('预览失败：' + (e.message || '未知错误'), 'error')
     showPreviewModal.value = false
   } finally {
     previewLoading.value = false
   }
+}
+
+function renderMarkdown(md) {
+  let html = md
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+    .replace(/\n{2,}/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+  return '<p>' + html + '</p>'
 }
 
 function onFileChange(event) {
@@ -743,8 +806,77 @@ async function initGraph() {
 /* 文档预览 */
 .preview-modal {
   min-width: 600px;
-  max-width: 800px;
-  max-height: 85vh;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.preview-header h3 { margin: 0; }
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.close-btn:hover { color: #1e293b; }
+
+.preview-file {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.pdf-viewer {
+  width: 100%;
+  height: 65vh;
+  border: none;
+}
+
+.markdown-body,
+.word-body {
+  padding: 20px 24px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: #334155;
+}
+
+.markdown-body :deep(h1),
+.word-body :deep(h1) { font-size: 24px; margin: 16px 0 8px; color: #1e293b; }
+.markdown-body :deep(h2),
+.word-body :deep(h2) { font-size: 20px; margin: 14px 0 6px; color: #1e293b; }
+.markdown-body :deep(h3),
+.word-body :deep(h3) { font-size: 17px; margin: 12px 0 4px; color: #1e293b; }
+.markdown-body :deep(code),
+.word-body :deep(code) { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+.markdown-body :deep(li),
+.word-body :deep(li) { margin: 4px 0; padding-left: 8px; }
+.markdown-body :deep(table),
+.word-body :deep(table) { border-collapse: collapse; width: 100%; margin: 12px 0; }
+.markdown-body :deep(th), .markdown-body :deep(td),
+.word-body :deep(th), .word-body :deep(td) { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; font-size: 13px; }
+.markdown-body :deep(th),
+.word-body :deep(th) { background: #f8fafc; font-weight: 600; }
+
+.preview-meta {
+  font-size: 12px;
+  color: #94a3b8;
+  flex: 1;
 }
 
 .preview-chunks {

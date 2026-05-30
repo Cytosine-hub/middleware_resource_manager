@@ -8,12 +8,16 @@ import com.middleware.manager.knowledge.loader.StandardDocumentLoader;
 import com.middleware.manager.knowledge.repository.KnowledgeChunkRepository;
 import com.middleware.manager.knowledge.splitter.TextSplitter;
 import com.middleware.manager.knowledge.store.VectorStore;
+import com.middleware.manager.service.StorageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,19 +35,22 @@ public class KnowledgeService {
     private final KnowledgeChunkRepository chunkRepository;
     private final StandardDocumentLoader standardDocumentLoader;
     private final List<DocumentLoader> documentLoaders;
+    private final StorageService storageService;
 
     public KnowledgeService(TextSplitter textSplitter,
                             EmbeddingService embeddingService,
                             VectorStore vectorStore,
                             KnowledgeChunkRepository chunkRepository,
                             StandardDocumentLoader standardDocumentLoader,
-                            List<DocumentLoader> documentLoaders) {
+                            List<DocumentLoader> documentLoaders,
+                            StorageService storageService) {
         this.textSplitter = textSplitter;
         this.embeddingService = embeddingService;
         this.vectorStore = vectorStore;
         this.chunkRepository = chunkRepository;
         this.standardDocumentLoader = standardDocumentLoader;
         this.documentLoaders = documentLoaders;
+        this.storageService = storageService;
     }
 
     /**
@@ -53,6 +60,19 @@ public class KnowledgeService {
         String fileName = file.getOriginalFilename();
         DocumentLoader loader = resolveLoader(fileName);
 
+        // 保存原文件到 storage/knowledge/
+        String extension = "";
+        int lastDot = fileName.lastIndexOf('.');
+        if (lastDot >= 0) extension = fileName.substring(lastDot);
+        String storedFileName = "knowledge/" + UUID.randomUUID() + extension;
+        Path knowledgeDir = storageService.getRootLocation().resolve("knowledge");
+        Files.createDirectories(knowledgeDir);
+        Path dest = storageService.getRootLocation().resolve(storedFileName);
+        try (InputStream is = file.getInputStream()) {
+            Files.copy(is, dest, StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        // 重新读取文件提取文本内容
         String content;
         try (InputStream is = file.getInputStream()) {
             content = loader.load(is, fileName);
@@ -61,7 +81,7 @@ public class KnowledgeService {
         String sourceTitle = fileName;
         List<TextSplitter.TextChunk> chunks = textSplitter.split(content, sourceTitle);
 
-        return persistChunks(chunks, null, "UPLOAD", null, null);
+        return persistChunks(chunks, null, "UPLOAD", null, null, storedFileName);
     }
 
     /**
@@ -74,7 +94,7 @@ public class KnowledgeService {
 
         List<TextSplitter.TextChunk> chunks = textSplitter.split(content, sourceTitle);
 
-        return persistChunks(chunks, docId, "STANDARD_DOC", doc.getCategory(), doc.getSoftware());
+        return persistChunks(chunks, docId, "STANDARD_DOC", doc.getCategory(), doc.getSoftware(), null);
     }
 
     /**
@@ -149,7 +169,8 @@ public class KnowledgeService {
                                        Long sourceId,
                                        String sourceType,
                                        String category,
-                                       String software) {
+                                       String software,
+                                       String storedFileName) {
         // Remove old chunks for the same source (if re-importing)
         if (sourceId != null) {
             deleteBySource(sourceId, sourceType);
@@ -192,6 +213,7 @@ public class KnowledgeService {
             entity.setSoftware(software);
             entity.setChunkIndex(chunk.getChunkIndex());
             entity.setVectorId(vectorId);
+            entity.setStoredFileName(storedFileName);
             chunkRepository.save(entity);
 
             count++;
@@ -207,14 +229,24 @@ public class KnowledgeService {
     }
 
     public int deleteDocument(String sourceTitle, String sourceType) {
-        // 先查出关联的 vectorId 列表，清理向量库
+        // 先查出关联的 vectorId 列表，清理向量库和原文件
         List<KnowledgeChunk> chunks = chunkRepository.findBySourceTitleContaining(sourceTitle);
+        String storedFileToDelete = null;
         for (KnowledgeChunk chunk : chunks) {
             if (chunk.getVectorId() != null) {
                 try {
                     vectorStore.delete(chunk.getVectorId());
                 } catch (Exception ignored) {}
             }
+            if (chunk.getStoredFileName() != null && storedFileToDelete == null) {
+                storedFileToDelete = chunk.getStoredFileName();
+            }
+        }
+        // 删除原文件
+        if (storedFileToDelete != null) {
+            try {
+                storageService.deleteIfExists(storedFileToDelete);
+            } catch (Exception ignored) {}
         }
         // 删除 DB 记录
         return chunkRepository.deleteBySourceTitleAndSourceType(sourceTitle, sourceType);

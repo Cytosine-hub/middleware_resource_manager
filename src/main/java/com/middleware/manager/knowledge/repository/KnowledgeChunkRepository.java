@@ -34,6 +34,7 @@ public class KnowledgeChunkRepository {
         c.setSoftware(rs.getString("software"));
         c.setChunkIndex(rs.getInt("chunk_index"));
         c.setVectorId(rs.getString("vector_id"));
+        c.setStoredFileName(rs.getString("stored_file_name"));
         Timestamp ts = rs.getTimestamp("created_at");
         if (ts != null) {
             c.setCreatedAt(ts.toLocalDateTime());
@@ -50,8 +51,8 @@ public class KnowledgeChunkRepository {
             KeyHolder keyHolder = new GeneratedKeyHolder();
             jdbcTemplate.update(connection -> {
                 PreparedStatement ps = connection.prepareStatement(
-                        "INSERT INTO knowledge_chunks (content, source_title, source_type, source_id, category, software, chunk_index, vector_id, created_at) " +
-                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO knowledge_chunks (content, source_title, source_type, source_id, category, software, chunk_index, vector_id, stored_file_name, created_at) " +
+                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         Statement.RETURN_GENERATED_KEYS
                 );
                 ps.setString(1, c.getContent());
@@ -66,7 +67,8 @@ public class KnowledgeChunkRepository {
                 ps.setString(6, c.getSoftware());
                 ps.setInt(7, c.getChunkIndex());
                 ps.setString(8, c.getVectorId());
-                ps.setTimestamp(9, c.getCreatedAt() != null ? Timestamp.valueOf(c.getCreatedAt()) : Timestamp.valueOf(java.time.LocalDateTime.now()));
+                ps.setString(9, c.getStoredFileName());
+                ps.setTimestamp(10, c.getCreatedAt() != null ? Timestamp.valueOf(c.getCreatedAt()) : Timestamp.valueOf(java.time.LocalDateTime.now()));
                 return ps;
             }, keyHolder);
             c.setId(keyHolder.getKey().longValue());
@@ -173,7 +175,8 @@ public class KnowledgeChunkRepository {
     public List<Map<String, Object>> findDistinctSources() {
         return jdbcTemplate.queryForList(
             "SELECT source_type, source_title, source_id, COUNT(*) as chunk_count, " +
-            "GROUP_CONCAT(vector_id) as vector_ids " +
+            "GROUP_CONCAT(vector_id) as vector_ids, " +
+            "MIN(stored_file_name) as stored_file_name " +
             "FROM knowledge_chunks GROUP BY source_type, source_title, source_id " +
             "ORDER BY MAX(created_at) DESC"
         );

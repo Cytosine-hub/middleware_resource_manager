@@ -5,7 +5,14 @@ import com.middleware.manager.knowledge.repository.KnowledgeChunkRepository;
 import com.middleware.manager.knowledge.service.KnowledgeService;
 import com.middleware.manager.knowledge.service.KnowledgeService.ImportResult;
 import com.middleware.manager.knowledge.service.KnowledgeService.SearchResult;
+import com.middleware.manager.service.StorageService;
+import org.apache.tika.metadata.Metadata;
+import org.apache.tika.parser.AutoDetectParser;
+import org.apache.tika.sax.ToXMLContentHandler;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,6 +23,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +39,9 @@ public class KnowledgeController {
 
     @Autowired
     private KnowledgeChunkRepository chunkRepository;
+
+    @Autowired
+    private StorageService storageService;
 
     /**
      * POST /api/knowledge/upload
@@ -140,7 +152,79 @@ public class KnowledgeController {
         resp.put("sourceType", sourceType);
         resp.put("chunks", result);
         resp.put("totalChunks", result.size());
+        resp.put("storedFileName", chunks.isEmpty() ? null : chunks.get(0).getStoredFileName());
         return ResponseEntity.ok(resp);
+    }
+
+    /**
+     * GET /api/knowledge/docs/file?title=xxx&sourceType=xxx
+     * Serve the original file for preview (PDF, Markdown, etc.)
+     */
+    @GetMapping("/docs/file")
+    public ResponseEntity<?> serveFile(@RequestParam String title, @RequestParam String sourceType) {
+        List<KnowledgeChunk> chunks = chunkRepository.findBySourceTitleAndSourceType(title, sourceType);
+        if (chunks.isEmpty() || chunks.get(0).getStoredFileName() == null) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "未找到原文件");
+            return ResponseEntity.notFound().build();
+        }
+        String storedFileName = chunks.get(0).getStoredFileName();
+        Resource resource = storageService.loadAsResource(storedFileName);
+
+        String contentType = "application/octet-stream";
+        String lower = storedFileName.toLowerCase();
+        if (lower.endsWith(".pdf")) contentType = "application/pdf";
+        else if (lower.endsWith(".md")) contentType = "text/markdown; charset=utf-8";
+        else if (lower.endsWith(".docx")) contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        else if (lower.endsWith(".doc")) contentType = "application/msword";
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + title + "\"")
+                .body(resource);
+    }
+
+    /**
+     * GET /api/knowledge/docs/html?title=xxx&sourceType=xxx
+     * Convert document to HTML for preview (Word docs via Tika).
+     */
+    @GetMapping("/docs/html")
+    public ResponseEntity<?> serveHtml(@RequestParam String title, @RequestParam String sourceType) {
+        List<KnowledgeChunk> chunks = chunkRepository.findBySourceTitleAndSourceType(title, sourceType);
+        if (chunks.isEmpty() || chunks.get(0).getStoredFileName() == null) {
+            return ResponseEntity.notFound().build();
+        }
+        String storedFileName = chunks.get(0).getStoredFileName();
+        String lower = storedFileName.toLowerCase();
+
+        // 只处理 Word 文档，PDF 和 Markdown 前端直接渲染
+        if (!lower.endsWith(".doc") && !lower.endsWith(".docx")) {
+            return ResponseEntity.badRequest().body("{\"error\":\"此文件类型不需要HTML转换\"}");
+        }
+
+        try {
+            Resource resource = storageService.loadAsResource(storedFileName);
+            ToXMLContentHandler handler = new ToXMLContentHandler();
+            AutoDetectParser parser = new AutoDetectParser();
+            try (InputStream is = resource.getInputStream()) {
+                parser.parse(is, handler, new Metadata());
+            }
+            String html = handler.toString();
+            // 提取 body 内容
+            int bodyStart = html.indexOf("<body>");
+            int bodyEnd = html.indexOf("</body>");
+            String body = (bodyStart >= 0 && bodyEnd > bodyStart)
+                    ? html.substring(bodyStart + 6, bodyEnd)
+                    : html;
+
+            return ResponseEntity.ok()
+                    .contentType(MediaType.TEXT_HTML)
+                    .body(body);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "文档转换失败: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(error);
+        }
     }
 
     /**
