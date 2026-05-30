@@ -85,6 +85,7 @@
             <input type="file" accept=".pdf,.doc,.docx,.md,.markdown" multiple @change="onFileChange" />
             <span class="file-button">选择文件</span>
             <span>{{ uploadFiles.length > 0 ? `已选 ${uploadFiles.length} 个` : '未选择' }}</span>
+            <button v-if="uploadFiles.length > 0" class="ghost file-clear-btn" @click.stop.prevent="clearUploadFiles">清除</button>
           </label>
           <div v-if="uploadFiles.length > 0" class="file-list">
             <div v-for="(f, i) in uploadFiles" :key="i" class="file-item">
@@ -102,6 +103,20 @@
             <span v-if="uploadResults.filter(r => r.status === 'error').length > 0" class="error">
               失败 {{ uploadResults.filter(r => r.status === 'error').length }}
             </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 删除确认弹窗 -->
+      <div v-if="showDeleteModal" class="modal-backdrop" @click.self="showDeleteModal = false">
+        <div class="modal-panel delete-modal">
+          <h3>确认删除</h3>
+          <p>确定删除文档「{{ deleteTarget?.source_title }}」？此操作不可恢复。</p>
+          <div class="modal-actions">
+            <button class="danger" @click="confirmDeleteDoc" :disabled="deleting">
+              {{ deleting ? '删除中...' : '确认删除' }}
+            </button>
+            <button class="ghost" @click="showDeleteModal = false">取消</button>
           </div>
         </div>
       </div>
@@ -207,6 +222,8 @@ const searched = ref(false)
 // 已导入文档
 const kbDocs = ref([])
 const deleting = ref(false)
+const showDeleteModal = ref(false)
+const deleteTarget = ref(null)
 
 // 文档预览
 const showPreviewModal = ref(false)
@@ -237,17 +254,29 @@ async function loadKbDocs() {
   } catch { kbDocs.value = [] }
 }
 
-async function handleDeleteDoc(doc) {
-  if (!confirm(`确定删除文档「${doc.source_title}」？此操作不可恢复。`)) return
+function handleDeleteDoc(doc) {
+  deleteTarget.value = doc
+  showDeleteModal.value = true
+}
+
+async function confirmDeleteDoc() {
+  if (!deleteTarget.value) return
   deleting.value = true
   try {
-    await request(`/api/knowledge/docs?title=${encodeURIComponent(doc.source_title)}&sourceType=${doc.source_type}`, { method: 'DELETE' })
+    await request(`/api/knowledge/docs?title=${encodeURIComponent(deleteTarget.value.source_title)}&sourceType=${deleteTarget.value.source_type}`, { method: 'DELETE' })
+    showDeleteModal.value = false
+    deleteTarget.value = null
     await loadKbDocs()
   } catch (e) {
     props.notify('删除失败：' + (e.message || '未知错误'), 'error')
   } finally {
     deleting.value = false
   }
+}
+
+function clearUploadFiles() {
+  uploadFiles.value = []
+  uploadResults.value = null
 }
 
 function getDocIcon(sourceType) {
@@ -744,6 +773,15 @@ async function initGraph() {
 
 .file-button:hover { background: #dce4ee; }
 
+.file-clear-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.file-clear-btn:hover { background: #fef2f2; }
+
 .file-list {
   max-height: 150px;
   overflow-y: auto;
@@ -909,6 +947,19 @@ async function initGraph() {
   word-break: break-word;
   margin: 0;
   font-family: inherit;
+}
+
+/* 删除确认弹窗 */
+.delete-modal {
+  min-width: 380px;
+  max-width: 440px;
+}
+
+.delete-modal p {
+  color: #475569;
+  font-size: 14px;
+  margin: 12px 0 20px;
+  line-height: 1.6;
 }
 
 /* 按钮复用全局样式 */

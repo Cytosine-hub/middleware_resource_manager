@@ -10,7 +10,7 @@ import java.util.regex.Pattern;
 @Component
 public class TextSplitter {
 
-    private static final int DEFAULT_MAX_CHUNK_SIZE = 1000;
+    private static final int DEFAULT_MAX_CHUNK_SIZE = 500;
     private static final Pattern HEADING_PATTERN = Pattern.compile("(?m)^#{1,6}\\s+.*$");
 
     private final int maxChunkSize;
@@ -89,6 +89,17 @@ public class TextSplitter {
         StringBuilder current = new StringBuilder();
 
         for (String line : lines) {
+            // 单行超长时强制按字符切分
+            if (line.length() > maxChunkSize) {
+                if (current.length() > 0) {
+                    parts.add(current.toString());
+                    current.setLength(0);
+                }
+                for (int i = 0; i < line.length(); i += maxChunkSize) {
+                    parts.add(line.substring(i, Math.min(i + maxChunkSize, line.length())));
+                }
+                continue;
+            }
             if (current.length() + line.length() + 1 > maxChunkSize && current.length() > 0) {
                 parts.add(current.toString());
                 current.setLength(0);
