@@ -77,26 +77,33 @@
       </template>
 
       <!-- 上传弹窗 -->
-      <div v-if="showUploadModal" class="modal-backdrop" @click.self="showUploadModal = false">
+      <div v-if="showUploadModal" class="modal-backdrop" @click.self="handleUploadModalClose">
         <div class="modal-panel">
           <h3>批量上传文档</h3>
           <p>支持 PDF、Word、Markdown 格式</p>
-          <label class="file-field">
+          <label class="file-field" v-if="!uploading">
             <input type="file" accept=".pdf,.doc,.docx,.md,.markdown" multiple @change="onFileChange" />
             <span class="file-button">选择文件</span>
             <span>{{ uploadFiles.length > 0 ? `已选 ${uploadFiles.length} 个` : '未选择' }}</span>
             <button v-if="uploadFiles.length > 0" class="ghost file-clear-btn" @click.stop.prevent="clearUploadFiles">清除</button>
           </label>
-          <div v-if="uploadFiles.length > 0" class="file-list">
+          <div v-if="uploadFiles.length > 0 && !uploading" class="file-list">
             <div v-for="(f, i) in uploadFiles" :key="i" class="file-item">
               {{ f.name }} ({{ formatSize(f.size) }})
             </div>
           </div>
+          <div v-if="uploading" class="upload-progress">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 100%"></div>
+            </div>
+            <p class="progress-text">正在上传并处理 {{ uploadFiles.length }} 个文件，请稍候...</p>
+          </div>
           <div class="modal-actions">
-            <button :disabled="uploadFiles.length === 0 || uploading" @click="handleBatchUpload">
-              {{ uploading ? '上传中...' : '开始上传' }}
+            <button v-if="!uploading" :disabled="uploadFiles.length === 0" @click="handleBatchUpload">
+              开始上传
             </button>
-            <button class="ghost" @click="showUploadModal = false">取消</button>
+            <button v-if="uploading" class="danger" @click="cancelUpload">取消上传</button>
+            <button v-if="!uploading" class="ghost" @click="handleUploadModalClose">关闭</button>
           </div>
           <div v-if="uploadResults" class="upload-results">
             <span class="success">成功 {{ uploadResults.filter(r => r.status === 'success').length }}</span>
@@ -211,6 +218,7 @@ const uploadFiles = ref([])
 const uploading = ref(false)
 const uploadProgress = ref(0)
 const uploadResults = ref(null)
+let uploadAbortController = null
 
 // 检索测试
 const searchQuery = ref('')
@@ -355,17 +363,43 @@ async function handleBatchUpload() {
   uploading.value = true
   uploadResults.value = null
   uploadProgress.value = 0
+  uploadAbortController = new AbortController()
   try {
     const formData = new FormData()
     uploadFiles.value.forEach(f => formData.append('files', f))
-    const result = await request('/api/knowledge/batch-upload', { method: 'POST', body: formData })
+    const result = await request('/api/knowledge/batch-upload', {
+      method: 'POST',
+      body: formData,
+      signal: uploadAbortController.signal
+    })
     uploadResults.value = result?.results || []
     uploadProgress.value = uploadFiles.value.length
+    if (result?.results?.some(r => r.status === 'success')) {
+      await loadKbDocs()
+    }
   } catch (error) {
-    uploadResults.value = [{ fileName: '批量上传', status: 'error', error: error.message }]
+    if (error.name === 'AbortError') {
+      uploadResults.value = [{ fileName: '批量上传', status: 'error', error: '已取消' }]
+    } else {
+      uploadResults.value = [{ fileName: '批量上传', status: 'error', error: error.message }]
+    }
   } finally {
     uploading.value = false
+    uploadAbortController = null
   }
+}
+
+function cancelUpload() {
+  if (uploadAbortController) {
+    uploadAbortController.abort()
+  }
+}
+
+function handleUploadModalClose() {
+  if (uploading.value) {
+    cancelUpload()
+  }
+  showUploadModal.value = false
 }
 
 function formatSize(bytes) {
@@ -840,6 +874,38 @@ async function initGraph() {
 
 .upload-results .success { color: #16a34a; margin-right: 12px; font-weight: 500; }
 .upload-results .error { color: #dc2626; font-weight: 500; }
+
+/* 上传进度 */
+.upload-progress {
+  margin: 16px 0;
+}
+
+.progress-bar {
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #2356a5;
+  border-radius: 3px;
+  animation: progress-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.progress-text {
+  font-size: 13px;
+  color: #526071;
+  text-align: center;
+  margin: 0;
+}
 
 /* 文档预览 */
 .preview-modal {

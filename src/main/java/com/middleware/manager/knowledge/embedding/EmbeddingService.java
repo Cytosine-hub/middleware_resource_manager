@@ -9,6 +9,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Component
 public class EmbeddingService {
@@ -34,10 +37,23 @@ public class EmbeddingService {
     }
 
     public List<float[]> embedBatch(List<String> texts) {
-        List<float[]> results = new ArrayList<>();
-        for (String text : texts) {
-            results.add(embed(text));
+        if (texts.isEmpty()) return new ArrayList<>();
+
+        int parallel = Math.min(texts.size(), 8);
+        ExecutorService executor = Executors.newFixedThreadPool(parallel);
+        try {
+            List<CompletableFuture<float[]>> futures = new ArrayList<>();
+            for (String text : texts) {
+                futures.add(CompletableFuture.supplyAsync(() -> embed(text), executor));
+            }
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+            List<float[]> results = new ArrayList<>();
+            for (CompletableFuture<float[]> f : futures) {
+                results.add(f.join());
+            }
+            return results;
+        } finally {
+            executor.shutdown();
         }
-        return results;
     }
 }
