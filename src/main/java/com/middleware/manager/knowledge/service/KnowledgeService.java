@@ -60,21 +60,21 @@ public class KnowledgeService {
         String fileName = file.getOriginalFilename();
         DocumentLoader loader = resolveLoader(fileName);
 
+        // 先将文件读入内存字节数组，避免多次读取 InputStream 失败
+        byte[] fileBytes = file.getBytes();
+
         // 保存原文件到 storage/knowledge/
         String extension = "";
         int lastDot = fileName.lastIndexOf('.');
         if (lastDot >= 0) extension = fileName.substring(lastDot);
         String storedFileName = "knowledge/" + UUID.randomUUID() + extension;
-        Path knowledgeDir = storageService.getRootLocation().resolve("knowledge");
-        Files.createDirectories(knowledgeDir);
         Path dest = storageService.getRootLocation().resolve(storedFileName);
-        try (InputStream is = file.getInputStream()) {
-            Files.copy(is, dest, StandardCopyOption.REPLACE_EXISTING);
-        }
+        Files.createDirectories(dest.getParent());
+        Files.write(dest, fileBytes);
 
-        // 重新读取文件提取文本内容
+        // 从字节数组提取文本内容
         String content;
-        try (InputStream is = file.getInputStream()) {
+        try (InputStream is = new java.io.ByteArrayInputStream(fileBytes)) {
             content = loader.load(is, fileName);
         }
 
