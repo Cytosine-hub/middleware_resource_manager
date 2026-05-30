@@ -1,22 +1,34 @@
-const AUTH_KEY = 'mrm.basicAuth'
+const TOKEN_KEY = 'mrm.token'
 const USER_KEY = 'mrm.user'
+const EXPIRES_KEY = 'mrm.expiresAt'
 
 export function getSavedAuth() {
-  const token = sessionStorage.getItem(AUTH_KEY)
-  const user = sessionStorage.getItem(USER_KEY)
-  return token && user ? { token, user: JSON.parse(user) } : null
+  const token = localStorage.getItem(TOKEN_KEY)
+  const user = localStorage.getItem(USER_KEY)
+  const expiresAt = localStorage.getItem(EXPIRES_KEY)
+
+  if (!token || !user) return null
+
+  // 检查本地过期时间
+  if (expiresAt && new Date(expiresAt) < new Date()) {
+    clearAuth()
+    return null
+  }
+
+  return { token, user: JSON.parse(user) }
 }
 
-export function saveAuth(username, password, user) {
-  const token = btoa(`${username}:${password}`)
-  sessionStorage.setItem(AUTH_KEY, token)
-  sessionStorage.setItem(USER_KEY, JSON.stringify(user))
+export function saveAuth(username, token, user, expiresAt) {
+  localStorage.setItem(TOKEN_KEY, token)
+  localStorage.setItem(USER_KEY, JSON.stringify(user))
+  localStorage.setItem(EXPIRES_KEY, expiresAt)
   return token
 }
 
 export function clearAuth() {
-  sessionStorage.removeItem(AUTH_KEY)
-  sessionStorage.removeItem(USER_KEY)
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(USER_KEY)
+  localStorage.removeItem(EXPIRES_KEY)
 }
 
 export function fileUrl(path) {
@@ -24,11 +36,19 @@ export function fileUrl(path) {
 }
 
 export async function request(path, options = {}) {
-  const token = options.token || sessionStorage.getItem(AUTH_KEY)
+  const token = options.token || localStorage.getItem(TOKEN_KEY)
   const headers = new Headers(options.headers || {})
 
+  // 检查本地过期时间
+  const expiresAt = localStorage.getItem(EXPIRES_KEY)
+  if (expiresAt && new Date(expiresAt) < new Date()) {
+    clearAuth()
+    window.location.hash = '#/login'
+    throw new Error('登录已过期')
+  }
+
   if (token) {
-    headers.set('Authorization', `Basic ${token}`)
+    headers.set('Authorization', `Bearer ${token}`)
   }
 
   let body = options.body
@@ -49,6 +69,11 @@ export async function request(path, options = {}) {
   const response = await fetch(path, fetchOptions)
 
   if (!response.ok) {
+    // Token 过期或无效，清除登录状态
+    if (response.status === 401) {
+      clearAuth()
+      window.location.hash = '#/login'
+    }
     let message = response.statusText || 'Request failed'
     try {
       const payload = await response.json()

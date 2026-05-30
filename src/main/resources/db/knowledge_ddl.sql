@@ -90,6 +90,17 @@ INSERT IGNORE INTO system_settings (setting_key, setting_value, description) VAL
 ('knowledge-enabled', 'true', '知识库模块开关'),
 ('diagnostics-enabled', 'true', '智能排查模块开关');
 
+-- 用户登录令牌表
+CREATE TABLE IF NOT EXISTS user_tokens (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    token VARCHAR(64) NOT NULL UNIQUE,
+    username VARCHAR(120) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_token (token),
+    INDEX idx_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户登录令牌';
+
 -- 标准包相关字段（release_assets 表扩展，如已存在会报 Duplicate column 可忽略）
 ALTER TABLE release_assets ADD COLUMN standard_package BOOLEAN NOT NULL DEFAULT false COMMENT '是否为标准包';
 ALTER TABLE release_assets ADD COLUMN parameter_standard_id BIGINT COMMENT '关联的参数标准ID';

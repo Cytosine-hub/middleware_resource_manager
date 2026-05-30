@@ -1570,7 +1570,7 @@ async function deleteCommand(cmd) {
 }
 
 function authHeaders() {
-  return auth.token ? { Authorization: `Basic ${auth.token}` } : {}
+  return auth.token ? { Authorization: `Bearer ${auth.token}` } : {}
 }
 
 const publicDocumentGroups = computed(() => {
@@ -2081,10 +2081,19 @@ function fetchStandardParameters(targetId) {
 async function login() {
   try {
     const pwHash = await sha256(loginForm.password)
-    const token = btoa(`${loginForm.username}:${pwHash}`)
-    const user = await request('/api/auth/login', { token })
-    auth.token = saveAuth(loginForm.username, pwHash, user)
-    auth.user = user
+    const basicToken = btoa(`${loginForm.username}:${pwHash}`)
+    // 用 Basic Auth 调用登录接口获取 token
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Authorization': `Basic ${basicToken}` }
+    })
+    if (!res.ok) {
+      throw new Error(res.status === 401 ? '账号或密码错误' : '登录失败')
+    }
+    const data = await res.json()
+    // 保存 token（非密码哈希）
+    auth.token = saveAuth(loginForm.username, data.token, data, data.expiresAt)
+    auth.user = data
     loginForm.password = ''
     notify('登录成功', 'success')
     if (isReadOnly.value) {
@@ -2097,11 +2106,18 @@ async function login() {
     }
   } catch (error) {
     loginForm.password = ''
-    notify(error.status === 401 ? '账号或密码错误，请重新输入' : (error.message || '登录失败'), 'error')
+    notify(error.message || '登录失败', 'error')
   }
 }
 
-function logout(showMessage = true) {
+async function logout(showMessage = true) {
+  // 通知服务端删除 token
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${auth.token}` }
+    })
+  } catch (e) { /* 忽略网络错误 */ }
   clearAuth()
   auth.token = ''
   auth.user = null
@@ -2173,7 +2189,7 @@ function handleDownload(url, fileName) {
   downloadFileName.value = fileName || '文件'
 
   fetch(fileUrl(url), {
-    headers: { 'Authorization': 'Basic ' + auth.token }
+    headers: { 'Authorization': 'Bearer ' + auth.token }
   }).then(async resp => {
     if (!resp.ok) throw new Error('下载失败')
     const contentLength = +(resp.headers.get('Content-Length') || 0)
@@ -2444,7 +2460,7 @@ async function saveRelease() {
       }
       xhr.onerror = () => reject(new Error('网络错误'))
       xhr.open(method, url)
-      xhr.setRequestHeader('Authorization', 'Basic ' + auth.token)
+      xhr.setRequestHeader('Authorization', 'Bearer ' + auth.token)
       xhr.send(formData)
     })
     notify('资源已保存', 'success')
@@ -3116,7 +3132,7 @@ function handleParamImportFileChange(e) {
 
 function downloadParameterTemplate() {
   fetch('/api/admin/standard-parameters/template', {
-    headers: { 'Authorization': `Basic ${auth.token}` }
+    headers: { 'Authorization': `Bearer ${auth.token}` }
   }).then(res => res.blob()).then(blob => {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -3154,7 +3170,7 @@ async function importParameters() {
       }
       xhr.onerror = () => reject(new Error('网络错误'))
       xhr.open('POST', '/api/admin/standard-parameters/import')
-      xhr.setRequestHeader('Authorization', 'Basic ' + auth.token)
+      xhr.setRequestHeader('Authorization', 'Bearer ' + auth.token)
       xhr.send(formData)
     })
     paramImportResult.value = res

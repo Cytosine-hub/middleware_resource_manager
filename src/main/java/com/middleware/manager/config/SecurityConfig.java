@@ -1,5 +1,6 @@
 package com.middleware.manager.config;
 
+import com.middleware.manager.security.TokenAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -9,6 +10,7 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -19,17 +21,24 @@ import java.util.Arrays;
 @Configuration
 public class SecurityConfig {
 
+    private final TokenAuthenticationFilter tokenAuthenticationFilter;
+
+    public SecurityConfig(TokenAuthenticationFilter tokenAuthenticationFilter) {
+        this.tokenAuthenticationFilter = tokenAuthenticationFilter;
+    }
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> {})
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
+                .addFilterBefore(tokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(ex -> ex
                         .defaultAuthenticationEntryPointFor(
                                 new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
                                 new AntPathRequestMatcher("/api/**")))
                 .authorizeHttpRequests(auth -> auth
-                        // 图片文件公开访问（markdown 预览中 img 标签无 Auth header）
+                        // 图片文件公开访问
                         .requestMatchers("/files/images/**").permitAll()
                         // 文件下载：需登录
                         .requestMatchers("/files/**").authenticated()
@@ -42,7 +51,9 @@ public class SecurityConfig {
                         // 常用命令：读公开，写需登录
                         .requestMatchers(HttpMethod.GET, "/api/middleware-commands/**").permitAll()
                         .requestMatchers("/api/middleware-commands/**").authenticated()
-                        // 登录
+                        // 登录接口公开
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        // 其他 auth 接口需认证
                         .requestMatchers("/api/auth/**").authenticated()
                         // 用户管理：仅系统管理员
                         .requestMatchers("/api/admin/users/**").hasRole("SYS_ADMIN")
@@ -50,10 +61,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasAnyRole("SYS_ADMIN",
                                 "MIDDLEWARE_ADMIN", "DATABASE_ADMIN", "HOST_ADMIN", "NETWORK_ADMIN", "SECURITY_ADMIN",
                                 "MIDDLEWARE_MGR", "DATABASE_MGR", "HOST_MGR", "NETWORK_MGR", "SECURITY_MGR")
-                        .anyRequest().authenticated())
-                .httpBasic(basic -> basic
-                        .authenticationEntryPoint((request, response, authException) ->
-                                response.sendError(HttpStatus.UNAUTHORIZED.value(), HttpStatus.UNAUTHORIZED.getReasonPhrase())));
+                        .anyRequest().authenticated());
         return http.build();
     }
 
