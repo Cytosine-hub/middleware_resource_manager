@@ -193,7 +193,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { request } from '../api'
-import ForceGraph3D from '3d-force-graph'
+import ForceGraph from 'force-graph'
 
 const props = defineProps({ auth: Object, notify: { type: Function, default: (msg, type) => type === 'error' ? alert(msg) : alert(msg) } })
 
@@ -538,48 +538,51 @@ async function initGraph() {
     }
 
     const N = data.nodes.length
-    const resolution = N > 200 ? 4 : 8
 
-    graph = ForceGraph3D({ controlType: 'orbit' })(container)
+    graph = ForceGraph(container)
       .width(w)
       .height(h)
       .backgroundColor('#000000')
       .nodeLabel(n => `${n.name} (${n.val}次)`)
       .nodeColor(() => '#ffffff')
-      .nodeVal(n => n.group === 'keyword' ? Math.max(n.val * 0.5, 1.5) : Math.max(n.val * 1.5, 4))
-      .nodeResolution(resolution)
-      .linkColor(() => '#ffffff')
-      .linkWidth(l => Math.max(l.value * 0.8, 0.5))
-      .linkDirectionalParticles(1)
-      .linkDirectionalParticleWidth(1)
-      .linkDirectionalParticleColor(() => '#ffffff')
+      .nodeVal(n => n.group === 'keyword' ? Math.max(n.val * 0.5, 1.5) : Math.max(n.val * 2, 5))
+      .linkColor(() => 'rgba(255,255,255,0.6)')
+      .linkWidth(l => Math.max(l.value * 0.5, 0.3))
+      .linkDirectionalParticles(0)
+      .nodeCanvasObject((n, ctx) => {
+        const r = Math.sqrt(n.val || 1) * 1.5
+        ctx.beginPath()
+        ctx.arc(n.x, n.y, r, 0, 2 * Math.PI)
+        ctx.fillStyle = '#ffffff'
+        ctx.fill()
+      })
+      .nodePointerAreaPaint((n, color, ctx) => {
+        const r = Math.sqrt(n.val || 1) * 1.5 + 2
+        ctx.fillStyle = color
+        ctx.beginPath()
+        ctx.arc(n.x, n.y, r, 0, 2 * Math.PI)
+        ctx.fill()
+      })
       .onNodeClick(n => {
-        if (n && n.x != null) {
-          const distance = 80
-          const distRatio = 1 + distance / Math.sqrt((n.x || 0) ** 2 + (n.y || 0) ** 2 + (n.z || 0) ** 2)
-          graph.cameraPosition(
-            { x: (n.x || 0) * distRatio, y: (n.y || 0) * distRatio, z: (n.z || 0) * distRatio },
-            n,
-            1500
-          )
-        }
+        graph.centerAt(n.x, n.y, 1000)
+        graph.zoom(4, 1000)
       })
 
-    const r = Math.max(50, N * 2)
+    // 2D 圆形初始布局
+    const r = Math.max(100, N * 3)
     data.nodes.forEach((n, i) => {
-      const phi = Math.acos(-1 + 2 * i / N)
-      const theta = Math.sqrt(N * Math.PI) * phi
-      n.x = r * Math.cos(theta) * Math.sin(phi)
-      n.y = r * Math.sin(theta) * Math.sin(phi)
-      n.z = r * Math.cos(phi)
+      const angle = (2 * Math.PI * i) / N
+      n.x = r * Math.cos(angle)
+      n.y = r * Math.sin(angle)
     })
     graph.graphData(data)
 
-    graph.d3Force('charge').strength(-120)
-    graph.d3Force('link').distance(60)
+    graph.d3Force('charge').strength(-300)
+    graph.d3Force('link').distance(80)
+    graph.zoomToFit(400, 50)
     graphReady.value = true
   } catch (e) {
-    console.warn('3D graph init error:', e)
+    console.warn('graph init error:', e)
   } finally {
     graphLoading.value = false
   }

@@ -13,7 +13,7 @@
       <span class="link-count">连接: {{ graphData.links?.length || 0 }}</span>
     </div>
 
-    <!-- 3D 图形容器 -->
+    <!-- 图形容器 -->
     <div ref="graphContainer" class="graph-container"></div>
 
     <!-- 节点详情面板 -->
@@ -27,8 +27,8 @@
 
     <!-- 图例 -->
     <div class="graph-legend">
-      <div><span class="legend-dot keyword"></span> 关键词</div>
-      <div><span class="legend-dot document"></span> 文档来源</div>
+      <div><span class="legend-dot keyword"></span> 关键词（小）</div>
+      <div><span class="legend-dot document"></span> 文档来源（大）</div>
     </div>
   </div>
 </template>
@@ -36,7 +36,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { request } from '../api'
-import ForceGraph3D from '3d-force-graph'
+import ForceGraph from 'force-graph'
 
 const graphContainer = ref(null)
 const graphData = ref({ nodes: [], links: [] })
@@ -71,58 +71,57 @@ function initGraph() {
   if (!graphContainer.value || !graphData.value.nodes.length) return
 
   const container = graphContainer.value
-  const width = container.clientWidth
-  const height = container.clientHeight
 
   try {
-  graph = ForceGraph3D({ controlType: 'orbit' })(container)
-    .width(width)
-    .height(height)
-    .backgroundColor('#0a0e1a')
-    .graphData(graphData.value)
-    .nodeLabel(node => `${node.name} (${node.val}次)`)
-    .nodeColor(node => node.group === 'keyword' ? '#4a9eff' : '#4aff8e')
-    .nodeVal(node => Math.max(node.val * 2, 3))
-    .nodeResolution(8)
-    .linkColor(() => 'rgba(255,255,255,0.15)')
-    .linkWidth(link => Math.max(link.value * 0.5, 0.3))
-    .linkDirectionalParticles(1)
-    .linkDirectionalParticleWidth(1)
-    .linkDirectionalParticleColor(() => '#4a9eff')
-    .onNodeClick(node => {
-      if (!node || node.x == null) return
-      selectedNode.value = node
-      const distance = 80
-      const distRatio = 1 + distance / Math.sqrt(
-        (node.x || 0) ** 2 + (node.y || 0) ** 2 + (node.z || 0) ** 2
-      )
-      graph.cameraPosition(
-        { x: (node.x || 0) * distRatio, y: (node.y || 0) * distRatio, z: (node.z || 0) * distRatio },
-        node,
-        2000
-      )
-    })
-    .onNodeHover(node => {
-      container.style.cursor = node ? 'pointer' : null
-    })
+    graph = ForceGraph(container)
+      .width(container.clientWidth)
+      .height(container.clientHeight)
+      .backgroundColor('#000000')
+      .graphData(graphData.value)
+      .nodeLabel(node => `${node.name} (${node.val}次)`)
+      .nodeColor(() => '#ffffff')
+      .nodeVal(node => node.group === 'keyword' ? Math.max(node.val * 0.5, 1.5) : Math.max(node.val * 2, 5))
+      .linkColor(() => 'rgba(255,255,255,0.6)')
+      .linkWidth(link => Math.max(link.value * 0.5, 0.3))
+      .linkDirectionalParticles(0)
+      .nodeCanvasObject((n, ctx) => {
+        const r = Math.sqrt(n.val || 1) * 1.5
+        ctx.beginPath()
+        ctx.arc(n.x, n.y, r, 0, 2 * Math.PI)
+        ctx.fillStyle = '#ffffff'
+        ctx.fill()
+      })
+      .nodePointerAreaPaint((n, color, ctx) => {
+        const r = Math.sqrt(n.val || 1) * 1.5 + 2
+        ctx.fillStyle = color
+        ctx.beginPath()
+        ctx.arc(n.x, n.y, r, 0, 2 * Math.PI)
+        ctx.fill()
+      })
+      .onNodeClick(node => {
+        selectedNode.value = node
+        graph.centerAt(node.x, node.y, 1000)
+        graph.zoom(4, 1000)
+      })
+      .onNodeHover(node => {
+        container.style.cursor = node ? 'pointer' : null
+      })
 
-  // 球形布局：给节点初始位置
-  const N = graphData.value.nodes.length
-  const radius = Math.max(50, N * 2)
-  graphData.value.nodes.forEach((node, i) => {
-    const phi = Math.acos(-1 + (2 * i) / N)
-    const theta = Math.sqrt(N * Math.PI) * phi
-    node.x = radius * Math.cos(theta) * Math.sin(phi)
-    node.y = radius * Math.sin(theta) * Math.sin(phi)
-    node.z = radius * Math.cos(phi)
-  })
-  graph.graphData(graphData.value)
+    // 2D 圆形初始布局
+    const N = graphData.value.nodes.length
+    const r = Math.max(100, N * 3)
+    graphData.value.nodes.forEach((node, i) => {
+      const angle = (2 * Math.PI * i) / N
+      node.x = r * Math.cos(angle)
+      node.y = r * Math.sin(angle)
+    })
+    graph.graphData(graphData.value)
 
-  // 力学参数
-  graph.d3Force('charge').strength(-120)
-  graph.d3Force('link').distance(60)
+    graph.d3Force('charge').strength(-300)
+    graph.d3Force('link').distance(80)
+    graph.zoomToFit(400, 50)
   } catch (e) {
-    console.warn('3D graph init error:', e)
+    console.warn('graph init error:', e)
   }
 }
 
@@ -134,19 +133,8 @@ function focusNode() {
   )
   if (node) {
     selectedNode.value = node
-    try {
-      const distance = 100
-      const distRatio = 1 + distance / Math.sqrt(
-        (node.x || 0) ** 2 + (node.y || 0) ** 2 + (node.z || 0) ** 2
-      )
-      graph.cameraPosition(
-        { x: (node.x || 0) * distRatio, y: (node.y || 0) * distRatio, z: (node.z || 0) * distRatio },
-        node,
-        2000
-      )
-    } catch (e) {
-      console.warn('Camera position error:', e)
-    }
+    graph.centerAt(node.x, node.y, 1000)
+    graph.zoom(4, 1000)
   }
 }
 </script>
@@ -175,17 +163,20 @@ function focusNode() {
 
 .search-input {
   padding: 6px 12px;
-  border: 1px solid #d8e1ec;
+  border: 1px solid #333;
   border-radius: 6px;
   font-size: 14px;
   width: 200px;
-  background: rgba(255,255,255,0.95);
+  background: rgba(30,30,30,0.95);
+  color: #fff;
 }
+
+.search-input::placeholder { color: #888; }
 
 .node-count, .link-count {
   font-size: 13px;
-  color: #888;
-  background: rgba(255,255,255,0.9);
+  color: #aaa;
+  background: rgba(30,30,30,0.9);
   padding: 4px 8px;
   border-radius: 4px;
 }
@@ -195,24 +186,24 @@ function focusNode() {
   top: 12px;
   right: 12px;
   z-index: 10;
-  background: rgba(255,255,255,0.96);
-  border: 1px solid #d8e1ec;
+  background: rgba(20,20,20,0.96);
+  border: 1px solid #333;
   border-radius: 8px;
   padding: 16px;
   min-width: 200px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
 
 .node-detail h4 {
   margin: 0 0 8px;
   font-size: 16px;
-  color: #2356a5;
+  color: #fff;
 }
 
 .node-detail p {
   margin: 4px 0;
   font-size: 13px;
-  color: #526071;
+  color: #aaa;
 }
 
 .graph-legend {
@@ -220,10 +211,11 @@ function focusNode() {
   bottom: 12px;
   left: 12px;
   z-index: 10;
-  background: rgba(255,255,255,0.9);
+  background: rgba(20,20,20,0.9);
   padding: 8px 12px;
   border-radius: 6px;
   font-size: 13px;
+  color: #aaa;
 }
 
 .graph-legend div {
@@ -240,6 +232,6 @@ function focusNode() {
   display: inline-block;
 }
 
-.legend-dot.keyword { background: #4a9eff; }
-.legend-dot.document { background: #4aff8e; }
+.legend-dot.keyword { background: #fff; width: 6px; height: 6px; }
+.legend-dot.document { background: #fff; width: 12px; height: 12px; }
 </style>
