@@ -47,6 +47,7 @@ let graph = null
 onMounted(async () => {
   await loadGraphData()
   await nextTick()
+  await new Promise(r => setTimeout(r, 100))
   initGraph()
 })
 
@@ -71,11 +72,22 @@ function initGraph() {
   if (!graphContainer.value || !graphData.value.nodes.length) return
 
   const container = graphContainer.value
+  const w = container.clientWidth || 800
+  const h = container.clientHeight || 600
 
   try {
+    // 2D 圆形初始布局
+    const N = graphData.value.nodes.length
+    const r = Math.max(100, N * 3)
+    graphData.value.nodes.forEach((node, i) => {
+      const angle = (2 * Math.PI * i) / N
+      node.x = r * Math.cos(angle)
+      node.y = r * Math.sin(angle)
+    })
+
     graph = ForceGraph(container)
-      .width(container.clientWidth)
-      .height(container.clientHeight)
+      .width(w)
+      .height(h)
       .backgroundColor('#000000')
       .graphData(graphData.value)
       .nodeLabel(node => `${node.name} (${node.val}次)`)
@@ -83,7 +95,6 @@ function initGraph() {
       .nodeVal(node => node.group === 'keyword' ? Math.max(node.val * 0.5, 1.5) : Math.max(node.val * 2, 5))
       .linkColor(() => 'rgba(255,255,255,0.6)')
       .linkWidth(link => Math.max(link.value * 0.5, 0.3))
-      .linkDirectionalParticles(0)
       .nodeCanvasObject((n, ctx) => {
         const r = Math.sqrt(n.val || 1) * 1.5
         ctx.beginPath()
@@ -107,15 +118,9 @@ function initGraph() {
         container.style.cursor = node ? 'pointer' : null
       })
 
-    // 2D 圆形初始布局
-    const N = graphData.value.nodes.length
-    const r = Math.max(100, N * 3)
-    graphData.value.nodes.forEach((node, i) => {
-      const angle = (2 * Math.PI * i) / N
-      node.x = r * Math.cos(angle)
-      node.y = r * Math.sin(angle)
-    })
-    graph.graphData(graphData.value)
+    graph.d3Force('charge').strength(-300)
+    graph.d3Force('link').distance(80)
+    setTimeout(() => graph.zoomToFit(400, 50), 500)
 
     graph.d3Force('charge').strength(-300)
     graph.d3Force('link').distance(80)

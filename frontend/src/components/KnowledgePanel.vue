@@ -526,10 +526,13 @@ async function initGraph() {
   if (!graphContainer.value) return
   graphLoading.value = true
   try {
+    // 等待 DOM 渲染完成，确保容器有尺寸
     await nextTick()
+    await new Promise(r => setTimeout(r, 100))
+
     const container = graphContainer.value
-    const w = container.clientWidth || container.offsetWidth || 600
-    const h = container.clientHeight || container.offsetHeight || 400
+    const w = container.clientWidth || 800
+    const h = container.clientHeight || 600
 
     const data = await request('/api/knowledge/graph')
     if (!data || !data.nodes?.length) {
@@ -538,6 +541,14 @@ async function initGraph() {
     }
 
     const N = data.nodes.length
+
+    // 2D 圆形初始布局
+    const radius = Math.max(100, N * 3)
+    data.nodes.forEach((n, i) => {
+      const angle = (2 * Math.PI * i) / N
+      n.x = radius * Math.cos(angle)
+      n.y = radius * Math.sin(angle)
+    })
 
     graph = ForceGraph(container)
       .width(w)
@@ -548,7 +559,6 @@ async function initGraph() {
       .nodeVal(n => n.group === 'keyword' ? Math.max(n.val * 0.5, 1.5) : Math.max(n.val * 2, 5))
       .linkColor(() => 'rgba(255,255,255,0.6)')
       .linkWidth(l => Math.max(l.value * 0.5, 0.3))
-      .linkDirectionalParticles(0)
       .nodeCanvasObject((n, ctx) => {
         const r = Math.sqrt(n.val || 1) * 1.5
         ctx.beginPath()
@@ -568,18 +578,12 @@ async function initGraph() {
         graph.zoom(4, 1000)
       })
 
-    // 2D 圆形初始布局
-    const r = Math.max(100, N * 3)
-    data.nodes.forEach((n, i) => {
-      const angle = (2 * Math.PI * i) / N
-      n.x = r * Math.cos(angle)
-      n.y = r * Math.sin(angle)
-    })
     graph.graphData(data)
-
     graph.d3Force('charge').strength(-300)
     graph.d3Force('link').distance(80)
-    graph.zoomToFit(400, 50)
+
+    // 等力图稳定后再 fit
+    setTimeout(() => graph.zoomToFit(400, 50), 500)
     graphReady.value = true
   } catch (e) {
     console.warn('graph init error:', e)
