@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS wiki_sources (
 CREATE TABLE IF NOT EXISTS wiki_ingest_log (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     source_id BIGINT NOT NULL,
-    operator_id BIGINT NOT NULL,
+    operator_id BIGINT,
     pages_created INT DEFAULT 0,
     pages_updated INT DEFAULT 0,
     links_created INT DEFAULT 0,

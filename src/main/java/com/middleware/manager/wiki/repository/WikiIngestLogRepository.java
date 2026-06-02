@@ -48,7 +48,7 @@ public class WikiIngestLogRepository {
                 Statement.RETURN_GENERATED_KEYS
             );
             ps.setLong(1, log.getSourceId());
-            ps.setLong(2, log.getOperatorId());
+            if (log.getOperatorId() != null) ps.setLong(2, log.getOperatorId()); else ps.setNull(2, java.sql.Types.BIGINT);
             ps.setInt(3, log.getPagesCreated());
             ps.setInt(4, log.getPagesUpdated());
             ps.setInt(5, log.getLinksCreated());
