@@ -24,11 +24,6 @@ spring:
     hikari:
       initialization-fail-timeout: -1
       minimum-idle: 2
-  sql:
-    init:
-      mode: always
-      schema-locations: classpath:db/knowledge_ddl.sql,classpath:db/wiki_ddl.sql
-      continue-on-error: true
   servlet:
     multipart:
       max-file-size: 2048MB
