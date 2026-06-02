@@ -85,6 +85,12 @@ public class AgentService {
                     continue;
                 }
                 Map<String, Object> args = resolveArgs(step.getArgs(), context);
+                List<String> missing = findUnresolved(args);
+                if (!missing.isEmpty()) {
+                    accumulated.append("[").append(step.getDescription()).append("] 缺少必要参数：")
+                            .append(String.join(", ", missing)).append("，请补充后重试\n\n");
+                    continue;
+                }
                 log.info("[Agent] Calling tool: {} with args: {}", step.getTool(), args);
                 try {
                     String result = tool.call(args);
@@ -127,6 +133,20 @@ public class AgentService {
         Map<String, Object> resolved = new HashMap<>();
         template.forEach((k, v) -> resolved.put(k, resolveTemplate(v, context)));
         return resolved;
+    }
+
+    private List<String> findUnresolved(Map<String, Object> args) {
+        List<String> missing = new ArrayList<>();
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\{\\{(\\w+)}}");
+        for (Map.Entry<String, Object> entry : args.entrySet()) {
+            if (entry.getValue() instanceof String s) {
+                java.util.regex.Matcher m = pattern.matcher(s);
+                while (m.find()) {
+                    missing.add(m.group(1));
+                }
+            }
+        }
+        return missing;
     }
 
     private String resolveTemplate(String template, Map<String, String> context) {

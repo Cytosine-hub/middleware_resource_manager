@@ -1,3 +1,28 @@
+# Release v1.0.8-20260602
+
+**日期**: 2026-06-02
+**分支**: feature/ops-agent
+**发布范围**: frontend / backend / db
+
+**自上次发布以来的变更**:
+- feat: 常用命令模块权限管控 — 迁移到 software_types + 分类级 RBAC
+- fix: 新增命令表单按用户角色显示可选软件类型
+- fix: 新增/删除命令后刷新侧边栏类型列表
+
+## 文件清单
+
+| 文件 | 大小 |
+|------|------|
+| backend/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar | 105 MB |
+| backend/application.yml.example | 2.9 KB |
+| frontend/index.html | 0.5 KB |
+| frontend/assets/index-CxKXAleL.js | 578 KB |
+| frontend/assets/index-C_Heoq1F.css | 70 KB |
+| frontend/favicon.svg | 295 B |
+| db/upgrade-v1.0.8-commands.sql | 2.1 KB |
+
+---
+
 # Release v1.0.7-20260602
 
 **日期**: 2026-06-02
