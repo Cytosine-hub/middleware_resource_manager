@@ -515,11 +515,9 @@ async function initGraph() {
     if (!data || !data.nodes?.length) return
 
     const container = graphContainer.value
-    console.log('[Graph] container:', container.clientWidth, 'x', container.clientHeight, 'children:', container.children.length)
 
-    graph = ForceGraph(container)
-      .width(container.clientWidth)
-      .height(container.clientHeight)
+    // 先创建实例，再挂载到容器
+    graph = ForceGraph()
       .backgroundColor('#000000')
       .graphData(data)
       .nodeLabel(n => `${n.name} (${n.val}次)`)
@@ -532,7 +530,8 @@ async function initGraph() {
         graph.zoom(4, 1000)
       })
 
-    console.log('[Graph] canvas:', container.querySelector('canvas')?.width, 'x', container.querySelector('canvas')?.height)
+    // 挂载到 DOM 容器
+    graph(container)
 
     graph.d3Force('charge').strength(-300)
     graph.d3Force('link').distance(80)

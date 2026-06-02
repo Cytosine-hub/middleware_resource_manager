@@ -72,22 +72,9 @@ function initGraph() {
   if (!graphContainer.value || !graphData.value.nodes.length) return
 
   const container = graphContainer.value
-  const w = container.clientWidth || 800
-  const h = container.clientHeight || 600
 
   try {
-    // 2D 圆形初始布局
-    const N = graphData.value.nodes.length
-    const r = Math.max(100, N * 3)
-    graphData.value.nodes.forEach((node, i) => {
-      const angle = (2 * Math.PI * i) / N
-      node.x = r * Math.cos(angle)
-      node.y = r * Math.sin(angle)
-    })
-
-    graph = ForceGraph(container)
-      .width(w)
-      .height(h)
+    graph = ForceGraph()
       .backgroundColor('#000000')
       .graphData(graphData.value)
       .nodeLabel(node => `${node.name} (${node.val}次)`)
@@ -95,20 +82,6 @@ function initGraph() {
       .nodeVal(node => node.group === 'keyword' ? Math.max(node.val * 0.5, 1.5) : Math.max(node.val * 2, 5))
       .linkColor(() => 'rgba(255,255,255,0.6)')
       .linkWidth(link => Math.max(link.value * 0.5, 0.3))
-      .nodeCanvasObject((n, ctx) => {
-        const r = Math.sqrt(n.val || 1) * 1.5
-        ctx.beginPath()
-        ctx.arc(n.x, n.y, r, 0, 2 * Math.PI)
-        ctx.fillStyle = '#ffffff'
-        ctx.fill()
-      })
-      .nodePointerAreaPaint((n, color, ctx) => {
-        const r = Math.sqrt(n.val || 1) * 1.5 + 2
-        ctx.fillStyle = color
-        ctx.beginPath()
-        ctx.arc(n.x, n.y, r, 0, 2 * Math.PI)
-        ctx.fill()
-      })
       .onNodeClick(node => {
         selectedNode.value = node
         graph.centerAt(node.x, node.y, 1000)
@@ -117,6 +90,9 @@ function initGraph() {
       .onNodeHover(node => {
         container.style.cursor = node ? 'pointer' : null
       })
+
+    // 挂载到 DOM 容器
+    graph(container)
 
     graph.d3Force('charge').strength(-300)
     graph.d3Force('link').distance(80)
