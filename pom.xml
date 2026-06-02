@@ -122,6 +122,20 @@
             <artifactId>poi-ooxml</artifactId>
             <version>5.2.5</version>
         </dependency>
+
+        <!-- JGraphT：图算法库，用于知识图谱的 Louvain 社区检测、图遍历 -->
+        <dependency>
+            <groupId>org.jgrapht</groupId>
+            <artifactId>jgrapht-core</artifactId>
+            <version>1.5.2</version>
+        </dependency>
+
+        <!-- Commonmark：Markdown 解析器，用于提取 [[wikilink]] 交叉引用 -->
+        <dependency>
+            <groupId>org.commonmark</groupId>
+            <artifactId>commonmark</artifactId>
+            <version>0.22.0</version>
+        </dependency>
     </dependencies>
 
     <build>
