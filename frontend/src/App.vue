@@ -1585,6 +1585,7 @@ async function saveCommand() {
     if (res.ok) {
       notify('命令已保存')
       closeCommandDialog()
+      loadCmdTypes()
       loadCmdCommands()
     } else {
       const err = await res.json().catch(() => ({}))
@@ -1602,6 +1603,7 @@ async function deleteCommand(cmd) {
     })
     if (res.ok) {
       notify('已删除')
+      loadCmdTypes()
       loadCmdCommands()
     }
   } catch { notify('网络错误') }
