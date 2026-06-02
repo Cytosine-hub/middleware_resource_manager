@@ -26,7 +26,8 @@
             <button class="ghost" @click="loadKbDocs">刷新</button>
           </div>
         </div>
-        <div class="docs-list" v-if="kbDocs.length > 0">
+        <div v-if="docsLoading" class="empty-state">加载中...</div>
+        <div class="docs-list" v-else-if="kbDocs.length > 0">
           <div v-for="(doc, idx) in kbDocs" :key="idx" class="doc-item" @click="handlePreviewDoc(doc)">
             <span class="doc-icon">{{ getDocIcon(doc.source_type) }}</span>
             <div class="doc-info">
@@ -42,6 +43,7 @@
       <!-- 知识图谱 -->
       <template v-if="currentTab === 'graph'">
         <div class="graph-wrapper">
+          <div v-if="graphLoading" class="graph-loading">加载知识图谱中...</div>
           <div ref="graphContainer" class="graph-container"></div>
         </div>
       </template>
@@ -170,11 +172,12 @@
               <div class="word-body" v-html="previewHtml"></div>
             </div>
             <!-- 切片预览（导入的标准文档等无原文件的情况） -->
-            <div v-else class="preview-chunks">
-              <div v-for="(chunk, i) in previewDoc.chunks" :key="i" class="preview-chunk">
+            <div v-else class="preview-chunks" @scroll="onChunksScroll">
+              <div v-for="(chunk, i) in previewDoc.chunks.slice(0, previewChunkPage)" :key="i" class="preview-chunk">
                 <div class="chunk-header">切片 #{{ chunk.chunkIndex + 1 }}</div>
                 <pre class="chunk-content">{{ chunk.content }}</pre>
               </div>
+              <div v-if="previewChunkPage < previewDoc.chunks.length" class="empty-state">加载更多切片...</div>
             </div>
           </template>
           <div class="modal-actions" v-if="!previewLoading">
@@ -239,7 +242,21 @@ const previewHtml = ref('')
 
 // 知识图谱
 const graphContainer = ref(null)
+const graphReady = ref(false)
+const graphLoading = ref(false)
 let graph = null
+
+// 文档列表 loading
+const docsLoading = ref(false)
+
+// 切片分页预览
+const previewChunkPage = ref(20)
+function onChunksScroll(e) {
+  const { scrollTop, clientHeight, scrollHeight } = e.target
+  if (scrollTop + clientHeight >= scrollHeight - 50) {
+    previewChunkPage.value += 20
+  }
+}
 
 onMounted(() => { loadKbDocs() })
 
@@ -252,10 +269,12 @@ onBeforeUnmount(() => {
 // ── 文档管理 ──
 
 async function loadKbDocs() {
+  docsLoading.value = true
   try {
     kbDocs.value = await request('/api/knowledge/docs')
     if (!Array.isArray(kbDocs.value)) kbDocs.value = []
   } catch { kbDocs.value = [] }
+  finally { docsLoading.value = false }
 }
 
 function handleDeleteDoc(doc) {
@@ -307,6 +326,7 @@ async function handlePreviewDoc(doc) {
   previewType.value = 'chunks'
   previewFileUrl.value = ''
   previewHtml.value = ''
+  previewChunkPage.value = 20
   previewDoc.value = { title: doc.source_title, sourceType: doc.source_type, chunks: [], totalChunks: 0, storedFileName: null }
   try {
     const q = `title=${encodeURIComponent(doc.source_title)}&sourceType=${encodeURIComponent(doc.source_type)}`
@@ -489,36 +509,50 @@ watch(showImportModal, (val) => {
 
 watch(currentTab, async (tab) => {
   if (tab === 'graph') {
+    if (graphReady.value && graph) return // 已初始化，复用
     await nextTick()
     initGraph()
+  } else {
+    // 离开图谱 tab 时销毁实例释放 WebGL 资源
+    if (graph) {
+      graph._destructor?.()
+      graph = null
+      graphReady.value = false
+    }
   }
 })
 
 async function initGraph() {
   if (!graphContainer.value) return
+  graphLoading.value = true
   try {
-    // 确保容器有尺寸
     await nextTick()
     const container = graphContainer.value
     const w = container.clientWidth || container.offsetWidth || 600
     const h = container.clientHeight || container.offsetHeight || 400
 
     const data = await request('/api/knowledge/graph')
-    if (!data || !data.nodes?.length) return
+    if (!data || !data.nodes?.length) {
+      graphLoading.value = false
+      return
+    }
+
+    const N = data.nodes.length
+    const resolution = N > 200 ? 4 : 8
 
     graph = ForceGraph3D({ controlType: 'orbit' })(container)
       .width(w)
       .height(h)
-      .backgroundColor('#1a2744')
+      .backgroundColor('#000000')
       .nodeLabel(n => `${n.name} (${n.val}次)`)
-      .nodeColor(n => n.group === 'keyword' ? '#4a9eff' : '#4aff8e')
-      .nodeVal(n => Math.max(n.val * 0.6, 1.5))
-      .nodeResolution(8)
-      .linkColor(() => 'rgba(255,255,255,0.4)')
-      .linkWidth(l => Math.max(l.value * 1.5, 1))
+      .nodeColor(() => '#ffffff')
+      .nodeVal(n => n.group === 'keyword' ? Math.max(n.val * 0.5, 1.5) : Math.max(n.val * 1.5, 4))
+      .nodeResolution(resolution)
+      .linkColor(() => '#ffffff')
+      .linkWidth(l => Math.max(l.value * 0.8, 0.5))
       .linkDirectionalParticles(1)
-      .linkDirectionalParticleWidth(2)
-      .linkDirectionalParticleColor(() => '#4a9eff')
+      .linkDirectionalParticleWidth(1)
+      .linkDirectionalParticleColor(() => '#ffffff')
       .onNodeClick(n => {
         if (n && n.x != null) {
           const distance = 80
@@ -531,7 +565,6 @@ async function initGraph() {
         }
       })
 
-    const N = data.nodes.length
     const r = Math.max(50, N * 2)
     data.nodes.forEach((n, i) => {
       const phi = Math.acos(-1 + 2 * i / N)
@@ -544,8 +577,11 @@ async function initGraph() {
 
     graph.d3Force('charge').strength(-120)
     graph.d3Force('link').distance(60)
+    graphReady.value = true
   } catch (e) {
     console.warn('3D graph init error:', e)
+  } finally {
+    graphLoading.value = false
   }
 }
 </script>
@@ -655,6 +691,19 @@ async function initGraph() {
 .graph-container {
   width: 100%;
   height: 100%;
+}
+
+.graph-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #aaa;
+  font-size: 16px;
+  z-index: 10;
+  background: rgba(0,0,0,0.8);
+  padding: 16px 32px;
+  border-radius: 8px;
 }
 
 /* 检索测试 — 百度风格 */

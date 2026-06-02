@@ -330,7 +330,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
-import { request } from '../api'
+import { request, getSavedAuth } from '../api'
 import MarkdownIt from 'markdown-it'
 
 const props = defineProps({ auth: Object })
@@ -480,48 +480,112 @@ async function sendMessage() {
 
   abortController = new AbortController()
 
+  // 重试提示消息的索引（用于更新或移除）
+  let retryMsgIdx = -1
+
   try {
-    let result
-    if (agentMode.value === 'ops') {
-      result = await request('/api/ops-agent/chat', {
-        method: 'POST',
-        body: { sessionId: currentSessionId.value, message: text, context: {} },
-        signal: abortController.signal
-      })
-      if (result) {
-        messages.value.push({
-          role: 'assistant',
-          content: result.response || '',
-          skill: result.skill || null,
-          tools: result.toolsUsed || []
-        })
-        if (result.sessionId && !currentSessionId.value) {
-          currentSessionId.value = result.sessionId
+    const url = agentMode.value === 'ops' ? '/api/ops-agent/chat' : '/api/agent/chat'
+    const body = agentMode.value === 'ops'
+      ? { sessionId: currentSessionId.value, message: text, context: {} }
+      : { sessionId: currentSessionId.value, message: text }
+
+    const auth = getSavedAuth()
+    const headers = { 'Content-Type': 'application/json' }
+    if (auth?.token) headers['Authorization'] = `Bearer ${auth.token}`
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: abortController.signal
+    })
+
+    if (!response.ok) {
+      let errMsg = response.statusText
+      try { const p = await response.json(); errMsg = p.error || p.message || errMsg } catch {}
+      throw Object.assign(new Error(errMsg), { status: response.status })
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let currentEvent = { type: '', data: '' }
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          currentEvent.type = line.slice(6).trim()
+        } else if (line.startsWith('data:')) {
+          currentEvent.data = line.slice(5).trim()
+        } else if (line === '' && currentEvent.data) {
+          const data = JSON.parse(currentEvent.data)
+          currentEvent = { type: '', data: '' }
+
+          if (data.message) {
+            if (retryMsgIdx >= 0) {
+              messages.value[retryMsgIdx].content = `⏳ ${data.message}`
+            } else {
+              retryMsgIdx = messages.value.length
+              messages.value.push({ role: 'assistant', content: `⏳ ${data.message}` })
+            }
+            scrollToBottom()
+          } else if (data.error) {
+            if (retryMsgIdx >= 0) {
+              messages.value[retryMsgIdx].content = data.retryFailed
+                ? `⚠️ ${data.error}`
+                : `请求失败：${data.error}`
+            } else {
+              messages.value.push({
+                role: 'assistant',
+                content: data.retryFailed ? `⚠️ ${data.error}` : `请求失败：${data.error}`
+              })
+            }
+          } else {
+            if (retryMsgIdx >= 0) {
+              messages.value.splice(retryMsgIdx, 1)
+              retryMsgIdx = -1
+            }
+            if (agentMode.value === 'ops') {
+              messages.value.push({
+                role: 'assistant',
+                content: data.response || '',
+                skill: data.skill || null,
+                tools: data.toolsUsed || []
+              })
+            } else {
+              messages.value.push({
+                role: 'assistant',
+                content: data.answer || data.content || '',
+                references: data.references || []
+              })
+            }
+            if (data.sessionId && !currentSessionId.value) {
+              currentSessionId.value = data.sessionId
+            }
+            await loadSessions()
+          }
         }
-        await loadSessions()
-      }
-    } else {
-      result = await request('/api/agent/chat', {
-        method: 'POST',
-        body: { sessionId: currentSessionId.value, message: text },
-        signal: abortController.signal
-      })
-      if (result) {
-        if (result.sessionId && !currentSessionId.value) {
-          currentSessionId.value = result.sessionId
-        }
-        messages.value.push({
-          role: 'assistant',
-          content: result.answer || result.content || '',
-          references: result.references || []
-        })
-        await loadSessions()
       }
     }
   } catch (error) {
     if (error.name === 'AbortError') {
+      if (retryMsgIdx >= 0) messages.value.splice(retryMsgIdx, 1)
       messages.value.push({ role: 'assistant', content: '*（已停止）*' })
+    } else if (error.status === 503) {
+      if (retryMsgIdx >= 0) {
+        messages.value[retryMsgIdx].content = `⚠️ ${error.message || '模型响应超时，请稍后再试'}`
+      } else {
+        messages.value.push({ role: 'assistant', content: `⚠️ ${error.message || '模型响应超时，请稍后再试'}` })
+      }
     } else {
+      if (retryMsgIdx >= 0) messages.value.splice(retryMsgIdx, 1)
       messages.value.push({ role: 'assistant', content: `请求失败：${error.message || '未知错误'}` })
     }
   } finally {

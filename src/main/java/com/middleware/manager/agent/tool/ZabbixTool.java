@@ -36,7 +36,7 @@ public class ZabbixTool implements Tool {
             String host = (String) params.get("host");
             String metric = (String) params.get("metric");
             String timeRange = (String) params.getOrDefault("timeRange", "1h");
-            int limit = params.containsKey("limit") ? ((Number) params.get("limit")).intValue() : 100;
+            int limit = params.containsKey("limit") ? Integer.parseInt(params.get("limit").toString()) : 100;
 
             if (host == null || host.isEmpty()) {
                 return "错误：请指定主机名（host 参数）";

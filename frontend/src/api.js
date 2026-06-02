@@ -78,7 +78,7 @@ export async function request(path, options = {}) {
     try {
       const payload = await response.json()
       const fieldErrors = payload.fieldErrors ? Object.values(payload.fieldErrors).filter(Boolean) : []
-      message = fieldErrors.length ? fieldErrors.join('；') : (payload.message || message)
+      message = fieldErrors.length ? fieldErrors.join('；') : (payload.message || payload.error || message)
     } catch (error) {
       // Keep the HTTP status text when the backend did not return JSON.
     }

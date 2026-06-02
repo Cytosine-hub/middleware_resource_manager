@@ -6,7 +6,7 @@ import com.middleware.manager.knowledge.agent.ChatSessionRepository;
 import com.middleware.manager.knowledge.agent.TroubleshootAgent;
 import com.middleware.manager.knowledge.agent.TroubleshootAgent.AgentResponse;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,10 +14,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @RestController
 @RequestMapping("/api/agent")
@@ -29,103 +33,94 @@ public class AgentController {
     @Autowired
     private ChatSessionRepository chatSessionRepository;
 
-    /**
-     * POST /api/agent/chat
-     * Request: { "sessionId": 1, "message": "Redis连接超时怎么排查" }
-     * Response: { "answer": "...", "references": [...], "sessionId": 1 }
-     */
-    @PostMapping("/chat")
-    public ResponseEntity<?> chat(@RequestBody ChatRequest request) {
-        try {
-            Long sessionId = request.getSessionId();
-            if (sessionId == null) {
-                ChatSession session = agent.createSession();
-                sessionId = session.getId();
+    private final ExecutorService sseExecutor = Executors.newCachedThreadPool();
+
+    @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter chat(@RequestBody ChatRequest request) {
+        SseEmitter emitter = new SseEmitter(300_000L);
+
+        sseExecutor.submit(() -> {
+            try {
+                Long sessionId = request.getSessionId();
+                if (sessionId == null) {
+                    ChatSession session = agent.createSession();
+                    sessionId = session.getId();
+                }
+
+                Long finalSessionId = sessionId;
+                AgentResponse response = agent.chat(sessionId, request.getMessage(), retryMsg -> {
+                    try {
+                        emitter.send(SseEmitter.event()
+                                .name("retry")
+                                .data(Map.of("message", retryMsg)));
+                    } catch (IOException ignored) {}
+                });
+
+                Map<String, Object> result = new HashMap<>();
+                result.put("answer", response.getAnswer());
+                result.put("references", response.getReferences());
+                result.put("sessionId", finalSessionId);
+                emitter.send(SseEmitter.event().name("result").data(result));
+                emitter.complete();
+            } catch (Exception e) {
+                String msg = e.getMessage() != null ? e.getMessage() : "未知错误";
+                boolean isRetryFail = msg.contains("已重试");
+                try {
+                    emitter.send(SseEmitter.event()
+                            .name("error")
+                            .data(Map.of("error", msg, "retryFailed", isRetryFail)));
+                } catch (IOException ignored) {}
+                emitter.complete();
             }
-            AgentResponse response = agent.chat(sessionId, request.getMessage());
-            Map<String, Object> result = new HashMap<>();
-            result.put("answer", response.getAnswer());
-            result.put("references", response.getReferences());
-            result.put("sessionId", sessionId);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+        });
+
+        emitter.onTimeout(emitter::complete);
+        emitter.onError(t -> emitter.complete());
+        return emitter;
     }
 
-    /**
-     * GET /api/agent/sessions
-     */
     @GetMapping("/sessions")
-    public ResponseEntity<List<ChatSession>> getSessions() {
-        return ResponseEntity.ok(agent.getAllSessions());
+    public List<ChatSession> getSessions() {
+        return agent.getAllSessions();
     }
 
-    /**
-     * GET /api/agent/sessions/{id}
-     */
     @GetMapping("/sessions/{id}")
-    public ResponseEntity<?> getSessionMessages(@PathVariable Long id) {
-        return ResponseEntity.ok(agent.getSessionMessages(id));
+    public List<ChatMessage> getSessionMessages(@PathVariable Long id) {
+        return agent.getSessionMessages(id);
     }
 
-    /**
-     * POST /api/agent/sessions
-     * 创建新会话，可指定 mode
-     */
     @PostMapping("/sessions")
-    public ResponseEntity<ChatSession> createSession(@RequestBody(required = false) Map<String, String> body) {
+    public ChatSession createSession(@RequestBody(required = false) Map<String, String> body) {
         ChatSession session = new ChatSession();
         session.setTitle("");
         String mode = (body != null && body.get("mode") != null) ? body.get("mode") : "rag";
         session.setMode(mode);
         chatSessionRepository.save(session);
-        return ResponseEntity.ok(session);
+        return session;
     }
 
-    /**
-     * PATCH /api/agent/sessions/{id}/mode
-     */
     @PatchMapping("/sessions/{id}/mode")
-    public ResponseEntity<?> updateSessionMode(@PathVariable Long id, @RequestBody Map<String, String> body) {
+    public Object updateSessionMode(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String mode = body.get("mode");
         if (mode == null || (!mode.equals("rag") && !mode.equals("ops"))) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "mode must be 'rag' or 'ops'");
-            return ResponseEntity.badRequest().body(error);
+            return Map.of("error", "mode must be 'rag' or 'ops'");
         }
         return chatSessionRepository.findById(id)
                 .map(session -> {
                     session.setMode(mode);
                     chatSessionRepository.save(session);
-                    return ResponseEntity.ok((Object) session);
+                    return (Object) session;
                 })
-                .orElse(ResponseEntity.notFound().build());
+                .orElse(null);
     }
 
-    /**
-     * Request body for the chat endpoint.
-     */
     public static class ChatRequest {
         private Long sessionId;
         private String message;
 
-        public Long getSessionId() {
-            return sessionId;
-        }
-
-        public void setSessionId(Long sessionId) {
-            this.sessionId = sessionId;
-        }
-
-        public String getMessage() {
-            return message;
-        }
-
-        public void setMessage(String message) {
-            this.message = message;
-        }
+        public Long getSessionId() { return sessionId; }
+        public void setSessionId(Long sessionId) { this.sessionId = sessionId; }
+        public String getMessage() { return message; }
+        public void setMessage(String message) { this.message = message; }
     }
 }

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 @Service
 public class TroubleshootAgent {
@@ -39,6 +40,7 @@ public class TroubleshootAgent {
 
     private static final int MAX_HISTORY_MESSAGES = 10;
     private static final int DEFAULT_SEARCH_TOP_K = 5;
+    private static final int MAX_RETRIES = 5;
 
     private final ChatModel chatModel;
 
@@ -71,6 +73,10 @@ public class TroubleshootAgent {
      * Core chat method: send a user message and get an agent response.
      */
     public AgentResponse chat(Long sessionId, String userMessage) {
+        return chat(sessionId, userMessage, null);
+    }
+
+    public AgentResponse chat(Long sessionId, String userMessage, Consumer<String> onRetry) {
         // 1. Save user message
         com.middleware.manager.knowledge.agent.ChatMessage userMsg = new com.middleware.manager.knowledge.agent.ChatMessage();
         userMsg.setSessionId(sessionId);
@@ -124,9 +130,28 @@ public class TroubleshootAgent {
             messages.add(new UserMessage(contextMessage));
         }
 
-        // 4. Call LLM
+        // 4. Call LLM (with retry)
         log.info("Calling LLM for session {}, message count: {}", sessionId, messages.size());
-        ChatResponse response = chatModel.chat(messages);
+        ChatResponse response = null;
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                response = chatModel.chat(messages);
+                break;
+            } catch (Exception e) {
+                log.error("LLM call failed (attempt {}/{}): {}", attempt, MAX_RETRIES, e.getMessage());
+                lastException = e;
+                if (attempt < MAX_RETRIES) {
+                    if (onRetry != null) {
+                        onRetry.accept("模型响应超时，正在重试（" + attempt + "/" + MAX_RETRIES + "）...");
+                    }
+                    try { Thread.sleep(attempt * 2000L); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                }
+            }
+        }
+        if (response == null) {
+            throw new RuntimeException("模型响应超时，已重试" + MAX_RETRIES + "次，请稍后再试", lastException);
+        }
 
         String answer = response.aiMessage() != null ? response.aiMessage().text() : "";
 

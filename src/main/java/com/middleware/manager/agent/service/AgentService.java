@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 @Service
@@ -44,6 +45,10 @@ public class AgentService {
     }
 
     public Map<String, Object> chat(String userMessage, Map<String, String> context) {
+        return chat(userMessage, context, null);
+    }
+
+    public Map<String, Object> chat(String userMessage, Map<String, String> context, Consumer<String> onRetry) {
         log.info("[Agent] Received: {}", userMessage);
 
         // 1. Try to match a skill
@@ -55,10 +60,10 @@ public class AgentService {
         if (skill != null) {
             log.info("[Agent] Matched skill: {}", skill.getName());
             skillName = skill.getName();
-            response = executeSkill(skill, context != null ? context : new HashMap<>(), toolsUsed);
+            response = executeSkill(skill, context != null ? context : new HashMap<>(), toolsUsed, onRetry);
         } else {
             // 2. General reasoning with tool awareness
-            response = generalChat(userMessage);
+            response = generalChat(userMessage, onRetry);
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -68,7 +73,7 @@ public class AgentService {
         return result;
     }
 
-    private String executeSkill(Skill skill, Map<String, String> context, List<String> toolsUsed) {
+    private String executeSkill(Skill skill, Map<String, String> context, List<String> toolsUsed, Consumer<String> onRetry) {
         StringBuilder accumulated = new StringBuilder();
         accumulated.append("正在执行排查流程：").append(skill.getName()).append("\n\n");
 
@@ -89,25 +94,23 @@ public class AgentService {
                     accumulated.append("[").append(step.getDescription()).append("] 调用失败: ").append(e.getMessage()).append("\n\n");
                 }
             } else if (step.getPrompt() != null) {
-                // Ask LLM to synthesize
                 String prompt = accumulated + "\n" + resolveTemplate(step.getPrompt(), context);
                 List<Message> messages = List.of(
                         Message.system("你是线上问题排查专家。根据以下数据综合分析，给出根因和修复建议。"),
                         Message.user(prompt)
                 );
-                return chatModel.generate(messages);
+                return chatModel.generate(messages, onRetry);
             }
         }
 
-        // If no synthesis step, ask LLM to summarize
         List<Message> messages = List.of(
                 Message.system("你是线上问题排查专家。根据以下排查数据，给出根因分析和修复建议。"),
                 Message.user(accumulated.toString())
         );
-        return chatModel.generate(messages);
+        return chatModel.generate(messages, onRetry);
     }
 
-    private String generalChat(String userMessage) {
+    private String generalChat(String userMessage, Consumer<String> onRetry) {
         String toolDesc = toolMap.values().stream()
                 .map(t -> "- " + t.name() + ": " + t.description())
                 .collect(Collectors.joining("\n"));
@@ -116,7 +119,7 @@ public class AgentService {
                 Message.system(String.format(SYSTEM_PROMPT, toolDesc)),
                 Message.user(userMessage)
         );
-        return chatModel.generate(messages);
+        return chatModel.generate(messages, onRetry);
     }
 
     private Map<String, Object> resolveArgs(Map<String, String> template, Map<String, String> context) {

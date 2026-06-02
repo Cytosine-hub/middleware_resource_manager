@@ -7,11 +7,16 @@ import com.middleware.manager.knowledge.agent.ChatMessage;
 import com.middleware.manager.knowledge.agent.ChatMessageRepository;
 import com.middleware.manager.knowledge.agent.ChatSession;
 import com.middleware.manager.knowledge.agent.ChatSessionRepository;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @RestController("opsAgentController")
 @RequestMapping("/api/ops-agent")
@@ -21,6 +26,7 @@ public class AgentController {
     private final SkillLoader skillLoader;
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final ExecutorService sseExecutor = Executors.newCachedThreadPool();
 
     public AgentController(AgentService agentService, SkillLoader skillLoader,
                            ChatSessionRepository chatSessionRepository,
@@ -31,45 +37,71 @@ public class AgentController {
         this.chatMessageRepository = chatMessageRepository;
     }
 
-    @PostMapping("/chat")
-    public Map<String, Object> chat(@RequestBody ChatRequest req) {
-        // 创建或获取会话
-        Long sessionId = req.getSessionId();
-        ChatSession session;
-        if (sessionId != null) {
-            session = chatSessionRepository.findById(sessionId)
-                    .orElseGet(() -> createNewSession());
-        } else {
-            session = createNewSession();
-        }
+    @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter chat(@RequestBody ChatRequest req) {
+        SseEmitter emitter = new SseEmitter(300_000L);
 
-        // 保存用户消息
-        ChatMessage userMsg = new ChatMessage();
-        userMsg.setSessionId(session.getId());
-        userMsg.setRole("user");
-        userMsg.setContent(req.getMessage());
-        chatMessageRepository.save(userMsg);
+        sseExecutor.submit(() -> {
+            try {
+                // 创建或获取会话
+                Long sessionId = req.getSessionId();
+                ChatSession session;
+                if (sessionId != null) {
+                    session = chatSessionRepository.findById(sessionId)
+                            .orElseGet(() -> createNewSession());
+                } else {
+                    session = createNewSession();
+                }
 
-        // 调用 Agent
-        Map<String, Object> result = agentService.chat(req.getMessage(), req.getContext());
+                // 保存用户消息
+                ChatMessage userMsg = new ChatMessage();
+                userMsg.setSessionId(session.getId());
+                userMsg.setRole("user");
+                userMsg.setContent(req.getMessage());
+                chatMessageRepository.save(userMsg);
 
-        // 保存助手消息
-        ChatMessage assistantMsg = new ChatMessage();
-        assistantMsg.setSessionId(session.getId());
-        assistantMsg.setRole("assistant");
-        assistantMsg.setContent((String) result.get("response"));
-        chatMessageRepository.save(assistantMsg);
+                // 调用 Agent（带重试回调）
+                Map<String, Object> result = agentService.chat(req.getMessage(), req.getContext(), retryMsg -> {
+                    try {
+                        emitter.send(SseEmitter.event()
+                                .name("retry")
+                                .data(Map.of("message", retryMsg)));
+                    } catch (IOException ignored) {}
+                });
 
-        // 更新会话标题（使用第一条消息）
-        if (session.getTitle() == null || session.getTitle().isEmpty()) {
-            String title = req.getMessage().length() > 30 ?
-                    req.getMessage().substring(0, 30) + "..." : req.getMessage();
-            session.setTitle(title);
-            chatSessionRepository.save(session);
-        }
+                // 保存助手消息
+                ChatMessage assistantMsg = new ChatMessage();
+                assistantMsg.setSessionId(session.getId());
+                assistantMsg.setRole("assistant");
+                assistantMsg.setContent((String) result.get("response"));
+                chatMessageRepository.save(assistantMsg);
 
-        result.put("sessionId", session.getId());
-        return result;
+                // 更新会话标题
+                if (session.getTitle() == null || session.getTitle().isEmpty()) {
+                    String title = req.getMessage().length() > 30 ?
+                            req.getMessage().substring(0, 30) + "..." : req.getMessage();
+                    session.setTitle(title);
+                    chatSessionRepository.save(session);
+                }
+
+                result.put("sessionId", session.getId());
+                emitter.send(SseEmitter.event().name("result").data(result));
+                emitter.complete();
+            } catch (Exception e) {
+                String msg = e.getMessage() != null ? e.getMessage() : "未知错误";
+                boolean isRetryFail = msg.contains("已重试");
+                try {
+                    emitter.send(SseEmitter.event()
+                            .name("error")
+                            .data(Map.of("error", msg, "retryFailed", isRetryFail)));
+                } catch (IOException ignored) {}
+                emitter.complete();
+            }
+        });
+
+        emitter.onTimeout(emitter::complete);
+        emitter.onError(t -> emitter.complete());
+        return emitter;
     }
 
     private ChatSession createNewSession() {
