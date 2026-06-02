@@ -415,8 +415,8 @@
               <label>所属类型
                 <select v-model="cmdForm.softwareTypeId" required>
                   <option value="" disabled>请选择</option>
-                  <optgroup v-for="cat in cmdTypeCategories" :key="cat" :label="cat">
-                    <option v-for="t in cmdTypesByCategory(cat)" :key="t.id" :value="t.id">{{ t.name }}</option>
+                  <optgroup v-for="cat in cmdFormCategories" :key="cat" :label="cat">
+                    <option v-for="t in cmdFormTypesByCategory(cat)" :key="t.id" :value="t.id">{{ t.name }}</option>
                   </optgroup>
                 </select>
               </label>
@@ -1504,6 +1504,17 @@ function canManageCommand(cmd) {
   return cat === managedCategory.value
 }
 
+// 表单可选的软件类型（根据用户角色过滤）
+const cmdFormTypes = computed(() => {
+  if (isSysAdmin.value) return softwareTypes.value
+  if (!managedCategory.value) return []
+  return softwareTypes.value.filter(t => t.category === managedCategory.value)
+})
+const cmdFormCategories = computed(() => [...new Set(cmdFormTypes.value.map(t => t.category))])
+function cmdFormTypesByCategory(cat) {
+  return cmdFormTypes.value.filter(t => t.category === cat)
+}
+
 function parseCategories(cats) {
   if (!cats) return []
   try { return JSON.parse(cats) } catch { return [] }
@@ -1907,6 +1918,7 @@ function syncRoute() {
   } else if (route.name === 'commands') {
     loadCmdTypes()
     loadCmdCommands()
+    if (auth.token) loadSoftwareTypes()
   } else if (route.name === 'public') {
     if (route.token) {
       loadDetail(route.token)
