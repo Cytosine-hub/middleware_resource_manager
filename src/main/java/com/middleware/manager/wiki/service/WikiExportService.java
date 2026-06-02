@@ -42,10 +42,10 @@ public class WikiExportService {
     }
 
     /**
-     * 导出所有 ACTIVE 状态的 Wiki 页面为 ZIP 包。
+     * 导出所有 Wiki 页面为 ZIP 包。
      */
     public byte[] exportAll() throws IOException {
-        List<WikiPage> pages = pageRepo.findByStatus("ACTIVE");
+        List<WikiPage> pages = pageRepo.findAll();
         return exportPages(pages);
     }
 

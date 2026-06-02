@@ -114,14 +114,14 @@ public class WikiPageRepository {
 
     public List<WikiPage> fulltextSearch(String query, int limit) {
         return jdbc.query(
-            "SELECT *, MATCH(title, summary, content) AGAINST(? IN BOOLEAN MODE) AS relevance FROM wiki_pages WHERE MATCH(title, summary, content) AGAINST(? IN BOOLEAN MODE) AND status = 'ACTIVE' ORDER BY relevance DESC LIMIT ?",
+            "SELECT *, MATCH(title, summary, content) AGAINST(? IN BOOLEAN MODE) AS relevance FROM wiki_pages WHERE MATCH(title, summary, content) AGAINST(? IN BOOLEAN MODE) ORDER BY relevance DESC LIMIT ?",
             ROW_MAPPER, query, query, limit
         );
     }
 
     public List<WikiPage> findByTitleContaining(String keyword, int limit) {
         return jdbc.query(
-            "SELECT * FROM wiki_pages WHERE title LIKE ? AND status = 'ACTIVE' ORDER BY updated_at DESC LIMIT ?",
+            "SELECT * FROM wiki_pages WHERE title LIKE ? ORDER BY updated_at DESC LIMIT ?",
             ROW_MAPPER, "%" + keyword + "%", limit
         );
     }
