@@ -41,8 +41,7 @@
       </template>
 
       <!-- 知识图谱 -->
-      <div v-show="currentTab === 'graph'" class="graph-wrapper">
-        <div v-if="graphLoading" class="graph-loading">加载知识图谱中...</div>
+      <div v-if="currentTab === 'graph'" class="graph-wrapper">
         <div ref="graphContainer" class="graph-container"></div>
       </div>
 
@@ -240,8 +239,6 @@ const previewHtml = ref('')
 
 // 知识图谱
 const graphContainer = ref(null)
-const graphReady = ref(false)
-const graphLoading = ref(false)
 let graph = null
 
 // 文档列表 loading
@@ -505,33 +502,24 @@ watch(showImportModal, (val) => {
 
 // ── 知识图谱 ──
 
-watch(currentTab, async (tab) => {
-  if (tab === 'graph' && !graphReady.value) {
-    await nextTick()
-    await new Promise(r => setTimeout(r, 500))
-    initGraph()
+watch(currentTab, (tab) => {
+  if (tab === 'graph') {
+    nextTick(() => initGraph())
   }
 })
 
 async function initGraph() {
-  if (!graphContainer.value || graphReady.value) return
-  graphLoading.value = true
+  if (!graphContainer.value) return
   try {
     const data = await request('/api/knowledge/graph')
-    if (!data || !data.nodes?.length) {
-      graphLoading.value = false
-      return
-    }
+    if (!data || !data.nodes?.length) return
 
-    const N = data.nodes.length
-    const radius = Math.max(100, N * 3)
-    data.nodes.forEach((n, i) => {
-      const angle = (2 * Math.PI * i) / N
-      n.x = radius * Math.cos(angle)
-      n.y = radius * Math.sin(angle)
-    })
+    const container = graphContainer.value
+    console.log('[Graph] container:', container.clientWidth, 'x', container.clientHeight, 'children:', container.children.length)
 
-    graph = ForceGraph(graphContainer.value)
+    graph = ForceGraph(container)
+      .width(container.clientWidth)
+      .height(container.clientHeight)
       .backgroundColor('#000000')
       .graphData(data)
       .nodeLabel(n => `${n.name} (${n.val}次)`)
@@ -544,14 +532,12 @@ async function initGraph() {
         graph.zoom(4, 1000)
       })
 
+    console.log('[Graph] canvas:', container.querySelector('canvas')?.width, 'x', container.querySelector('canvas')?.height)
+
     graph.d3Force('charge').strength(-300)
     graph.d3Force('link').distance(80)
-    setTimeout(() => graph.zoomToFit(400, 50), 1000)
-    graphReady.value = true
   } catch (e) {
     console.warn('graph init error:', e)
-  } finally {
-    graphLoading.value = false
   }
 }
 </script>
