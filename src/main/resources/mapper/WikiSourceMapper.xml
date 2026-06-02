@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.middleware.manager.wiki.repository.WikiSourceMapper">
+
+    <resultMap id="wikiSourceResultMap" type="WikiSource">
+        <id property="id" column="id"/>
+        <result property="title" column="title"/>
+        <result property="sourceType" column="source_type"/>
+        <result property="filePath" column="file_path"/>
+        <result property="contentHash" column="content_hash"/>
+        <result property="content" column="content"/>
+        <result property="category" column="category"/>
+        <result property="software" column="software"/>
+        <result property="ingested" column="ingested"/>
+        <result property="ingestedAt" column="ingested_at"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <select id="findById" resultMap="wikiSourceResultMap">
+        SELECT * FROM wiki_sources WHERE id = #{id}
+    </select>
+
+    <select id="findByContentHash" resultMap="wikiSourceResultMap">
+        SELECT * FROM wiki_sources WHERE content_hash = #{contentHash}
+    </select>
+
+    <select id="findAll" resultMap="wikiSourceResultMap">
+        SELECT * FROM wiki_sources ORDER BY created_at DESC
+    </select>
+
+    <select id="findByIngested" resultMap="wikiSourceResultMap">
+        SELECT * FROM wiki_sources WHERE ingested = #{ingested} ORDER BY created_at DESC
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO wiki_sources (title, source_type, file_path, content_hash, content, category, software, created_by)
+        VALUES (#{title}, #{sourceType}, #{filePath}, #{contentHash}, #{content}, #{category}, #{software}, #{createdBy})
+    </insert>
+
+    <update id="update">
+        UPDATE wiki_sources
+        SET title=#{title}, source_type=#{sourceType}, file_path=#{filePath}, content_hash=#{contentHash},
+            content=#{content}, category=#{category}, software=#{software}, ingested=#{ingested}, ingested_at=#{ingestedAt}
+        WHERE id=#{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM wiki_sources WHERE id = #{id}
+    </delete>
+
+</mapper>

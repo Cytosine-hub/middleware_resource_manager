@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.middleware.manager.wiki.repository.WikiPageMapper">
+
+    <resultMap id="wikiPageResultMap" type="WikiPage">
+        <id property="id" column="id"/>
+        <result property="title" column="title"/>
+        <result property="pageType" column="page_type"/>
+        <result property="category" column="category"/>
+        <result property="software" column="software"/>
+        <result property="version" column="version"/>
+        <result property="content" column="content"/>
+        <result property="summary" column="summary"/>
+        <result property="sourceRefs" column="source_refs"/>
+        <result property="status" column="status"/>
+        <result property="contradictionNote" column="contradiction_note"/>
+        <result property="compiledBy" column="compiled_by"/>
+        <result property="compiledAt" column="compiled_at"/>
+        <result property="reviewedBy" column="reviewed_by"/>
+        <result property="reviewedAt" column="reviewed_at"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="findById" resultMap="wikiPageResultMap">
+        SELECT * FROM wiki_pages WHERE id = #{id}
+    </select>
+
+    <select id="findByTitleAndType" resultMap="wikiPageResultMap">
+        SELECT * FROM wiki_pages WHERE title = #{title} AND page_type = #{pageType}
+    </select>
+
+    <select id="findAll" resultMap="wikiPageResultMap">
+        SELECT * FROM wiki_pages ORDER BY updated_at DESC
+    </select>
+
+    <select id="findByCategory" resultMap="wikiPageResultMap">
+        SELECT * FROM wiki_pages WHERE category = #{category} ORDER BY title
+    </select>
+
+    <select id="findBySoftware" resultMap="wikiPageResultMap">
+        SELECT * FROM wiki_pages WHERE software = #{software} ORDER BY title
+    </select>
+
+    <select id="findByStatus" resultMap="wikiPageResultMap">
+        SELECT * FROM wiki_pages WHERE status = #{status} ORDER BY updated_at DESC
+    </select>
+
+    <select id="fulltextSearch" resultMap="wikiPageResultMap">
+        SELECT *, MATCH(title, summary, content) AGAINST(#{query} IN BOOLEAN MODE) AS relevance
+        FROM wiki_pages
+        WHERE MATCH(title, summary, content) AGAINST(#{query} IN BOOLEAN MODE)
+        ORDER BY relevance DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="findByTitleContaining" resultMap="wikiPageResultMap">
+        SELECT * FROM wiki_pages WHERE title LIKE CONCAT('%', #{keyword}, '%') ORDER BY updated_at DESC LIMIT #{limit}
+    </select>
+
+    <select id="countByStatus" resultType="int">
+        SELECT COUNT(*) FROM wiki_pages WHERE status = #{status}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO wiki_pages (title, page_type, category, software, version, content, summary, source_refs, status, compiled_by, compiled_at)
+        VALUES (#{title}, #{pageType}, #{category}, #{software}, #{version}, #{content}, #{summary}, #{sourceRefs}, #{status}, #{compiledBy}, #{compiledAt})
+    </insert>
+
+    <update id="update">
+        UPDATE wiki_pages
+        SET title=#{title}, page_type=#{pageType}, category=#{category}, software=#{software}, version=#{version},
+            content=#{content}, summary=#{summary}, source_refs=#{sourceRefs}, status=#{status},
+            contradiction_note=#{contradictionNote}, compiled_by=#{compiledBy}, compiled_at=#{compiledAt},
+            reviewed_by=#{reviewedBy}, reviewed_at=#{reviewedAt}, updated_at=NOW()
+        WHERE id=#{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM wiki_pages WHERE id = #{id}
+    </delete>
+
+    <select id="findOrphanPages" resultMap="wikiPageResultMap">
+        SELECT p.* FROM wiki_pages p
+        LEFT JOIN wiki_links l ON p.id = l.to_page_id
+        WHERE l.id IS NULL AND p.status = 'ACTIVE' AND p.page_type != 'OVERVIEW'
+    </select>
+
+    <select id="findStalePages" resultMap="wikiPageResultMap">
+        SELECT * FROM wiki_pages
+        WHERE status = 'ACTIVE' AND updated_at &lt; DATE_SUB(NOW(), INTERVAL #{days} DAY)
+    </select>
+
+</mapper>

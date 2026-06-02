@@ -6,8 +6,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.middleware.manager.wiki.entity.WikiLink;
 import com.middleware.manager.wiki.entity.WikiPage;
-import com.middleware.manager.wiki.repository.WikiLinkRepository;
-import com.middleware.manager.wiki.repository.WikiPageRepository;
+import com.middleware.manager.wiki.repository.WikiLinkMapper;
+import com.middleware.manager.wiki.repository.WikiPageMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -23,60 +23,46 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-/**
- * Wiki 导出服务：将 Wiki 页面导出为可传输的 ZIP 包。
- * 用于外网编译 → 内网导入的数据交换。
- */
 @Service
 public class WikiExportService {
 
     private static final Logger log = LoggerFactory.getLogger(WikiExportService.class);
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
-    private final WikiPageRepository pageRepo;
-    private final WikiLinkRepository linkRepo;
+    private final WikiPageMapper pageMapper;
+    private final WikiLinkMapper linkMapper;
 
-    public WikiExportService(WikiPageRepository pageRepo, WikiLinkRepository linkRepo) {
-        this.pageRepo = pageRepo;
-        this.linkRepo = linkRepo;
+    public WikiExportService(WikiPageMapper pageMapper, WikiLinkMapper linkMapper) {
+        this.pageMapper = pageMapper;
+        this.linkMapper = linkMapper;
     }
 
-    /**
-     * 导出所有 Wiki 页面为 ZIP 包。
-     */
     public byte[] exportAll() throws IOException {
-        List<WikiPage> pages = pageRepo.findAll();
+        List<WikiPage> pages = pageMapper.findAll();
         return exportPages(pages);
     }
 
-    /**
-     * 按分类导出 Wiki 页面。
-     */
     public byte[] exportByCategory(String category) throws IOException {
-        List<WikiPage> pages = pageRepo.findByCategory(category);
+        List<WikiPage> pages = pageMapper.findByCategory(category);
         return exportPages(pages);
     }
 
     private byte[] exportPages(List<WikiPage> pages) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (ZipOutputStream zos = new ZipOutputStream(baos)) {
-            // manifest.json
             JsonObject manifest = buildManifest(pages);
             addZipEntry(zos, "manifest.json", gson.toJson(manifest));
 
-            // pages/*.md
             for (WikiPage page : pages) {
                 String fileName = sanitizeFileName(page.getTitle()) + "_" + page.getPageType() + ".md";
                 String content = buildPageMarkdown(page);
                 addZipEntry(zos, "pages/" + fileName, content);
             }
 
-            // links.json
             JsonArray linksArray = new JsonArray();
             for (WikiPage page : pages) {
-                List<WikiLink> links = linkRepo.findByFromPageId(page.getId());
+                List<WikiLink> links = linkMapper.findByFromPageId(page.getId());
                 for (WikiLink link : links) {
-                    // 只导出页面都在导出范围内的链接
                     if (pages.stream().anyMatch(p -> p.getId().equals(link.getToPageId()))) {
                         JsonObject linkObj = new JsonObject();
                         linkObj.addProperty("from", page.getTitle());

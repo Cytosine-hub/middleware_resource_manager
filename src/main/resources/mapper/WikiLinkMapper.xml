@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.middleware.manager.wiki.repository.WikiLinkMapper">
+
+    <resultMap id="wikiLinkResultMap" type="WikiLink">
+        <id property="id" column="id"/>
+        <result property="fromPageId" column="from_page_id"/>
+        <result property="toPageId" column="to_page_id"/>
+        <result property="linkType" column="link_type"/>
+        <result property="confidence" column="confidence"/>
+        <result property="context" column="context"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <select id="findByFromPageId" resultMap="wikiLinkResultMap">
+        SELECT * FROM wiki_links WHERE from_page_id = #{fromPageId}
+    </select>
+
+    <select id="findByToPageId" resultMap="wikiLinkResultMap">
+        SELECT * FROM wiki_links WHERE to_page_id = #{toPageId}
+    </select>
+
+    <select id="findAllByPageId" resultMap="wikiLinkResultMap">
+        SELECT * FROM wiki_links WHERE from_page_id = #{pageId} OR to_page_id = #{pageId}
+    </select>
+
+    <select id="findAll" resultMap="wikiLinkResultMap">
+        SELECT * FROM wiki_links
+    </select>
+
+    <select id="exists" resultType="int">
+        SELECT COUNT(*) FROM wiki_links WHERE from_page_id = #{fromPageId} AND to_page_id = #{toPageId}
+    </select>
+
+    <insert id="insertIgnore">
+        INSERT IGNORE INTO wiki_links (from_page_id, to_page_id, link_type, confidence, context)
+        VALUES (#{fromPageId}, #{toPageId}, #{linkType}, #{confidence}, #{context})
+    </insert>
+
+    <delete id="deleteByPageId">
+        DELETE FROM wiki_links WHERE from_page_id = #{pageId} OR to_page_id = #{pageId}
+    </delete>
+
+    <select id="countAll" resultType="int">
+        SELECT COUNT(*) FROM wiki_links
+    </select>
+
+</mapper>

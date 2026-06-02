@@ -3,8 +3,8 @@ package com.middleware.manager.wiki.web;
 import com.middleware.manager.knowledge.loader.DocumentLoader;
 import com.middleware.manager.wiki.entity.WikiPage;
 import com.middleware.manager.wiki.entity.WikiSource;
-import com.middleware.manager.wiki.repository.WikiPageRepository;
-import com.middleware.manager.wiki.repository.WikiSourceRepository;
+import com.middleware.manager.wiki.repository.WikiPageMapper;
+import com.middleware.manager.wiki.repository.WikiSourceMapper;
 import com.middleware.manager.wiki.service.IngestAgent;
 import com.middleware.manager.wiki.service.WikiExportService;
 import com.middleware.manager.wiki.service.WikiImportService;
@@ -27,80 +27,74 @@ public class WikiController {
 
     private static final Logger log = LoggerFactory.getLogger(WikiController.class);
 
-    private final WikiPageRepository pageRepo;
-    private final WikiSourceRepository sourceRepo;
+    private final WikiPageMapper pageMapper;
+    private final WikiSourceMapper sourceMapper;
     private final IngestAgent ingestAgent;
     private final WikiExportService exportService;
     private final WikiImportService importService;
     private final List<DocumentLoader> documentLoaders;
 
-    public WikiController(WikiPageRepository pageRepo,
-                          WikiSourceRepository sourceRepo,
+    public WikiController(WikiPageMapper pageMapper,
+                          WikiSourceMapper sourceMapper,
                           IngestAgent ingestAgent,
                           WikiExportService exportService,
                           WikiImportService importService,
                           List<DocumentLoader> documentLoaders) {
-        this.pageRepo = pageRepo;
-        this.sourceRepo = sourceRepo;
+        this.pageMapper = pageMapper;
+        this.sourceMapper = sourceMapper;
         this.ingestAgent = ingestAgent;
         this.exportService = exportService;
         this.importService = importService;
         this.documentLoaders = documentLoaders;
     }
 
-    // ==================== Wiki 页面 CRUD ====================
-
     @GetMapping("/pages")
     public List<WikiPage> listPages(@RequestParam(required = false) String category,
                                     @RequestParam(required = false) String software,
                                     @RequestParam(required = false) String status) {
-        if (category != null) return pageRepo.findByCategory(category);
-        if (software != null) return pageRepo.findBySoftware(software);
-        if (status != null) return pageRepo.findByStatus(status);
-        return pageRepo.findAll();
+        if (category != null) return pageMapper.findByCategory(category);
+        if (software != null) return pageMapper.findBySoftware(software);
+        if (status != null) return pageMapper.findByStatus(status);
+        return pageMapper.findAll();
     }
 
     @GetMapping("/pages/{id}")
     public ResponseEntity<WikiPage> getPage(@PathVariable Long id) {
-        return pageRepo.findById(id)
-            .map(ResponseEntity::ok)
-            .orElse(ResponseEntity.notFound().build());
+        WikiPage page = pageMapper.findById(id);
+        return page != null ? ResponseEntity.ok(page) : ResponseEntity.notFound().build();
     }
 
     @GetMapping("/pages/search")
     public List<WikiPage> searchPages(@RequestParam String q, @RequestParam(defaultValue = "10") int limit) {
-        // 先尝试 FULLTEXT 搜索
-        List<WikiPage> results = pageRepo.fulltextSearch(q, limit);
+        List<WikiPage> results = pageMapper.fulltextSearch(q, limit);
         if (results.isEmpty()) {
-            // fallback 到 LIKE 搜索
-            results = pageRepo.findByTitleContaining(q, limit);
+            results = pageMapper.findByTitleContaining(q, limit);
         }
         return results;
     }
 
     @PutMapping("/pages/{id}")
     public ResponseEntity<WikiPage> updatePage(@PathVariable Long id, @RequestBody WikiPage page) {
-        return pageRepo.findById(id).map(existing -> {
-            if (page.getTitle() != null) existing.setTitle(page.getTitle());
-            if (page.getContent() != null) existing.setContent(page.getContent());
-            if (page.getSummary() != null) existing.setSummary(page.getSummary());
-            if (page.getCategory() != null) existing.setCategory(page.getCategory());
-            if (page.getSoftware() != null) existing.setSoftware(page.getSoftware());
-            if (page.getVersion() != null) existing.setVersion(page.getVersion());
-            if (page.getStatus() != null) existing.setStatus(page.getStatus());
-            existing.setUpdatedAt(LocalDateTime.now());
-            pageRepo.save(existing);
-            return ResponseEntity.ok(existing);
-        }).orElse(ResponseEntity.notFound().build());
+        WikiPage existing = pageMapper.findById(id);
+        if (existing == null) return ResponseEntity.notFound().build();
+
+        if (page.getTitle() != null) existing.setTitle(page.getTitle());
+        if (page.getContent() != null) existing.setContent(page.getContent());
+        if (page.getSummary() != null) existing.setSummary(page.getSummary());
+        if (page.getCategory() != null) existing.setCategory(page.getCategory());
+        if (page.getSoftware() != null) existing.setSoftware(page.getSoftware());
+        if (page.getVersion() != null) existing.setVersion(page.getVersion());
+        if (page.getStatus() != null) existing.setStatus(page.getStatus());
+        existing.setUpdatedAt(LocalDateTime.now());
+        pageMapper.update(existing);
+        return ResponseEntity.ok(existing);
     }
 
     @DeleteMapping("/pages/{id}")
     public ResponseEntity<Void> deletePage(@PathVariable Long id) {
-        pageRepo.deleteById(id);
+        pageMapper.deleteById(id);
         return ResponseEntity.ok().build();
     }
-
-    // ==================== Ingest 编译 ====================
 
     @PostMapping("/ingest/upload")
     public ResponseEntity<IngestAgent.IngestResult> ingestUpload(@RequestParam("file") MultipartFile file) {
@@ -116,17 +110,16 @@ public class WikiController {
 
             String hash = sha256(content);
 
-            // 创建或更新 WikiSource
-            WikiSource source = sourceRepo.findByContentHash(hash).orElseGet(() -> {
-                WikiSource s = new WikiSource();
-                s.setTitle(fileName);
-                s.setSourceType("UPLOAD");
-                s.setContent(content);
-                s.setContentHash(hash);
-                return sourceRepo.save(s);
-            });
+            WikiSource source = sourceMapper.findByContentHash(hash);
+            if (source == null) {
+                source = new WikiSource();
+                source.setTitle(fileName);
+                source.setSourceType("UPLOAD");
+                source.setContent(content);
+                source.setContentHash(hash);
+                sourceMapper.insert(source);
+            }
 
-            // 执行编译
             IngestAgent.IngestResult result = ingestAgent.ingest(source, null);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
@@ -143,22 +136,21 @@ public class WikiController {
             String category = body.get("category");
             String software = body.get("software");
 
-            if (content == null || content.isBlank()) {
-                return ResponseEntity.badRequest().build();
-            }
+            if (content == null || content.isBlank()) return ResponseEntity.badRequest().build();
 
             String hash = sha256(content);
 
-            WikiSource source = sourceRepo.findByContentHash(hash).orElseGet(() -> {
-                WikiSource s = new WikiSource();
-                s.setTitle(title);
-                s.setSourceType("MANUAL");
-                s.setContent(content);
-                s.setContentHash(hash);
-                s.setCategory(category);
-                s.setSoftware(software);
-                return sourceRepo.save(s);
-            });
+            WikiSource source = sourceMapper.findByContentHash(hash);
+            if (source == null) {
+                source = new WikiSource();
+                source.setTitle(title);
+                source.setSourceType("MANUAL");
+                source.setContent(content);
+                source.setContentHash(hash);
+                source.setCategory(category);
+                source.setSoftware(software);
+                sourceMapper.insert(source);
+            }
 
             IngestAgent.IngestResult result = ingestAgent.ingest(source, null);
             return ResponseEntity.ok(result);
@@ -167,8 +159,6 @@ public class WikiController {
             return ResponseEntity.internalServerError().build();
         }
     }
-
-    // ==================== 导入导出 ====================
 
     @GetMapping("/export")
     public ResponseEntity<byte[]> exportWiki(@RequestParam(required = false) String category) {
@@ -195,22 +185,18 @@ public class WikiController {
         }
     }
 
-    // ==================== 统计 ====================
-
     @GetMapping("/stats")
     public Map<String, Object> getStats() {
         Map<String, Object> stats = new HashMap<>();
-        stats.put("total_pages", pageRepo.findAll().size());
-        stats.put("active_pages", pageRepo.countByStatus("ACTIVE"));
-        stats.put("draft_pages", pageRepo.countByStatus("DRAFT"));
-        stats.put("contradicted_pages", pageRepo.countByStatus("CONTRADICTED"));
-        stats.put("stale_pages", pageRepo.countByStatus("STALE"));
-        stats.put("total_sources", sourceRepo.findAll().size());
-        stats.put("uningested_sources", sourceRepo.findByIngested(false).size());
+        stats.put("total_pages", pageMapper.findAll().size());
+        stats.put("active_pages", pageMapper.countByStatus("ACTIVE"));
+        stats.put("draft_pages", pageMapper.countByStatus("DRAFT"));
+        stats.put("contradicted_pages", pageMapper.countByStatus("CONTRADICTED"));
+        stats.put("stale_pages", pageMapper.countByStatus("STALE"));
+        stats.put("total_sources", sourceMapper.findAll().size());
+        stats.put("uningested_sources", sourceMapper.findByIngested(false).size());
         return stats;
     }
-
-    // ==================== 辅助方法 ====================
 
     private DocumentLoader resolveLoader(String fileName) {
         for (DocumentLoader loader : documentLoaders) {

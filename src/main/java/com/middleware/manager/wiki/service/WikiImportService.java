@@ -6,8 +6,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.middleware.manager.wiki.entity.WikiLink;
 import com.middleware.manager.wiki.entity.WikiPage;
-import com.middleware.manager.wiki.repository.WikiLinkRepository;
-import com.middleware.manager.wiki.repository.WikiPageRepository;
+import com.middleware.manager.wiki.repository.WikiLinkMapper;
+import com.middleware.manager.wiki.repository.WikiPageMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -19,26 +19,20 @@ import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-/**
- * Wiki 导入服务：解析导出 ZIP 包，写入数据库。
- */
 @Service
 public class WikiImportService {
 
     private static final Logger log = LoggerFactory.getLogger(WikiImportService.class);
     private final Gson gson = new Gson();
 
-    private final WikiPageRepository pageRepo;
-    private final WikiLinkRepository linkRepo;
+    private final WikiPageMapper pageMapper;
+    private final WikiLinkMapper linkMapper;
 
-    public WikiImportService(WikiPageRepository pageRepo, WikiLinkRepository linkRepo) {
-        this.pageRepo = pageRepo;
-        this.linkRepo = linkRepo;
+    public WikiImportService(WikiPageMapper pageMapper, WikiLinkMapper linkMapper) {
+        this.pageMapper = pageMapper;
+        this.linkMapper = linkMapper;
     }
 
-    /**
-     * 导入结果 DTO。
-     */
     public static class ImportResult {
         private int pagesCreated;
         private int pagesUpdated;
@@ -51,7 +45,6 @@ public class WikiImportService {
         public int getLinksCreated() { return linksCreated; }
         public int getConflicts() { return conflicts; }
         public String getStatus() { return status; }
-
         public void setPagesCreated(int v) { this.pagesCreated = v; }
         public void setPagesUpdated(int v) { this.pagesUpdated = v; }
         public void setLinksCreated(int v) { this.linksCreated = v; }
@@ -59,9 +52,6 @@ public class WikiImportService {
         public void setStatus(String v) { this.status = v; }
     }
 
-    /**
-     * 从 ZIP 字节数组导入 Wiki 页面。
-     */
     public ImportResult importFromZip(byte[] zipBytes) throws IOException {
         ImportResult result = new ImportResult();
         Map<String, WikiPage> importedPages = new HashMap<>();
@@ -84,25 +74,21 @@ public class WikiImportService {
             }
         }
 
-        // 保存页面
-        int created = 0, updated = 0, conflicts = 0;
+        int created = 0, conflicts = 0;
         for (WikiPage page : importedPages.values()) {
-            Optional<WikiPage> existing = pageRepo.findByTitleAndType(page.getTitle(), page.getPageType());
-            if (existing.isPresent()) {
-                // 标记为冲突（CONTRADICTED），等待人工裁决
-                WikiPage existingPage = existing.get();
-                existingPage.setStatus("CONTRADICTED");
-                existingPage.setContradictionNote("与导入包冲突，待审核");
-                pageRepo.save(existingPage);
+            WikiPage existing = pageMapper.findByTitleAndType(page.getTitle(), page.getPageType());
+            if (existing != null) {
+                existing.setStatus("CONTRADICTED");
+                existing.setContradictionNote("与导入包冲突，待审核");
+                pageMapper.update(existing);
                 conflicts++;
             } else {
-                page.setStatus("DRAFT"); // 新页面标为草稿
-                pageRepo.save(page);
+                page.setStatus("DRAFT");
+                pageMapper.insert(page);
                 created++;
             }
         }
 
-        // 重新读取 ZIP 处理链接
         int linksCreated = 0;
         try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
             ZipEntry entry;
@@ -116,18 +102,16 @@ public class WikiImportService {
         }
 
         result.setPagesCreated(created);
-        result.setPagesUpdated(updated);
         result.setLinksCreated(linksCreated);
         result.setConflicts(conflicts);
         result.setStatus("SUCCESS");
 
-        log.info("Import completed: created={}, updated={}, links={}, conflicts={}", created, updated, linksCreated, conflicts);
+        log.info("Import completed: created={}, links={}, conflicts={}", created, linksCreated, conflicts);
         return result;
     }
 
     private WikiPage parsePageMarkdown(String markdown) {
         WikiPage page = new WikiPage();
-        // 解析 YAML frontmatter
         if (markdown.startsWith("---")) {
             int endIdx = markdown.indexOf("---", 3);
             if (endIdx > 0) {
@@ -184,7 +168,7 @@ public class WikiImportService {
                     if (linkObj.has("confidence")) {
                         link.setConfidence(new BigDecimal(linkObj.get("confidence").getAsString()));
                     }
-                    linkRepo.save(link);
+                    linkMapper.insertIgnore(link);
                     created++;
                 }
             }
