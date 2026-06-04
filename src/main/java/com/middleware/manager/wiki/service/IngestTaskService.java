@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.InputStream;
 import java.security.MessageDigest;
@@ -82,6 +83,7 @@ public class IngestTaskService {
         return task;
     }
 
+    @Transactional
     private IngestTask createTaskFromContent(String title, String content, String category, String software,
                                               Long operatorId, String sourceType) {
         String hash = sha256(content);

@@ -303,11 +303,11 @@ public class IngestAgent {
                     String mergeDecision = callLlm(IngestPromptTemplates.buildMergeDecisionPrompt(
                             existing.getContent(), getAsString(pageObj, "content")));
                     JsonObject decision = parseJson(mergeDecision);
-                    String action = decision != null ? getAsString(decision, "decision") : "OVERWRITE";
+                    String action = decision != null ? getAsString(decision, "action") : "OVERWRITE";
 
                     if ("CONTRADICT".equals(action)) {
                         existing.setStatus("CONTRADICTED");
-                        existing.setContradictionNote(getAsString(decision, "note"));
+                        existing.setContradictionNote(decision != null ? getAsString(decision, "reason") : "与新文档内容矛盾");
                         pageMapper.update(existing);
                     } else if ("APPEND".equals(action)) {
                         existing.setContent(existing.getContent() + "\n\n" + getAsString(pageObj, "content"));

@@ -8,6 +8,7 @@ import com.middleware.manager.wiki.repository.WikiPageMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -35,6 +36,7 @@ public class LintAgent {
     /**
      * Run all lint checks, persist results, and return them.
      */
+    @Transactional
     public List<LintResult> runLint() {
         // Clean up old resolved results before running
         lintResultMapper.deleteResolved();

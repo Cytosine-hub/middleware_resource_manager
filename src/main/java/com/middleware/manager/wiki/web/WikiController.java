@@ -1,5 +1,7 @@
 package com.middleware.manager.wiki.web;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.middleware.manager.domain.AdminAccount;
 import com.middleware.manager.knowledge.loader.DocumentLoader;
 import com.middleware.manager.repository.AdminAccountMapper;
@@ -7,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import com.middleware.manager.knowledge.embedding.EmbeddingService;
 import com.middleware.manager.wiki.service.WikiSearchService;
 import com.middleware.manager.knowledge.store.VectorStore;
+import com.middleware.manager.wiki.repository.WikiPagePermissionMapper;
 import com.middleware.manager.wiki.entity.IngestTask;
 import com.middleware.manager.wiki.entity.LintResult;
 import com.middleware.manager.wiki.repository.IngestTaskMapper;
@@ -69,6 +72,8 @@ public class WikiController {
     private final IngestTaskMapper taskMapper;
     private final WikiIngestLogMapper ingestLogMapper;
     private final WikiPermissionService wikiPermissionService;
+    private final WikiPagePermissionMapper pagePermissionMapper;
+    private final Gson gson = new Gson();
 
     public WikiController(WikiPageMapper pageMapper,
                           WikiLinkMapper linkMapper,
@@ -83,6 +88,7 @@ public class WikiController {
                           LintAgent lintAgent,
                           LintResultMapper lintResultMapper,
                           WikiPermissionService wikiPermissionService,
+                          WikiPagePermissionMapper pagePermissionMapper,
                           IngestTaskService taskService,
                           IngestTaskMapper taskMapper,
                           WikiIngestLogMapper ingestLogMapper,
@@ -101,6 +107,7 @@ public class WikiController {
         this.lintAgent = lintAgent;
         this.lintResultMapper = lintResultMapper;
         this.wikiPermissionService = wikiPermissionService;
+        this.pagePermissionMapper = pagePermissionMapper;
         this.embeddingService = embeddingService;
         this.vectorStore = vectorStore;
         this.taskService = taskService;
@@ -226,8 +233,11 @@ public class WikiController {
             String auditAction = resolveAuditAction(newStatus);
             Long actorId = resolveActorId(authentication);
             String actorIp = request.getRemoteAddr();
-            String detail = String.format("{\"oldStatus\":\"%s\",\"newStatus\":\"%s\",\"title\":\"%s\"}",
-                    oldStatus, newStatus, existing.getTitle());
+            JsonObject detailObj = new JsonObject();
+            detailObj.addProperty("oldStatus", oldStatus);
+            detailObj.addProperty("newStatus", newStatus);
+            detailObj.addProperty("title", existing.getTitle());
+            String detail = gson.toJson(detailObj);
             try {
                 auditLogMapper.insert(auditAction, "PAGE", id, actorId,
                         authentication != null ? authentication.getName() : "system", actorIp, detail);
@@ -241,6 +251,14 @@ public class WikiController {
 
     @DeleteMapping("/pages/{id}")
     public ResponseEntity<Void> deletePage(@PathVariable Long id) {
+        // 级联删除：链接、权限、向量
+        linkMapper.deleteByPageId(id);
+        pagePermissionMapper.deleteByPageId(id);
+        try {
+            vectorStore.delete("wiki_" + id);
+        } catch (Exception e) {
+            log.debug("Vector delete failed for page {}: {}", id, e.getMessage());
+        }
         pageMapper.deleteById(id);
         return ResponseEntity.ok().build();
     }

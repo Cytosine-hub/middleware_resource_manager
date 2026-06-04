@@ -11,6 +11,7 @@ import com.middleware.manager.wiki.repository.WikiPageMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.*;
 import java.math.BigDecimal;
@@ -73,6 +74,7 @@ public class WikiImportService {
         public Long getImportedPageId() { return importedPageId; }
     }
 
+    @Transactional
     public ImportResult importFromZip(byte[] zipBytes) throws IOException {
         ImportResult result = new ImportResult();
         Map<String, WikiPage> importedPages = new HashMap<>();

@@ -627,11 +627,16 @@ function formatDate(dt) {
 }
 
 // Computed rendered content
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 const renderedContent = computed(() => {
   if (!selectedPage.value?.content) return ''
   let html = md.render(selectedPage.value.content)
   html = html.replace(/\[\[([^\]]+)\]\]/g, (match, title) => {
-    return `<a class="wikilink" data-title="${title}" href="javascript:void(0)">${title}</a>`
+    const safe = escapeHtml(title)
+    return `<a class="wikilink" data-title="${safe}" href="javascript:void(0)">${safe}</a>`
   })
   return html
 })

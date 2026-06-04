@@ -24,7 +24,7 @@ public class WikiExceptionHandler {
     public ResponseEntity<Map<String, String>> handleRuntime(RuntimeException e) {
         log.error("Internal error: {}", e.getMessage(), e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", e.getMessage() != null ? e.getMessage() : "服务器内部错误"));
+                .body(Map.of("error", "服务器内部错误"));
     }
 
     @ExceptionHandler(Exception.class)
