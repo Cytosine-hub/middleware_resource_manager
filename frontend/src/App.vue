@@ -407,32 +407,22 @@
           </main>
         </div>
 
-        <div v-if="showCommandDialog" class="modal-backdrop" @click.self="closeCommandDialog()">
-          <form class="modal-panel" @submit.prevent="saveCommand()">
-            <div class="panel-title">
-              <h3>{{ cmdForm.id ? '编辑常用命令' : '新增常用命令' }}</h3>
-              <button type="button" class="ghost" @click="closeCommandDialog()">关闭</button>
-            </div>
-            <div class="form-grid single">
-              <label>所属类型
-                <select v-model="cmdForm.softwareTypeId" required>
-                  <option value="" disabled>请选择</option>
-                  <optgroup v-for="cat in cmdFormCategories" :key="cat" :label="cat">
-                    <option v-for="t in cmdFormTypesByCategory(cat)" :key="t.id" :value="t.id">{{ t.name }}</option>
-                  </optgroup>
-                </select>
-              </label>
-              <label>命令格式<textarea v-model.trim="cmdForm.commandFormat" required rows="4" placeholder="如: redis-cli -h $HOST -p $PORT info"></textarea></label>
-              <label>简要说明<input v-model.trim="cmdForm.briefDescription" required maxlength="500" placeholder="如: 查看基础信息" /></label>
-              <label>详细说明<textarea v-model.trim="cmdForm.detailedDescription" rows="6" placeholder="命令的详细说明、参数解释等"></textarea></label>
-              <label>分类标签<input v-model.trim="cmdForm.categories" placeholder="多个标签用逗号分隔，如: 基础,常用,查询" /></label>
-            </div>
-            <div class="form-actions">
-              <button type="submit">保存</button>
-              <button type="button" class="ghost" @click="closeCommandDialog()">取消</button>
-            </div>
-          </form>
-        </div>
+        <FormModal v-model="showCommandDialog" :title="cmdForm.id ? '编辑常用命令' : '新增常用命令'" @submit="saveCommand()">
+          <div class="form-grid single">
+            <label>所属类型
+              <select v-model="cmdForm.softwareTypeId" required>
+                <option value="" disabled>请选择</option>
+                <optgroup v-for="cat in cmdFormCategories" :key="cat" :label="cat">
+                  <option v-for="t in cmdFormTypesByCategory(cat)" :key="t.id" :value="t.id">{{ t.name }}</option>
+                </optgroup>
+              </select>
+            </label>
+            <label>命令格式<textarea v-model.trim="cmdForm.commandFormat" required rows="4" placeholder="如: redis-cli -h $HOST -p $PORT info"></textarea></label>
+            <label>简要说明<input v-model.trim="cmdForm.briefDescription" required maxlength="500" placeholder="如: 查看基础信息" /></label>
+            <label>详细说明<textarea v-model.trim="cmdForm.detailedDescription" rows="6" placeholder="命令的详细说明、参数解释等"></textarea></label>
+            <label>分类标签<input v-model.trim="cmdForm.categories" placeholder="多个标签用逗号分隔，如: 基础,常用,查询" /></label>
+          </div>
+        </FormModal>
       </section>
 
       <section v-else class="workspace">
@@ -825,12 +815,7 @@
       </div>
     </main>
 
-    <div v-if="editing" class="modal-backdrop" @click.self="cancelEdit()">
-      <form class="modal-panel wide-modal form-modal" @submit.prevent="saveRelease">
-        <div class="panel-title">
-          <h3>{{ releaseForm.id ? '编辑资源' : '新增资源' }}</h3>
-          <button type="button" class="ghost" @click="cancelEdit()">关闭</button>
-        </div>
+    <FormModal v-model="editing" :title="releaseForm.id ? '编辑资源' : '新增资源'" width="700px" @submit="saveRelease">
         <div class="form-grid">
           <label>分类
             <select v-model="releaseForm.category" required @change="releaseForm.softwareTypeId = ''">
@@ -876,22 +861,14 @@
           </div>
           <span class="progress-text">上传中 {{ uploadProgress }}%</span>
         </div>
-        <div class="form-actions">
-          <button type="submit" :disabled="uploading">{{ uploading ? '上传中...' : '保存' }}</button>
-          <button type="button" class="ghost" @click="cancelEdit()" :disabled="uploading">取消</button>
-        </div>
-      </form>
-    </div>
+      <template #actions>
+        <BaseButton type="submit" :loading="uploading">{{ uploading ? '上传中...' : '保存' }}</BaseButton>
+        <BaseButton variant="ghost" @click="cancelEdit()" :disabled="uploading">取消</BaseButton>
+      </template>
+    </FormModal>
 
-    <div v-if="showImport" class="modal-backdrop" @click.self="closeImportPage()">
-      <form class="modal-panel wide-modal form-modal" @submit.prevent="submitImport">
-        <div class="panel-title">
-          <div>
-            <h3>批量导入</h3>
-            <p>扫描指定目录并按所选软件导入安装包资源。</p>
-          </div>
-          <button type="button" class="ghost" :disabled="importing" @click="closeImportPage()">关闭</button>
-        </div>
+    <FormModal v-model="showImport" title="批量导入" width="700px" @submit="submitImport">
+        <p class="muted" style="margin:0 0 12px">扫描指定目录并按所选软件导入安装包资源。</p>
         <div class="form-grid">
           <label class="wide">目录路径<input v-model.trim="importForm.sourceDirectory" :disabled="importing" required /></label>
           <label>分类
@@ -911,17 +888,15 @@
           <label class="checkline"><input v-model="importForm.published" :disabled="importing" type="checkbox" />导入后发布</label>
           <label class="wide">说明<textarea v-model.trim="importForm.description" :disabled="importing" /></label>
         </div>
-        <div class="form-actions">
-          <button type="submit" :disabled="importing">{{ importing ? '导入中...' : '开始导入' }}</button>
-          <button type="button" class="ghost" :disabled="importing" @click="closeImportPage()">取消</button>
-        </div>
         <div v-if="importing" class="loading-panel">
-          <span class="spinner"></span>
-          <strong>正在导入，请稍候</strong>
+          <LoadingSpinner text="正在导入，请稍候..." />
           <p>正在扫描目录并写入资源记录，导入完成后会显示结果。</p>
         </div>
-      </form>
-    </div>
+      <template #actions>
+        <BaseButton type="submit" :loading="importing">{{ importing ? '导入中...' : '开始导入' }}</BaseButton>
+        <BaseButton variant="ghost" :disabled="importing" @click="closeImportPage()">取消</BaseButton>
+      </template>
+    </FormModal>
 
     <FormModal v-model="showTypeDialog" :title="typeForm.id ? '编辑类型' : '新增类型'" @submit="saveType">
       <div class="form-grid single">
@@ -977,35 +952,29 @@
       </div>
     </FormModal>
 
-    <div v-if="showParamImportDialog" class="modal-backdrop" @click.self="showParamImportDialog = false">
-      <form class="modal-panel" @submit.prevent="importParameters">
-        <div class="panel-title">
-          <h3>批量导入参数</h3>
-          <button type="button" class="ghost" @click="showParamImportDialog = false">关闭</button>
-        </div>
-        <div class="form-grid single">
-          <p class="muted" style="margin:0 0 12px">请先下载模板，按格式填写后上传 Excel 文件。支持的列：参数编码、参数名称、参数值、分类、说明、是否启用（是/否）、是否部署标准（是/否）。</p>
-          <label class="file-field">选择 Excel 文件
-            <span class="file-control">
-              <input type="file" accept=".xlsx,.xls" @change="handleParamImportFileChange" required />
-              <span class="file-button">选择文件</span>
-              <span class="file-name">{{ paramImportFile?.name || '未选择文件' }}</span>
-            </span>
-          </label>
-        </div>
-        <div v-if="paramImportResult" class="import-result">
-          <p>导入完成：成功 <strong>{{ paramImportResult.imported }}</strong> 条，跳过 <strong>{{ paramImportResult.skipped }}</strong> 条</p>
-          <ul v-if="paramImportResult.errors.length > 0">
-            <li v-for="(err, idx) in paramImportResult.errors" :key="idx" class="import-error">{{ err }}</li>
-          </ul>
-        </div>
-        <div class="form-actions">
-          <button type="button" class="ghost" @click="downloadParameterTemplate()">下载模板</button>
-          <button type="submit" :disabled="paramImporting">{{ paramImporting ? '导入中...' : '开始导入' }}</button>
-          <button type="button" class="ghost" @click="showParamImportDialog = false; paramImportResult = null">关闭</button>
-        </div>
-      </form>
-    </div>
+    <FormModal v-model="showParamImportDialog" title="批量导入参数" submitText="开始导入" :submitDisabled="paramImporting" @submit="importParameters">
+      <div class="form-grid single">
+        <p class="muted" style="margin:0 0 12px">请先下载模板，按格式填写后上传 Excel 文件。支持的列：参数编码、参数名称、参数值、分类、说明、是否启用（是/否）、是否部署标准（是/否）。</p>
+        <label class="file-field">选择 Excel 文件
+          <span class="file-control">
+            <input type="file" accept=".xlsx,.xls" @change="handleParamImportFileChange" required />
+            <span class="file-button">选择文件</span>
+            <span class="file-name">{{ paramImportFile?.name || '未选择文件' }}</span>
+          </span>
+        </label>
+      </div>
+      <div v-if="paramImportResult" class="import-result">
+        <p>导入完成：成功 <strong>{{ paramImportResult.imported }}</strong> 条，跳过 <strong>{{ paramImportResult.skipped }}</strong> 条</p>
+        <ul v-if="paramImportResult.errors.length > 0">
+          <li v-for="(err, idx) in paramImportResult.errors" :key="idx" class="import-error">{{ err }}</li>
+        </ul>
+      </div>
+      <template #actions>
+        <BaseButton variant="ghost" @click="downloadParameterTemplate()">下载模板</BaseButton>
+        <BaseButton type="submit" :loading="paramImporting">{{ paramImporting ? '导入中...' : '开始导入' }}</BaseButton>
+        <BaseButton variant="ghost" @click="showParamImportDialog = false; paramImportResult = null">关闭</BaseButton>
+      </template>
+    </FormModal>
 
     <div v-if="selectedPreviewDocument" class="modal-backdrop doc-preview-backdrop">
       <div class="doc-preview-full">
@@ -1172,6 +1141,7 @@ import ConfirmDialog from './components/ui/ConfirmDialog.vue'
 import FormModal from './components/ui/FormModal.vue'
 import BaseModal from './components/ui/BaseModal.vue'
 import BaseButton from './components/ui/BaseButton.vue'
+import LoadingSpinner from './components/ui/LoadingSpinner.vue'
 
 const { auth, login: authLogin, logout: authLogout, restoreAuth, sha256,
   currentUserRole, isSysAdmin, isCategoryAdmin, isManager, canAccessAdmin, isReadOnly, managedCategory } = useAuth()
