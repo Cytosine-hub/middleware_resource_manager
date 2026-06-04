@@ -1142,16 +1142,29 @@ import FormModal from './components/ui/FormModal.vue'
 import BaseModal from './components/ui/BaseModal.vue'
 import BaseButton from './components/ui/BaseButton.vue'
 import LoadingSpinner from './components/ui/LoadingSpinner.vue'
+import { useAdmin } from './composables/useAdmin'
 
 const { auth, login: authLogin, logout: authLogout, restoreAuth, sha256,
   currentUserRole, isSysAdmin, isCategoryAdmin, isManager, canAccessAdmin, isReadOnly, managedCategory } = useAuth()
 const { notice, notify, confirmDialog, confirm: confirmAction, handleConfirm, cancelConfirm } = useNotify()
 const { route, navigate } = useRoute()
 
+// ── 管理后台状态 composable（仅状态，函数保留在 App.vue）──
+const admin = useAdmin(auth, notify, confirmAction)
+const {
+  adminSection, showPassword, showImport, importing, importResult, showImportResultDialog,
+  editing, uploading, uploadProgress, deleteTarget, deletingRelease,
+  showTypeDialog, showCategoryDialog, softwareCategories, softwareTypes,
+  showStandardDialog, showParameterDialog, showParamImportDialog, paramImporting, paramImportResult, paramImportFile,
+  allParameterStandards, standardDocuments, standardParameters, selectedStandard,
+  selectedReview, selectedReviewDiff, reviewComment, allReviews, showRevisionModal, revisionList, revisionDocTitle,
+  showUserDialog, showRoleDialog, userFormTarget, userList, allRoles, systemSettings,
+  adminFilters, typeFilters, standardFilters, parameterFilters, maintenanceDocumentFilters, reviewFilters, reviewPage,
+  adminPage, releaseForm, importForm, passwordForm, categoryForm, typeForm, standardForm, parameterForm, userForm
+} = admin
+
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true })
 const siteConfig = reactive({ knowledgeEnabled: true, diagnosticsEnabled: true })
-const uploading = ref(false)
-const uploadProgress = ref(0)
 const downloading = ref(false)
 const downloadProgress = ref(0)
 const downloadFileName = ref('')
@@ -1185,72 +1198,19 @@ function destroyStdScrollSpy() {
   if (stdScrollHandler) { window.removeEventListener('scroll', stdScrollHandler); stdScrollHandler = null }
 }
 const standardsLoading = ref(false)
-const editing = ref(false)
-const adminSection = ref('files')
-const showImport = ref(false)
-const importing = ref(false)
-const importResult = ref(null)
-const showImportResultDialog = ref(false)
-const showPassword = ref(false)
-const showTypes = ref(false)
-const showCategoryDialog = ref(false)
-const showTypeDialog = ref(false)
-const showStandardDialog = ref(false)
+// ── 管理后台状态已迁移到 composables/useAdmin.js ──
+const loginForm = reactive({ username: '', password: '' })
 const selectedPreviewDocument = ref(null)
 const previewTocActiveId = ref('')
-const showParameterDialog = ref(false)
-const selectedStandard = ref(null)
-const deleteTarget = ref(null)
-const deletingRelease = ref(false)
 const showReviewDialog = ref(false)
 const reviewTarget = ref(null)
 const reviewAction = ref('approve')
-const reviewComment = ref('')
 const showDiffDialog = ref(false)
 const diffTarget = ref(null)
 const diffContent = ref('')
-const allReviews = ref([])
-const selectedReview = ref(null)
-const selectedReviewDiff = ref('')
 const diffLines = computed(() => selectedReviewDiff.value ? selectedReviewDiff.value.split('\n') : [])
-const reviewFilters = reactive({ status: '' })
-const reviewPage = reactive({ page: 0, size: 10 })
-
-// ── 修订历史 ──
-const revisionList = ref([])
-const showRevisionModal = ref(false)
-const revisionDocTitle = ref('')
-
-// ── 系统设置 ──
-const systemSettings = reactive({ 'knowledge-enabled': 'true', 'diagnostics-enabled': 'true' })
-
 const publicFilters = reactive({ keyword: '', platform: '', page: 0, size: 12 })
-const adminFilters = reactive({ keyword: '', platform: '', published: '', page: 0, size: 10 })
-const typeFilters = reactive({ category: '', name: '', page: 0, size: 10 })
-const standardFilters = reactive({ keyword: '', category: '', software: '', status: '', page: 0, size: 10 })
-const parameterFilters = reactive({ page: 0, size: 10 })
-const maintenanceDocumentFilters = reactive({ keyword: '', documentType: '', status: '', page: 0, size: 10 })
 const publicPage = reactive(emptyPage(12))
-const adminPage = reactive(emptyPage(10))
-const softwareCategories = ref([])
-const softwareTypes = ref([])
-const standardDocuments = ref([])
-const allParameterStandards = ref([])
-const standardParameters = ref([])
-const userList = ref([])
-const showUserDialog = ref(false)
-const showRoleDialog = ref(false)
-const userFormTarget = ref(null)
-const userForm = reactive({ username: '', displayName: '', password: '', role: '开发经理' })
-const allRoles = ref([])
-const loginForm = reactive({ username: '', password: '' })
-const releaseForm = reactive(defaultReleaseForm())
-const importForm = reactive(defaultImportForm())
-const passwordForm = reactive({ currentPassword: '', newPassword: '', confirmPassword: '' })
-const categoryForm = reactive({ name: '' })
-const typeForm = reactive(defaultTypeForm())
-const standardForm = reactive(defaultStandardForm())
-const parameterForm = reactive(defaultParameterForm())
 
 // ── 常用命令 ──
 const cmdTypes = ref([])
@@ -2982,11 +2942,7 @@ async function copyParameter(parameter) {
   notify(`已复制 ${text}`, 'success')
 }
 
-const showParamImportDialog = ref(false)
-const paramImportFile = ref(null)
-const paramImporting = ref(false)
-const paramImportResult = ref(null)
-
+// showParamImportDialog, paramImportFile, paramImporting, paramImportResult 已迁移到 composable
 function handleParamImportFileChange(e) {
   paramImportFile.value = e.target.files[0] || null
 }
