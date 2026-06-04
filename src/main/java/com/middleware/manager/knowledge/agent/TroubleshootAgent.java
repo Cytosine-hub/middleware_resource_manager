@@ -18,7 +18,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 @Service
@@ -105,7 +107,7 @@ public class TroubleshootAgent {
         }
 
         // 2. Retrieve relevant knowledge — Wiki first, chunk fallback
-        List<String> references = new ArrayList<>();
+        List<Map<String, Object>> references = new ArrayList<>();
         String contextMessage;
 
         // Try Wiki search first
@@ -122,7 +124,10 @@ public class TroubleshootAgent {
             // Wiki has sufficient results — use Wiki context
             contextMessage = buildWikiContextMessage(userMessage, wikiResults);
             for (WikiSearchService.WikiSearchResult r : wikiResults) {
-                references.add(r.getPage().getTitle());
+                Map<String, Object> ref = new HashMap<>();
+                ref.put("title", r.getPage().getTitle());
+                ref.put("wikiPageId", r.getPage().getId());
+                references.add(ref);
             }
         } else {
             // Fall back to existing chunk-based search
@@ -130,7 +135,9 @@ public class TroubleshootAgent {
             contextMessage = buildContextMessage(userMessage, searchResults);
             for (SearchResult r : searchResults) {
                 if (r.getSourceTitle() != null) {
-                    references.add(r.getSourceTitle());
+                    Map<String, Object> ref = new HashMap<>();
+                    ref.put("title", r.getSourceTitle());
+                    references.add(ref);
                 }
             }
         }
@@ -280,12 +287,12 @@ public class TroubleshootAgent {
      */
     public static class AgentResponse {
         private String answer;
-        private List<String> references;
+        private List<Map<String, Object>> references;
 
         public AgentResponse() {
         }
 
-        public AgentResponse(String answer, List<String> references) {
+        public AgentResponse(String answer, List<Map<String, Object>> references) {
             this.answer = answer;
             this.references = references;
         }

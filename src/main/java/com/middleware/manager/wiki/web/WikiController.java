@@ -3,6 +3,10 @@ package com.middleware.manager.wiki.web;
 import com.middleware.manager.domain.AdminAccount;
 import com.middleware.manager.knowledge.loader.DocumentLoader;
 import com.middleware.manager.repository.AdminAccountMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.middleware.manager.knowledge.embedding.EmbeddingService;
+import com.middleware.manager.wiki.service.WikiSearchService;
+import com.middleware.manager.knowledge.store.VectorStore;
 import com.middleware.manager.wiki.entity.IngestTask;
 import com.middleware.manager.wiki.entity.LintResult;
 import com.middleware.manager.wiki.repository.IngestTaskMapper;
@@ -55,6 +59,11 @@ public class WikiController {
     private final AdminAccountMapper adminAccountMapper;
     private final WikiAuditLogMapper auditLogMapper;
     private final LintAgent lintAgent;
+    private final EmbeddingService embeddingService;
+    private final VectorStore vectorStore;
+
+    @Autowired
+    private WikiSearchService wikiSearchService;
     private final LintResultMapper lintResultMapper;
     private final IngestTaskService taskService;
     private final IngestTaskMapper taskMapper;
@@ -76,7 +85,9 @@ public class WikiController {
                           WikiPermissionService wikiPermissionService,
                           IngestTaskService taskService,
                           IngestTaskMapper taskMapper,
-                          WikiIngestLogMapper ingestLogMapper) {
+                          WikiIngestLogMapper ingestLogMapper,
+                          EmbeddingService embeddingService,
+                          VectorStore vectorStore) {
         this.pageMapper = pageMapper;
         this.linkMapper = linkMapper;
         this.sourceMapper = sourceMapper;
@@ -90,6 +101,8 @@ public class WikiController {
         this.lintAgent = lintAgent;
         this.lintResultMapper = lintResultMapper;
         this.wikiPermissionService = wikiPermissionService;
+        this.embeddingService = embeddingService;
+        this.vectorStore = vectorStore;
         this.taskService = taskService;
         this.taskMapper = taskMapper;
         this.ingestLogMapper = ingestLogMapper;
@@ -113,11 +126,40 @@ public class WikiController {
 
     @GetMapping("/pages/search")
     public List<WikiPage> searchPages(@RequestParam String q, @RequestParam(defaultValue = "10") int limit) {
-        List<WikiPage> results = pageMapper.fulltextSearch(q, limit);
+        // 使用 WikiSearchService 的混合检索（向量 + FULLTEXT 并行）
+        List<WikiSearchService.WikiSearchResult> searchResults = wikiSearchService.search(q, limit);
+        List<WikiPage> results = new ArrayList<>();
+        for (WikiSearchService.WikiSearchResult sr : searchResults) {
+            results.add(sr.getPage());
+        }
         if (results.isEmpty()) {
             results = pageMapper.findByTitleContaining(q, limit);
         }
         return results;
+    }
+
+    @PostMapping("/pages/reindex")
+    public ResponseEntity<Map<String, Object>> reindexPages() {
+        List<WikiPage> pages = pageMapper.findAll();
+        int success = 0, failed = 0;
+        for (WikiPage page : pages) {
+            try {
+                String text = page.getTitle() + "\n" + (page.getSummary() != null ? page.getSummary() : "");
+                float[] vector = embeddingService.embed(text);
+                String vectorId = "wiki_" + page.getId();
+                Map<String, String> metadata = new HashMap<>();
+                metadata.put("source", "wiki");
+                metadata.put("pageId", String.valueOf(page.getId()));
+                metadata.put("title", page.getTitle());
+                metadata.put("pageType", page.getPageType());
+                vectorStore.add(vectorId, vector, metadata);
+                success++;
+            } catch (Exception e) {
+                log.warn("Failed to vectorize page {}: {}", page.getId(), e.getMessage());
+                failed++;
+            }
+        }
+        return ResponseEntity.ok(Map.of("total", pages.size(), "success", success, "failed", failed));
     }
 
     @PutMapping("/pages-batch-category")

@@ -20,22 +20,6 @@
         <p v-if="displaySessions.length === 0" class="empty-hint">暂无会话，点击上方按钮新建。</p>
       </div>
 
-      <!-- 知识库文档列表 -->
-      <div class="kb-section">
-        <button class="kb-toggle" @click="showKbDocs = !showKbDocs">
-          {{ showKbDocs ? '收起' : '展开' }} 知识库文档 ({{ kbDocs.length }})
-        </button>
-        <div v-if="showKbDocs" class="kb-list">
-          <div v-for="(doc, idx) in kbDocs" :key="idx" class="kb-item">
-            <span class="kb-icon">{{ getDocIcon(doc.source_type) }}</span>
-            <div class="kb-info">
-              <span class="kb-title">{{ doc.source_title || '未知来源' }}</span>
-              <span class="kb-meta">{{ doc.chunk_count }} 个切片</span>
-            </div>
-          </div>
-          <p v-if="kbDocs.length === 0" class="empty-hint">知识库为空，请先导入文档。</p>
-        </div>
-      </div>
 
       <!-- Skill 管理 -->
       <div class="skill-section">
@@ -281,7 +265,10 @@
                   </button>
                   <div v-if="expandedRefs[idx]" class="references-list">
                     <div v-for="(ref, rIdx) in msg.references" :key="rIdx" class="reference-item">
-                      <span class="ref-source">{{ ref }}</span>
+                      <span v-if="ref.wikiPageId" class="ref-badge wiki">Wiki</span>
+                      <span v-else class="ref-badge kb">知识库</span>
+                      <a v-if="ref.wikiPageId" class="ref-link" @click.prevent="openWikiPage(ref.wikiPageId)">{{ ref.title }}</a>
+                      <span v-else class="ref-title">{{ ref.title }}</span>
                     </div>
                   </div>
                 </div>
@@ -351,8 +338,6 @@ const chatContainer = ref(null)
 const inputRef = ref(null)
 const expandedRefs = ref({})
 const readyToSend = ref(false)
-const showKbDocs = ref(false)
-const kbDocs = ref([])
 let abortController = null
 
 // ========== Skill 管理 ==========
@@ -382,7 +367,6 @@ const displaySessions = computed(() => {
 
 onMounted(() => {
   loadSessions()
-  loadKbDocs()
   loadSkills()
   loadAvailableTools()
 })
@@ -398,13 +382,8 @@ async function loadSessions() {
   }
 }
 
-async function loadKbDocs() {
-  try {
-    const result = await request('/api/knowledge/docs')
-    kbDocs.value = Array.isArray(result) ? result : []
-  } catch {
-    kbDocs.value = []
-  }
+function openWikiPage(pageId) {
+  window.open(`/#/wiki?page=${pageId}`, '_blank')
 }
 
 async function switchSession(sessionId) {
@@ -1094,8 +1073,13 @@ async function submitSaveExperience() {
 .references-section { margin-top: 8px; border-top: 1px solid #d1d5db; padding-top: 8px; }
 .references-toggle { background: none; border: none; color: #2356a5; font-size: 12px; cursor: pointer; padding: 0; text-decoration: underline; }
 .references-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
-.reference-item { background: rgba(255,255,255,0.6); border-radius: 6px; padding: 6px 10px; font-size: 12px; }
-.ref-source { font-weight: 600; color: #1e293b; }
+.reference-item { background: rgba(255,255,255,0.6); border-radius: 6px; padding: 6px 10px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.ref-badge { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; }
+.ref-badge.wiki { background: #dbeafe; color: #1e40af; }
+.ref-badge.kb { background: #fef3c7; color: #92400e; }
+.ref-link { color: #2563eb; cursor: pointer; text-decoration: underline; font-weight: 500; }
+.ref-link:hover { color: #1d4ed8; }
+.ref-title { font-weight: 500; color: #1e293b; }
 
 /* 输入区 */
 .chat-input-area {

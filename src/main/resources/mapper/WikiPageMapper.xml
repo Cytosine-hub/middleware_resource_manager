@@ -50,6 +50,7 @@
         SELECT *, MATCH(title, summary, content) AGAINST(#{query} IN BOOLEAN MODE) AS relevance
         FROM wiki_pages
         WHERE MATCH(title, summary, content) AGAINST(#{query} IN BOOLEAN MODE)
+          AND status = 'ACTIVE'
         ORDER BY relevance DESC
         LIMIT #{limit}
     </select>

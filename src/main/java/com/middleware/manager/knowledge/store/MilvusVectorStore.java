@@ -12,6 +12,7 @@ import io.milvus.param.collection.CreateCollectionParam;
 import io.milvus.param.collection.FieldType;
 import io.milvus.param.collection.HasCollectionParam;
 import io.milvus.param.dml.DeleteParam;
+import io.milvus.grpc.MutationResult;
 import io.milvus.param.dml.InsertParam;
 import io.milvus.param.dml.SearchParam;
 import io.milvus.param.index.CreateIndexParam;
@@ -149,10 +150,16 @@ public class MilvusVectorStore implements VectorStore {
                         .build()
         );
 
-        client.insert(InsertParam.newBuilder()
+        R<MutationResult> result = client.insert(InsertParam.newBuilder()
                 .withCollectionName(collection)
                 .withFields(fields)
                 .build());
+
+        if (result.getStatus() != R.Status.Success.getCode()) {
+            log.error("Milvus insert failed for id={}: {}", id, result.getMessage());
+        } else {
+            log.debug("Milvus insert success: id={}", id);
+        }
     }
 
     @Override
