@@ -305,11 +305,11 @@ public class TroubleshootAgent {
             this.answer = answer;
         }
 
-        public List<String> getReferences() {
+        public List<Map<String, Object>> getReferences() {
             return references;
         }
 
-        public void setReferences(List<String> references) {
+        public void setReferences(List<Map<String, Object>> references) {
             this.references = references;
         }
     }

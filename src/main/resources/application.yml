@@ -20,7 +20,7 @@ spring:
     url: jdbc:mysql://${APP_DB_HOST:127.0.0.1}:${APP_DB_PORT:3306}/${APP_DB_NAME:middleware_resource_manager}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${APP_DB_USERNAME:root}
-    password: ${APP_DB_PASSWORD:OlgDqdJfehRwBUITqFpi}
+    password: ${APP_DB_PASSWORD}
     hikari:
       initialization-fail-timeout: -1
       minimum-idle: 2
@@ -47,7 +47,7 @@ app:
 # ========== 知识库 & Agent 配置 ==========
   ai:
     base-url: ${AI_BASE_URL:https://token-plan-cn.xiaomimimo.com/v1}
-    api-key: ${AI_API_KEY:tp-c917uu165jgq2dosv8104vtxi7i8uaqb3wqkq5zxlbwm5haz}
+    api-key: ${AI_API_KEY}
     model: ${AI_MODEL:mimo-v2.5-pro}
     max-tokens: ${AI_MAX_TOKENS:4096}
     temperature: ${AI_TEMPERATURE:0.1}
@@ -78,11 +78,11 @@ app:
 langchain4j:
   open-ai:
     chat-model:
-      base-url: https://token-plan-cn.xiaomimimo.com/v1
-      api-key: tp-c917uu165jgq2dosv8104vtxi7i8uaqb3wqkq5zxlbwm5haz
-      model-name: mimo-v2.5-pro
-      max-tokens: 4096
-      temperature: 0.1
+      base-url: ${AI_BASE_URL:https://token-plan-cn.xiaomimimo.com/v1}
+      api-key: ${AI_API_KEY}
+      model-name: ${AI_MODEL:mimo-v2.5-pro}
+      max-tokens: ${AI_MAX_TOKENS:4096}
+      temperature: ${AI_TEMPERATURE:0.1}
       timeout: PT120S
       log-requests: true
       log-responses: true

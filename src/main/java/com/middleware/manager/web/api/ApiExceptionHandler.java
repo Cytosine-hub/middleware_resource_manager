@@ -37,13 +37,13 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleBadRequest(IllegalArgumentException ex) {
-        LOGGER.warn("api bad request: {}", ex.getMessage(), ex);
+        LOGGER.warn("api bad request: {}", ex.getMessage());
         return ResponseEntity.badRequest().body(new ApiError(400, ex.getMessage()));
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiError> handleConflict(IllegalStateException ex) {
-        LOGGER.warn("api conflict: {}", ex.getMessage(), ex);
+        LOGGER.warn("api conflict: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(409, ex.getMessage()));
     }
 

@@ -70,7 +70,8 @@ public class AdminAccountService implements UserDetailsService, ApplicationRunne
         if (!passwordEncoder.matches(currentPassword, account.getPasswordHash())) {
             throw new IllegalArgumentException("当前密码不正确");
         }
-        account.setPasswordHash(passwordEncoder.encode(newPassword));
+        // 前端传来的已经是 sha256(password)，统一走 sha256 → bcrypt 管道
+        account.setPasswordHash(encodePassword(sha256Hex(newPassword)));
         account.setUpdatedAt(LocalDateTime.now());
         mapper.update(account);
     }
@@ -84,7 +85,7 @@ public class AdminAccountService implements UserDetailsService, ApplicationRunne
         if (!StringUtils.hasText(newPassword) || newPassword.trim().length() < 6) {
             throw new IllegalArgumentException("密码至少6位");
         }
-        account.setPasswordHash(passwordEncoder.encode(newPassword.trim()));
+        account.setPasswordHash(encodePassword(sha256Hex(newPassword.trim())));
         account.setUpdatedAt(LocalDateTime.now());
         mapper.update(account);
     }

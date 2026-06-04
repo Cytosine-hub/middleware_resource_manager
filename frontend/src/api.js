@@ -5,16 +5,31 @@ const EXPIRES_KEY = 'mrm.expiresAt'
 export function getSavedAuth() {
   const token = localStorage.getItem(TOKEN_KEY)
   const user = localStorage.getItem(USER_KEY)
+  const expiresAt = localStorage.getItem(EXPIRES_KEY)
 
   if (!token || !user) return null
 
-  return { token, user: JSON.parse(user) }
+  // 校验 token 过期时间
+  if (expiresAt) {
+    const expiry = new Date(expiresAt)
+    if (!isNaN(expiry.getTime()) && expiry < new Date()) {
+      clearAuth()
+      return null
+    }
+  }
+
+  try {
+    return { token, user: JSON.parse(user) }
+  } catch {
+    clearAuth()
+    return null
+  }
 }
 
 export function saveAuth(username, token, user, expiresAt) {
   localStorage.setItem(TOKEN_KEY, token)
   localStorage.setItem(USER_KEY, JSON.stringify(user))
-  localStorage.setItem(EXPIRES_KEY, expiresAt)
+  if (expiresAt) localStorage.setItem(EXPIRES_KEY, expiresAt)
   return token
 }
 
@@ -22,10 +37,6 @@ export function clearAuth() {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
   localStorage.removeItem(EXPIRES_KEY)
-}
-
-export function fileUrl(path) {
-  return path
 }
 
 export async function request(path, options = {}) {
@@ -63,7 +74,7 @@ export async function request(path, options = {}) {
       const payload = await response.json()
       const fieldErrors = payload.fieldErrors ? Object.values(payload.fieldErrors).filter(Boolean) : []
       message = fieldErrors.length ? fieldErrors.join('；') : (payload.message || payload.error || message)
-    } catch (error) {
+    } catch {
       // Keep the HTTP status text when the backend did not return JSON.
     }
     const error = new Error(message)

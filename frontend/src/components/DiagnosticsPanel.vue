@@ -320,7 +320,10 @@ import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { request, getSavedAuth, clearAuth } from '../api'
 import MarkdownIt from 'markdown-it'
 
-const props = defineProps({ auth: Object })
+const props = defineProps({
+  auth: Object,
+  notify: { type: Function, default: (msg) => alert(msg) }
+})
 
 const md = new MarkdownIt({
   html: false,
@@ -436,7 +439,7 @@ async function toggleAgentMode() {
     await loadSessions()
   } catch (e) {
     console.error('Failed to toggle agent mode:', e)
-    alert('切换 Agent 模式失败：' + (e.message || '未知错误'))
+    props.notify?.('切换 Agent 模式失败：' + (e.message || '未知错误'), 'error')
   }
 }
 
@@ -798,7 +801,7 @@ function openSaveExperience(msg, idx) {
 }
 
 async function submitSaveExperience() {
-  if (!saveExpForm.name) { alert('请输入 Skill 名称'); return }
+  if (!saveExpForm.name) { props.notify?.('请输入 Skill 名称', 'error'); return }
   const toolsUsed = saveExpTarget.value?.tools || []
   // 构建步骤：每个工具一步 + 最后一步综合分析
   const steps = toolsUsed.map(t => ({
@@ -823,9 +826,9 @@ async function submitSaveExperience() {
     saveExpTarget.value._savedExp = true
     saveExpTarget.value = null
     await loadSkills()
-    alert('经验已保存')
+    props.notify?.('经验已保存', 'success')
   } catch (e) {
-    alert('保存失败: ' + (e.message || '未知错误'))
+    props.notify?.('保存失败: ' + (e.message || '未知错误'), 'error')
   }
 }
 </script>

@@ -365,7 +365,7 @@
 
       <KnowledgePanel v-else-if="route.name === 'knowledge' && siteConfig.knowledgeEnabled" :auth="auth" :notify="notify" />
       <WikiPanel v-else-if="route.name === 'wiki'" :auth="auth" :notify="notify" />
-      <DiagnosticsPanel v-else-if="route.name === 'diagnostics' && siteConfig.diagnosticsEnabled" :auth="auth" />
+      <DiagnosticsPanel v-else-if="route.name === 'diagnostics' && siteConfig.diagnosticsEnabled" :auth="auth" :notify="notify" />
 
       <section v-else-if="route.name === 'commands'" class="workspace commands-page">
         <div class="toolbar">
@@ -1262,7 +1262,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 import { clearAuth, fileUrl, getSavedAuth, request, saveAuth } from './api'
 import CryptoJS from 'crypto-js'
@@ -1526,7 +1526,9 @@ function parseCategories(cats) {
 
 function formatDetail(text) {
   if (!text) return ''
-  return text.replace(/\n/g, '<br>').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    .replace(/\n/g, '<br>').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
 }
 
 function copyCommand(text) {
@@ -3352,22 +3354,34 @@ async function doDeleteUser(user) {
   }
 }
 
-window.addEventListener('hashchange', syncRoute)
-window.addEventListener('unhandledrejection', (event) => {
-  const message = event.reason?.message || '请求失败'
-  notify(message, 'error')
-  if (event.reason?.status === 401) {
-    logout(false)
-  }
-  event.preventDefault()
-})
-
 async function loadSiteConfig() {
   try {
     const cfg = await request('/api/public/config', { token: null })
     siteConfig.knowledgeEnabled = cfg.knowledgeEnabled !== false
     siteConfig.diagnosticsEnabled = cfg.diagnosticsEnabled !== false
   } catch { /* use defaults */ }
+}
+
+function handleUnhandledRejection(event) {
+  const message = event.reason?.message || '请求失败'
+  notify(message, 'error')
+  if (event.reason?.status === 401) {
+    logout(false)
+  }
+  event.preventDefault()
+}
+
+function handleBeforeUnload(e) {
+  if (uploading.value) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+
+function handleAuthLogout() {
+  auth.token = ''
+  auth.user = null
+  window.location.hash = '#/home'
 }
 
 onMounted(() => {
@@ -3378,16 +3392,16 @@ onMounted(() => {
     auth.user = saved.user
   }
   syncRoute()
-  window.addEventListener('auth:logout', () => {
-    auth.token = ''
-    auth.user = null
-    window.location.hash = '#/home'
-  })
-  window.addEventListener('beforeunload', (e) => {
-    if (uploading.value) {
-      e.preventDefault()
-      e.returnValue = ''
-    }
-  })
+  window.addEventListener('hashchange', syncRoute)
+  window.addEventListener('unhandledrejection', handleUnhandledRejection)
+  window.addEventListener('auth:logout', handleAuthLogout)
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('hashchange', syncRoute)
+  window.removeEventListener('unhandledrejection', handleUnhandledRejection)
+  window.removeEventListener('auth:logout', handleAuthLogout)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>

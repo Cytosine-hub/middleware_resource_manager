@@ -27,7 +27,7 @@ import java.util.Base64;
 @RequestMapping("/api/auth")
 public class AuthApiController {
 
-    private static final Logger LOG = LoggerFactory.getLogger(AuthApiController.class);
+    private static final Logger log = LoggerFactory.getLogger(AuthApiController.class);
 
     private final AdminAccountService adminAccountService;
     private final PasswordEncoder passwordEncoder;
@@ -48,16 +48,16 @@ public class AuthApiController {
     @PostMapping("/login")
     public AuthResponse login(@RequestHeader(value = "Authorization", required = false) String authorization) {
         Credentials credentials = parseBasicCredentials(authorization);
-        LOG.info("login attempt: username={}", credentials.username);
+        log.debug("login attempt: username={}", credentials.username);
         UserDetails user;
         try {
             user = adminAccountService.loadUserByUsername(credentials.username);
         } catch (Exception e) {
-            LOG.warn("login failed: username={} user_not_found", credentials.username);
+            log.warn("login failed: username={} user_not_found", credentials.username);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "用户名或密码错误");
         }
         if (!passwordEncoder.matches(credentials.password, user.getPassword())) {
-            LOG.warn("login failed: username={} password_mismatch", credentials.username);
+            log.warn("login failed: username={} password_mismatch", credentials.username);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "用户名或密码错误");
         }
 
@@ -70,7 +70,7 @@ public class AuthApiController {
         String token = tokenService.createToken(credentials.username);
         LocalDateTime expiresAt = LocalDateTime.now().plusHours(2);
 
-        LOG.info("login success: username={} role={}", credentials.username, roleName);
+        log.debug("login success: username={} role={}", credentials.username, roleName);
         return new AuthResponse(user.getUsername(),
                 adminAccountService.getDisplayNameByUsername(user.getUsername()),
                 roleName, token, expiresAt);

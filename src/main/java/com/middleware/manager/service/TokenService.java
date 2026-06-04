@@ -10,7 +10,7 @@ import java.util.UUID;
 
 @Service
 public class TokenService {
-    private static final Logger LOGGER = LoggerFactory.getLogger(TokenService.class);
+    private static final Logger log = LoggerFactory.getLogger(TokenService.class);
     private static final long TOKEN_EXPIRY_HOURS = 2;
 
     private final UserTokenMapper tokenMapper;
@@ -25,7 +25,7 @@ public class TokenService {
 
         tokenMapper.insert(token, username, expiresAt);
 
-        LOGGER.info("token created for user={} expiresAt={}", username, expiresAt);
+        log.debug("token created for user={} expiresAt={}", username, expiresAt);
         return token;
     }
 
@@ -51,12 +51,12 @@ public class TokenService {
     public void deleteToken(String token) {
         if (token != null) {
             int deleted = tokenMapper.deleteByToken(token);
-            LOGGER.info("token deleted rows={}", deleted);
+            log.debug("token deleted rows={}", deleted);
         }
     }
 
     public void deleteAllTokensForUser(String username) {
         tokenMapper.deleteByUsername(username);
-        LOGGER.info("all tokens deleted for user={}", username);
+        log.debug("all tokens deleted for user={}", username);
     }
 }
