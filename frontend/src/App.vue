@@ -504,23 +504,13 @@
                 </div>
               </div>
 
-              <div v-if="showPassword" class="modal-backdrop" @click.self="showPassword = false">
-                <form class="modal-panel" @submit.prevent="changePassword">
-                  <div class="panel-title">
-                    <h3>修改密码</h3>
-                    <button type="button" class="ghost" @click="showPassword = false">关闭</button>
-                  </div>
-                  <div class="form-grid single">
-                    <label>当前密码<input v-model="passwordForm.currentPassword" type="password" required /></label>
-                    <label>新密码<input v-model="passwordForm.newPassword" type="password" minlength="8" required /></label>
-                    <label>确认密码<input v-model="passwordForm.confirmPassword" type="password" required /></label>
-                  </div>
-                  <div class="form-actions">
-                    <button type="submit">保存密码</button>
-                    <button type="button" class="ghost" @click="showPassword = false">取消</button>
-                  </div>
-                </form>
-              </div>
+              <FormModal v-model="showPassword" title="修改密码" @submit="changePassword">
+                <div class="form-grid single">
+                  <label>当前密码<input v-model="passwordForm.currentPassword" type="password" required /></label>
+                  <label>新密码<input v-model="passwordForm.newPassword" type="password" minlength="8" required /></label>
+                  <label>确认密码<input v-model="passwordForm.confirmPassword" type="password" required /></label>
+                </div>
+              </FormModal>
 
               <template v-if="adminSection === 'files'">
                 <div class="toolbar">
@@ -933,52 +923,27 @@
       </form>
     </div>
 
-    <div v-if="showTypeDialog" class="modal-backdrop" @click.self="closeTypeDialog()">
-      <form class="modal-panel" @submit.prevent="saveType">
-        <div class="panel-title">
-          <h3>{{ typeForm.id ? '编辑类型' : '新增类型' }}</h3>
-          <button type="button" class="ghost" @click="closeTypeDialog()">关闭</button>
-        </div>
-        <div class="form-grid single">
-          <label>分类
-            <select v-model="typeForm.category" required>
-              <option value="">请选择分类</option>
-              <option v-for="category in softwareTypeCategories" :key="category" :value="category">{{ category }}</option>
-            </select>
-          </label>
-          <label>软件类型名称<input v-model.trim="typeForm.name" required maxlength="120" /></label>
-          <label>说明<textarea v-model.trim="typeForm.description" maxlength="500" /></label>
-          <label class="checkline"><input v-model="typeForm.active" type="checkbox" />启用</label>
-        </div>
-        <div class="form-actions">
-          <button type="submit">保存</button>
-          <button type="button" class="ghost" @click="closeTypeDialog()">取消</button>
-        </div>
-      </form>
-    </div>
+    <FormModal v-model="showTypeDialog" :title="typeForm.id ? '编辑类型' : '新增类型'" @submit="saveType">
+      <div class="form-grid single">
+        <label>分类
+          <select v-model="typeForm.category" required>
+            <option value="">请选择分类</option>
+            <option v-for="category in softwareTypeCategories" :key="category" :value="category">{{ category }}</option>
+          </select>
+        </label>
+        <label>软件类型名称<input v-model.trim="typeForm.name" required maxlength="120" /></label>
+        <label>说明<textarea v-model.trim="typeForm.description" maxlength="500" /></label>
+        <label class="checkline"><input v-model="typeForm.active" type="checkbox" />启用</label>
+      </div>
+    </FormModal>
 
-    <div v-if="showCategoryDialog" class="modal-backdrop" @click.self="closeCategoryDialog()">
-      <form class="modal-panel" @submit.prevent="saveCategory">
-        <div class="panel-title">
-          <h3>新增分类</h3>
-          <button type="button" class="ghost" @click="closeCategoryDialog()">关闭</button>
-        </div>
-        <div class="form-grid single">
-          <label>分类名称<input v-model.trim="categoryForm.name" required maxlength="40" placeholder="例如 中间件、数据库、应用软件" /></label>
-        </div>
-        <div class="form-actions">
-          <button type="submit">保存</button>
-          <button type="button" class="ghost" @click="closeCategoryDialog()">取消</button>
-        </div>
-      </form>
-    </div>
+    <FormModal v-model="showCategoryDialog" title="新增分类" @submit="saveCategory">
+      <div class="form-grid single">
+        <label>分类名称<input v-model.trim="categoryForm.name" required maxlength="40" placeholder="例如 中间件、数据库、应用软件" /></label>
+      </div>
+    </FormModal>
 
-    <div v-if="showStandardDialog" class="modal-backdrop" @click.self="closeStandardDialog()">
-      <form class="modal-panel" @submit.prevent="saveStandard">
-        <div class="panel-title">
-          <h3>{{ standardForm.id ? '编辑标准' : '新增标准' }}</h3>
-          <button type="button" class="ghost" @click="closeStandardDialog()">关闭</button>
-        </div>
+    <FormModal v-model="showStandardDialog" :title="standardForm.id ? '编辑标准' : '新增标准'" @submit="saveStandard">
         <div class="form-grid single">
           <label>分类
             <select v-model="standardForm.category" required @change="standardForm.softwareTypeId = ''">
@@ -998,34 +963,19 @@
           <label>编码<input v-model.trim="standardForm.code" maxlength="20" /></label>
           <label v-if="adminSection !== 'standardPublish'">说明<textarea v-model.trim="standardForm.summary" maxlength="500" /></label>
         </div>
-        <div class="form-actions">
-          <button type="submit">保存</button>
-          <button type="button" class="ghost" @click="closeStandardDialog()">取消</button>
-        </div>
-      </form>
-    </div>
+    </FormModal>
 
-    <div v-if="showParameterDialog" class="modal-backdrop" @click.self="closeParameterDialog()">
-      <form class="modal-panel" @submit.prevent="saveParameter">
-        <div class="panel-title">
-          <h3>{{ parameterForm.id ? '编辑参数' : '新增参数' }}</h3>
-          <button type="button" class="ghost" @click="closeParameterDialog()">关闭</button>
-        </div>
-        <div class="form-grid single">
-          <label>参数编码<input v-model.trim="parameterForm.code" required maxlength="80" placeholder="例如 JDK_VERSION" /></label>
-          <label>参数名称<input v-model.trim="parameterForm.name" required maxlength="120" /></label>
-          <label>参数值<input v-model.trim="parameterForm.value" required maxlength="500" /></label>
-          <label>分类<input v-model.trim="parameterForm.category" maxlength="60" /></label>
-          <label>说明<textarea v-model.trim="parameterForm.description" maxlength="500" /></label>
-          <label class="checkline"><input v-model="parameterForm.active" type="checkbox" />启用</label>
-          <label class="checkline"><input v-model="parameterForm.deploymentStandard" type="checkbox" />是否为部署标准</label>
-        </div>
-        <div class="form-actions">
-          <button type="submit">保存</button>
-          <button type="button" class="ghost" @click="closeParameterDialog()">取消</button>
-        </div>
-      </form>
-    </div>
+    <FormModal v-model="showParameterDialog" :title="parameterForm.id ? '编辑参数' : '新增参数'" @submit="saveParameter">
+      <div class="form-grid single">
+        <label>参数编码<input v-model.trim="parameterForm.code" required maxlength="80" placeholder="例如 JDK_VERSION" /></label>
+        <label>参数名称<input v-model.trim="parameterForm.name" required maxlength="120" /></label>
+        <label>参数值<input v-model.trim="parameterForm.value" required maxlength="500" /></label>
+        <label>分类<input v-model.trim="parameterForm.category" maxlength="60" /></label>
+        <label>说明<textarea v-model.trim="parameterForm.description" maxlength="500" /></label>
+        <label class="checkline"><input v-model="parameterForm.active" type="checkbox" />启用</label>
+        <label class="checkline"><input v-model="parameterForm.deploymentStandard" type="checkbox" />是否为部署标准</label>
+      </div>
+    </FormModal>
 
     <div v-if="showParamImportDialog" class="modal-backdrop" @click.self="showParamImportDialog = false">
       <form class="modal-panel" @submit.prevent="importParameters">
@@ -1103,95 +1053,50 @@
       </div>
     </div>
 
-    <div v-if="showUserDialog" class="modal-backdrop" @click.self="closeUserDialog()">
-      <form class="modal-panel" @submit.prevent="createUser">
-        <div class="panel-title"><h3>新增用户</h3><button type="button" class="ghost" @click="closeUserDialog()">关闭</button></div>
-        <div class="form-grid single">
-          <label>账号<input v-model.trim="userForm.username" required minlength="2" maxlength="60" placeholder="登录账号" /></label>
-          <label>用户名<input v-model.trim="userForm.displayName" maxlength="60" placeholder="显示名称（可选）" /></label>
-          <label>密码<input v-model="userForm.password" type="password" required minlength="6" maxlength="64" placeholder="至少6位" /></label>
-          <label>角色
-            <select v-model="userForm.role" required>
-              <option v-for="r in allRoles" :key="r.name" :value="r.name">{{ r.name }}</option>
-            </select>
-          </label>
-        </div>
-        <div class="form-actions">
-          <button type="button" class="ghost" @click="closeUserDialog()">取消</button>
-          <button type="submit">创建</button>
-        </div>
-      </form>
-    </div>
-
-    <div v-if="showRoleDialog" class="modal-backdrop" @click.self="closeRoleDialog()">
-      <form class="modal-panel" @submit.prevent="changeUserRole">
-        <div class="panel-title"><h3>修改角色 — {{ userFormTarget?.username }}</h3><button type="button" class="ghost" @click="closeRoleDialog()">关闭</button></div>
+    <FormModal v-model="showUserDialog" title="新增用户" submitText="创建" @submit="createUser">
+      <div class="form-grid single">
+        <label>账号<input v-model.trim="userForm.username" required minlength="2" maxlength="60" placeholder="登录账号" /></label>
+        <label>用户名<input v-model.trim="userForm.displayName" maxlength="60" placeholder="显示名称（可选）" /></label>
+        <label>密码<input v-model="userForm.password" type="password" required minlength="6" maxlength="64" placeholder="至少6位" /></label>
         <label>角色
           <select v-model="userForm.role" required>
             <option v-for="r in allRoles" :key="r.name" :value="r.name">{{ r.name }}</option>
           </select>
         </label>
-        <div class="form-actions">
-          <button type="button" class="ghost" @click="closeRoleDialog()">取消</button>
-          <button type="submit">保存</button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </FormModal>
 
-    <div v-if="showImportResultDialog" class="modal-backdrop" @click.self="showImportResultDialog = false">
-      <article class="modal-panel">
-        <div class="panel-title">
-          <h3>导入结果</h3>
-          <button type="button" class="ghost" @click="showImportResultDialog = false">关闭</button>
-        </div>
-        <div class="result-grid">
-          <div>
-            <span>扫描文件</span>
-            <strong>{{ importResult?.scannedCount ?? 0 }}</strong>
-          </div>
-          <div>
-            <span>成功导入</span>
-            <strong>{{ importResult?.importedCount ?? 0 }}</strong>
-          </div>
-          <div>
-            <span>跳过文件</span>
-            <strong>{{ importResult?.skippedCount ?? 0 }}</strong>
-          </div>
-          <div>
-            <span>失败文件</span>
-            <strong>{{ importResult?.failedCount ?? 0 }}</strong>
-          </div>
-        </div>
-        <div class="form-actions">
-          <button type="button" @click="showImportResultDialog = false">确定</button>
-        </div>
-      </article>
-    </div>
+    <FormModal v-model="showRoleDialog" :title="'修改角色 — ' + (userFormTarget?.username || '')" @submit="changeUserRole">
+      <label>角色
+        <select v-model="userForm.role" required>
+          <option v-for="r in allRoles" :key="r.name" :value="r.name">{{ r.name }}</option>
+        </select>
+      </label>
+    </FormModal>
 
-    <div v-if="deleteTarget" class="modal-backdrop" @click.self="closeDeleteReleaseDialog()">
-      <article class="modal-panel">
-        <div class="panel-title">
-          <h3>删除资源</h3>
-          <button type="button" class="ghost" :disabled="deletingRelease" @click="closeDeleteReleaseDialog()">关闭</button>
-        </div>
-        <p class="confirm-message">
-          确认删除 {{ deleteTarget.middlewareName }} {{ deleteTarget.version }}？
-        </p>
-        <div class="form-actions">
-          <button type="button" class="ghost" :disabled="deletingRelease" @click="closeDeleteReleaseDialog()">取消</button>
-          <button type="button" class="danger" :disabled="deletingRelease" @click="confirmDeleteRelease()">
-            {{ deletingRelease ? '删除中...' : '确认删除' }}
-          </button>
-        </div>
-      </article>
-    </div>
+    <BaseModal v-model="showImportResultDialog" title="导入结果">
+      <div class="result-grid">
+        <div><span>扫描文件</span><strong>{{ importResult?.scannedCount ?? 0 }}</strong></div>
+        <div><span>成功导入</span><strong>{{ importResult?.importedCount ?? 0 }}</strong></div>
+        <div><span>跳过文件</span><strong>{{ importResult?.skippedCount ?? 0 }}</strong></div>
+        <div><span>失败文件</span><strong>{{ importResult?.failedCount ?? 0 }}</strong></div>
+      </div>
+      <template #footer>
+        <BaseButton @click="showImportResultDialog = false">确定</BaseButton>
+      </template>
+    </BaseModal>
 
-    <div v-if="showRevisionModal" class="modal-backdrop" @click.self="closeRevisionModal()">
-      <article class="modal-panel review-detail-modal">
-        <div class="panel-title">
-          <h3>{{ revisionDocTitle }} - 修订历史</h3>
-          <button type="button" class="ghost" @click="closeRevisionModal()">关闭</button>
-        </div>
+    <BaseModal :modelValue="!!deleteTarget" @update:modelValue="closeDeleteReleaseDialog()" title="删除资源" width="400px">
+      <p class="confirm-message">
+        确认删除 {{ deleteTarget?.middlewareName }} {{ deleteTarget?.version }}？
+      </p>
+      <template #footer>
+        <BaseButton variant="ghost" :disabled="deletingRelease" @click="closeDeleteReleaseDialog()">取消</BaseButton>
+        <BaseButton variant="danger" :disabled="deletingRelease" :loading="deletingRelease" @click="confirmDeleteRelease()">确认删除</BaseButton>
+      </template>
+    </BaseModal>
+
+    <BaseModal v-model="showRevisionModal" :title="revisionDocTitle + ' - 修订历史'" width="700px">
         <div v-if="revisionList.length === 0" class="empty-state" style="padding:40px 0">暂无修订记录</div>
         <div v-else class="revision-list">
           <div v-for="rev in revisionList" :key="rev.id" class="revision-item">
@@ -1211,53 +1116,37 @@
             </details>
           </div>
         </div>
-      </article>
-    </div>
+    </BaseModal>
 
-    <div v-if="selectedReview" class="modal-backdrop" @click.self="closeReviewDetail()">
-      <article class="modal-panel review-detail-modal">
-        <div class="panel-title">
-          <h3>{{ selectedReview.documentType === 'PARAMETER_STANDARD' ? [selectedReview.category, selectedReview.software].filter(Boolean).join(' / ') : selectedReview.documentTitle }}</h3>
-          <button type="button" class="ghost" @click="closeReviewDetail()">关闭</button>
-        </div>
-        <p class="muted" style="margin: 0 0 12px">
-          <span :class="['status', reviewStatusClass(selectedReview.status)]">{{ selectedReview.statusLabel }}</span>
-          V{{ selectedReview.documentVersion || '-' }} · {{ selectedReview.category || '-' }} / {{ selectedReview.software || '-' }}
-        </p>
-        <div class="review-meta">
-          <p>提交人：{{ selectedReview.submitterDisplayName || selectedReview.submitterUsername }} · 提交时间：{{ formatTime(selectedReview.submittedAt) }}</p>
-          <p v-if="selectedReview.reviewerUsername">审核人：{{ selectedReview.reviewerUsername }} · 审核时间：{{ formatTime(selectedReview.reviewedAt) }}</p>
-          <p v-if="selectedReview.reviewComment">审核意见：{{ selectedReview.reviewComment }}</p>
-        </div>
-        <div class="diff-view">
-          <h4>版本差异对比</h4>
-          <pre class="diff-content"><template v-for="(line, idx) in diffLines" :key="idx"><span :class="['diff-line', line.startsWith('+') ? 'diff-line-add' : line.startsWith('-') ? 'diff-line-del' : line.startsWith('@@') ? 'diff-line-info' : '' ]">{{ line }}</span>
+    <BaseModal :modelValue="!!selectedReview" @update:modelValue="closeReviewDetail()" :title="selectedReview?.documentType === 'PARAMETER_STANDARD' ? [selectedReview?.category, selectedReview?.software].filter(Boolean).join(' / ') : (selectedReview?.documentTitle || '')" width="700px">
+      <p class="muted" style="margin: 0 0 12px">
+        <span :class="['status', reviewStatusClass(selectedReview?.status)]">{{ selectedReview?.statusLabel }}</span>
+        V{{ selectedReview?.documentVersion || '-' }} · {{ selectedReview?.category || '-' }} / {{ selectedReview?.software || '-' }}
+      </p>
+      <div class="review-meta">
+        <p>提交人：{{ selectedReview?.submitterDisplayName || selectedReview?.submitterUsername }} · 提交时间：{{ formatTime(selectedReview?.submittedAt) }}</p>
+        <p v-if="selectedReview?.reviewerUsername">审核人：{{ selectedReview?.reviewerUsername }} · 审核时间：{{ formatTime(selectedReview?.reviewedAt) }}</p>
+        <p v-if="selectedReview?.reviewComment">审核意见：{{ selectedReview?.reviewComment }}</p>
+      </div>
+      <div class="diff-view">
+        <h4>版本差异对比</h4>
+        <pre class="diff-content"><template v-for="(line, idx) in diffLines" :key="idx"><span :class="['diff-line', line.startsWith('+') ? 'diff-line-add' : line.startsWith('-') ? 'diff-line-del' : line.startsWith('@@') ? 'diff-line-info' : '' ]">{{ line }}</span>
 </template></pre>
+      </div>
+      <div v-if="selectedReview?.status === 'PENDING' && (isSysAdmin || (isCategoryAdmin && managedCategory === selectedReview?.category))" class="review-actions-panel">
+        <div class="form-grid single">
+          <label>审核意见<textarea v-model.trim="reviewComment" maxlength="1000" placeholder="请输入审核意见（可选）" /></label>
         </div>
-        <div v-if="selectedReview.status === 'PENDING' && (isSysAdmin || (isCategoryAdmin && managedCategory === selectedReview.category))" class="review-actions-panel">
-          <div class="form-grid single">
-            <label>审核意见<textarea v-model.trim="reviewComment" maxlength="1000" placeholder="请输入审核意见（可选）" /></label>
-          </div>
-          <div class="form-actions">
-            <button type="button" class="ghost" @click="closeReviewDetail()">取消</button>
-            <button type="button" class="ghost danger" @click="reviewReject(selectedReview)">驳回</button>
-            <button type="button" @click="reviewApprove(selectedReview)">审核通过</button>
-          </div>
-        </div>
-      </article>
-    </div>
-
-    <p v-if="notice" :class="['notice', notice.type]">{{ notice.message }}</p>
-
-    <div v-if="confirmDialog" class="modal-backdrop" @click.self="confirmDialog = null">
-      <div class="modal-panel" style="max-width:400px;text-align:center">
-        <p style="margin:0 0 20px;font-size:15px;line-height:1.6">{{ confirmDialog.message }}</p>
-        <div style="display:flex;gap:12px;justify-content:center">
-          <button class="ghost" @click="confirmDialog = null">取消</button>
-          <button @click="confirmDialog.onConfirm(); confirmDialog = null">确认</button>
+        <div class="form-actions">
+          <BaseButton variant="ghost" @click="closeReviewDetail()">取消</BaseButton>
+          <BaseButton variant="danger" @click="reviewReject(selectedReview)">驳回</BaseButton>
+          <BaseButton variant="success" @click="reviewApprove(selectedReview)">审核通过</BaseButton>
         </div>
       </div>
-    </div>
+    </BaseModal>
+
+    <Toast :notice="notice" />
+    <ConfirmDialog v-model="confirmDialog" />
   </div>
 </template>
 
@@ -1278,6 +1167,11 @@ import ForumPersonalCenter from './components/ForumPersonalCenter.vue'
 import KnowledgePanel from './components/KnowledgePanel.vue'
 import WikiPanel from './components/WikiPanel.vue'
 import DiagnosticsPanel from './components/DiagnosticsPanel.vue'
+import Toast from './components/ui/Toast.vue'
+import ConfirmDialog from './components/ui/ConfirmDialog.vue'
+import FormModal from './components/ui/FormModal.vue'
+import BaseModal from './components/ui/BaseModal.vue'
+import BaseButton from './components/ui/BaseButton.vue'
 
 const { auth, login: authLogin, logout: authLogout, restoreAuth, sha256,
   currentUserRole, isSysAdmin, isCategoryAdmin, isManager, canAccessAdmin, isReadOnly, managedCategory } = useAuth()
