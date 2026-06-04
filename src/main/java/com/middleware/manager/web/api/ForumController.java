@@ -31,8 +31,9 @@ public class ForumController {
                                      @RequestParam(defaultValue = "0") int page,
                                      @RequestParam(defaultValue = "12") int size) {
         var p = forumService.listPosts(keyword, tag, page, size);
+        Map<Long, List<String>> tagsByPostId = batchLoadTags(p.getList());
         PageResult<Map<String, Object>> result = new PageResult<>();
-        result.setContent(p.getList().stream().map(this::toSummary).collect(Collectors.toList()));
+        result.setContent(p.getList().stream().map(post -> toSummary(post, tagsByPostId)).collect(Collectors.toList()));
         result.setPage(p.getPageNum() - 1);
         result.setSize(p.getPageSize());
         result.setTotalElements(p.getTotal());
@@ -106,8 +107,9 @@ public class ForumController {
                                                    @RequestParam(defaultValue = "12") int size,
                                                    Authentication auth) {
         var p = forumService.listPostsByAuthor(auth.getName(), page, size);
+        Map<Long, List<String>> tagsByPostId = batchLoadTags(p.getList());
         PageResult<Map<String, Object>> result = new PageResult<>();
-        result.setContent(p.getList().stream().map(this::toSummary).collect(Collectors.toList()));
+        result.setContent(p.getList().stream().map(post -> toSummary(post, tagsByPostId)).collect(Collectors.toList()));
         result.setPage(p.getPageNum() - 1);
         result.setSize(p.getPageSize());
         result.setTotalElements(p.getTotal());
@@ -117,13 +119,23 @@ public class ForumController {
         return result;
     }
 
-    private Map<String, Object> toSummary(ForumPost p) {
+    private Map<Long, List<String>> batchLoadTags(List<ForumPost> posts) {
+        if (posts == null || posts.isEmpty()) return Collections.emptyMap();
+        List<Long> postIds = posts.stream().map(ForumPost::getId).collect(Collectors.toList());
+        List<ForumTag> tags = tagMapper.findByPostIds(postIds);
+        return tags.stream().collect(Collectors.groupingBy(
+                ForumTag::getPostId,
+                Collectors.mapping(ForumTag::getName, Collectors.toList())
+        ));
+    }
+
+    private Map<String, Object> toSummary(ForumPost p, Map<Long, List<String>> tagsByPostId) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", p.getId()); m.put("title", p.getTitle());
         m.put("authorDisplayName", p.getAuthorDisplayName());
         m.put("viewCount", p.getViewCount()); m.put("likeCount", p.getLikeCount());
         m.put("commentCount", p.getCommentCount());
-        m.put("tags", tagMapper.findByPostId(p.getId()).stream().map(ForumTag::getName).collect(Collectors.toList()));
+        m.put("tags", tagsByPostId.getOrDefault(p.getId(), Collections.emptyList()));
         String content = p.getContent();
         m.put("summary", content != null && content.length() > 200 ? content.substring(0, 200) + "..." : content);
         m.put("createdAt", p.getCreatedAt());

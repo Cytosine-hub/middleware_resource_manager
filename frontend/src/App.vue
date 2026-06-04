@@ -1264,8 +1264,11 @@
 <script setup>
 import { computed, nextTick, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
-import { clearAuth, fileUrl, getSavedAuth, request, saveAuth } from './api'
-import CryptoJS from 'crypto-js'
+import { request } from './api'
+import { useAuth } from './composables/useAuth'
+import { useNotify } from './composables/useNotify'
+import { useRoute } from './composables/useRoute'
+import { formatBytes, formatDetail } from './utils'
 import Pagination from './components/Pagination.vue'
 import DocumentEditor from './components/DocumentEditor.vue'
 import ForumPostList from './components/ForumPostList.vue'
@@ -1276,15 +1279,12 @@ import KnowledgePanel from './components/KnowledgePanel.vue'
 import WikiPanel from './components/WikiPanel.vue'
 import DiagnosticsPanel from './components/DiagnosticsPanel.vue'
 
-function sha256(str) {
-  return Promise.resolve(CryptoJS.SHA256(str).toString())
-}
+const { auth, login: authLogin, logout: authLogout, restoreAuth, sha256,
+  currentUserRole, isSysAdmin, isCategoryAdmin, isManager, canAccessAdmin, isReadOnly, managedCategory } = useAuth()
+const { notice, notify, confirmDialog, confirm: confirmAction, handleConfirm, cancelConfirm } = useNotify()
+const { route, navigate } = useRoute()
 
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true })
-const route = reactive(Object.assign({ documentId: null, postId: null, standardType: null }, parseRoute()))
-const notice = ref('')
-const confirmDialog = ref(null) // { message, onConfirm }
-const auth = reactive({ token: '', user: null })
 const siteConfig = reactive({ knowledgeEnabled: true, diagnosticsEnabled: true })
 const uploading = ref(false)
 const uploadProgress = ref(0)
@@ -1397,23 +1397,7 @@ const showCommandDialog = ref(false)
 function defaultCommandForm() { return { id: null, softwareTypeId: '', commandFormat: '', briefDescription: '', detailedDescription: '', categories: '' } }
 const cmdForm = reactive(defaultCommandForm())
 
-// ── RBAC helpers ──
-const currentUserRole = computed(() => auth.user?.role || '')
-const isSysAdmin = computed(() => currentUserRole.value === '系统管理员')
-const isCategoryAdmin = computed(() => ['中间件管理员', '数据库管理员', '网络管理员', '主机管理员', '网络安全管理员'].includes(currentUserRole.value))
-const isManager = computed(() => ['中间件管理岗', '数据库管理岗', '主机管理岗', '网络管理岗', '网络安全岗'].includes(currentUserRole.value))
-const isReadOnly = computed(() => currentUserRole.value === '开发经理' || currentUserRole.value === '运维经理')
-const canAccessAdmin = computed(() => isSysAdmin.value || isCategoryAdmin.value || isManager.value)
-const managedCategory = computed(() => {
-  const map = {
-    '中间件管理岗': '中间件', '中间件管理员': '中间件',
-    '数据库管理岗': '数据库', '数据库管理员': '数据库',
-    '主机管理岗': '主机', '主机管理员': '主机',
-    '网络管理岗': '网络', '网络管理员': '网络',
-    '网络安全岗': '安全', '网络安全管理员': '安全'
-  }
-  return map[currentUserRole.value] || ''
-})
+// ── RBAC helpers 已迁移到 composables/useAuth.js ──
 
 const adminPublishedParam = computed(() => adminFilters.published === '' ? '' : `&published=${adminFilters.published}`)
 const adminSectionLabel = computed(() => {
@@ -1524,12 +1508,7 @@ function parseCategories(cats) {
   try { return JSON.parse(cats) } catch { return [] }
 }
 
-function formatDetail(text) {
-  if (!text) return ''
-  return text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-    .replace(/\n/g, '<br>').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
-}
+// formatDetail 已迁移到 utils/index.js
 
 function copyCommand(text) {
   navigator.clipboard.writeText(text).then(() => notify('已复制到剪贴板')).catch(() => {})
@@ -1876,37 +1855,30 @@ function defaultParameterForm() {
   return { id: null, standardDocumentId: null, parameterStandardId: null, code: '', name: '', value: '', category: '', description: '', active: true, deploymentStandard: false }
 }
 
-function parseRoute() {
-  const hash = window.location.hash.replace(/^#/, '')
-  if (!hash || hash === '/' || hash === '/home') return { name: 'home', token: null }
-  if (hash.startsWith('/admin/document-editor')) {
-    const editorMatch = hash.match(/^\/admin\/document-editor\/(\d+)$/)
-    return { name: 'documentEditor', documentId: editorMatch ? editorMatch[1] : null }
-  }
-  if (hash.startsWith('/admin')) return { name: 'admin', token: null }
-  if (hash === '/forum/mine') return { name: 'forumMine', postId: null }
-  if (hash.startsWith('/forum/new')) return { name: 'forumEditor', postId: null }
-  const forumEditMatch = hash.match(/^\/forum\/edit\/(\d+)$/)
-  if (forumEditMatch) return { name: 'forumEditor', postId: forumEditMatch[1] }
-  const forumPostMatch = hash.match(/^\/forum\/post\/(\d+)$/)
-  if (forumPostMatch) return { name: 'forumDetail', postId: forumPostMatch[1] }
-  if (hash === '/forum' || hash.startsWith('/forum')) return { name: 'forum', postId: null }
-  if (hash === '/knowledge' || hash === '/knowledge/') return { name: 'knowledge' }
-  if (hash === '/wiki' || hash === '/wiki/') return { name: 'wiki' }
-  if (hash === '/diagnostics' || hash === '/diagnostics/') return { name: 'diagnostics' }
-  const detailMatch = hash.match(/^\/downloads\/(.+)$/)
-  if (detailMatch) return { name: 'public', token: detailMatch[1] }
-  const standardTypeMatch = hash.match(/^\/standards\/(ps|doc)\/(\d+)$/)
-  if (standardTypeMatch) return { name: 'standards', standardId: standardTypeMatch[2], standardType: standardTypeMatch[1] }
-  const standardMatch = hash.match(/^\/standards\/(\d+)$/)
-  if (standardMatch) return { name: 'standards', standardId: standardMatch[1], standardType: null }
-  if (hash === '/standards') return { name: 'standards', standardId: null, standardType: null }
-  if (hash === '/commands' || hash.startsWith('/commands')) return { name: 'commands' }
-  return { name: 'public', token: null }
-}
-
+// parseRoute/syncRoute 基础逻辑在 composables/useRoute.js
+// 这里的 syncRoute 包含路由变化后的数据加载副作用
 function syncRoute() {
-  const next = parseRoute()
+  const hash = window.location.hash.replace(/^#/, '')
+  let next
+  if (!hash || hash === '/' || hash === '/home') next = { name: 'home', token: null }
+  else if (hash.startsWith('/admin/document-editor')) {
+    const m = hash.match(/^\/admin\/document-editor\/(\d+)$/); next = { name: 'documentEditor', documentId: m ? m[1] : null }
+  } else if (hash.startsWith('/admin')) next = { name: 'admin', token: null }
+  else if (hash === '/forum/mine') next = { name: 'forumMine', postId: null }
+  else if (hash.startsWith('/forum/new')) next = { name: 'forumEditor', postId: null }
+  else if (/^\/forum\/edit\/(\d+)$/.test(hash)) next = { name: 'forumEditor', postId: hash.match(/\d+/)[0] }
+  else if (/^\/forum\/post\/(\d+)$/.test(hash)) next = { name: 'forumDetail', postId: hash.match(/\d+/)[0] }
+  else if (hash.startsWith('/forum')) next = { name: 'forum', postId: null }
+  else if (hash.startsWith('/knowledge')) next = { name: 'knowledge' }
+  else if (hash.startsWith('/wiki')) next = { name: 'wiki' }
+  else if (hash.startsWith('/diagnostics')) next = { name: 'diagnostics' }
+  else if (/^\/downloads\/(.+)$/.test(hash)) next = { name: 'public', token: hash.match(/^\/downloads\/(.+)$/)[1] }
+  else if (/^\/standards\/(ps|doc)\/(\d+)$/.test(hash)) { const m = hash.match(/^\/standards\/(ps|doc)\/(\d+)$/); next = { name: 'standards', standardId: m[2], standardType: m[1] } }
+  else if (/^\/standards\/(\d+)$/.test(hash)) next = { name: 'standards', standardId: hash.match(/\d+/)[0], standardType: null }
+  else if (hash === '/standards') next = { name: 'standards', standardId: null, standardType: null }
+  else if (hash.startsWith('/commands')) next = { name: 'commands' }
+  else next = { name: 'public', token: null }
+  route.name = next.name
   route.name = next.name
   route.token = next.token
   route.standardId = next.standardId
@@ -2128,20 +2100,7 @@ function fetchStandardParameters(targetId) {
 
 async function login() {
   try {
-    const pwHash = await sha256(loginForm.password)
-    const basicToken = btoa(`${loginForm.username}:${pwHash}`)
-    // 用 Basic Auth 调用登录接口获取 token
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Authorization': `Basic ${basicToken}` }
-    })
-    if (!res.ok) {
-      throw new Error(res.status === 401 ? '账号或密码错误' : '登录失败')
-    }
-    const data = await res.json()
-    // 保存 token（非密码哈希）
-    auth.token = saveAuth(loginForm.username, data.token, data, data.expiresAt)
-    auth.user = data
+    await authLogin(loginForm.username, loginForm.password)
     loginForm.password = ''
     notify('登录成功', 'success')
     if (isReadOnly.value) {
@@ -2159,16 +2118,7 @@ async function login() {
 }
 
 async function logout(showMessage = true) {
-  // 通知服务端删除 token
-  try {
-    await fetch('/api/auth/logout', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${auth.token}` }
-    })
-  } catch (e) { /* 忽略网络错误 */ }
-  clearAuth()
-  auth.token = ''
-  auth.user = null
+  await authLogout()
   loginForm.username = ''
   loginForm.password = ''
   selectedRelease.value = null
@@ -2183,9 +2133,7 @@ async function logout(showMessage = true) {
   Object.assign(standardForm, defaultStandardForm())
   Object.assign(userForm, { username: '', displayName: '', password: '', role: '开发经理' })
   userFormTarget.value = null
-  if (showMessage) {
-    notify('已退出')
-  }
+  if (showMessage) notify('已退出')
   window.location.hash = '#/home'
 }
 
@@ -3247,28 +3195,8 @@ async function changePassword() {
   }
 }
 
-function formatBytes(size) {
-  if (!size) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  let value = size
-  let unit = 0
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024
-    unit += 1
-  }
-  return `${value.toFixed(value >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`
-}
-
-function notify(message, type = 'info') {
-  notice.value = { message, type }
-  window.setTimeout(() => {
-    if (notice.value?.message === message) notice.value = ''
-  }, 3200)
-}
-
-function confirmAction(message, onConfirm) {
-  confirmDialog.value = { message, onConfirm }
-}
+// formatBytes 已迁移到 utils/index.js
+// notify / confirmAction 已迁移到 composables/useNotify.js
 
 // ── User management ──
 async function loadUsers() {
@@ -3386,11 +3314,7 @@ function handleAuthLogout() {
 
 onMounted(() => {
   loadSiteConfig()
-  const saved = getSavedAuth()
-  if (saved) {
-    auth.token = saved.token
-    auth.user = saved.user
-  }
+  restoreAuth()
   syncRoute()
   window.addEventListener('hashchange', syncRoute)
   window.addEventListener('unhandledrejection', handleUnhandledRejection)

@@ -2,10 +2,12 @@ package com.middleware.manager.web.api.dto;
 
 import com.middleware.manager.domain.ReleaseAsset;
 import com.middleware.manager.domain.SoftwareType;
+import lombok.Data;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+@Data
 public class ReleaseResponse {
     private Long id;
     private Long softwareTypeId;
@@ -66,163 +68,4 @@ public class ReleaseResponse {
         response.setPackageError(asset.getPackageError());
         return response;
     }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public Long getSoftwareTypeId() {
-        return softwareTypeId;
-    }
-
-    public void setSoftwareTypeId(Long softwareTypeId) {
-        this.softwareTypeId = softwareTypeId;
-    }
-
-    public String getSoftwareTypeCategory() {
-        return softwareTypeCategory;
-    }
-
-    public void setSoftwareTypeCategory(String softwareTypeCategory) {
-        this.softwareTypeCategory = softwareTypeCategory;
-    }
-
-    public String getSoftwareTypeName() {
-        return softwareTypeName;
-    }
-
-    public void setSoftwareTypeName(String softwareTypeName) {
-        this.softwareTypeName = softwareTypeName;
-    }
-
-    public String getMiddlewareName() {
-        return middlewareName;
-    }
-
-    public void setMiddlewareName(String middlewareName) {
-        this.middlewareName = middlewareName;
-    }
-
-    public String getVersion() {
-        return version;
-    }
-
-    public void setVersion(String version) {
-        this.version = version;
-    }
-
-    public String getPlatform() {
-        return platform;
-    }
-
-    public void setPlatform(String platform) {
-        this.platform = platform;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public LocalDate getReleasedAt() {
-        return releasedAt;
-    }
-
-    public void setReleasedAt(LocalDate releasedAt) {
-        this.releasedAt = releasedAt;
-    }
-
-    public boolean isPublished() {
-        return published;
-    }
-
-    public void setPublished(boolean published) {
-        this.published = published;
-    }
-
-    public String getDownloadToken() {
-        return downloadToken;
-    }
-
-    public void setDownloadToken(String downloadToken) {
-        this.downloadToken = downloadToken;
-    }
-
-    public String getOriginalFileName() {
-        return originalFileName;
-    }
-
-    public void setOriginalFileName(String originalFileName) {
-        this.originalFileName = originalFileName;
-    }
-
-    public String getContentType() {
-        return contentType;
-    }
-
-    public void setContentType(String contentType) {
-        this.contentType = contentType;
-    }
-
-    public long getFileSize() {
-        return fileSize;
-    }
-
-    public void setFileSize(long fileSize) {
-        this.fileSize = fileSize;
-    }
-
-    public long getDownloadCount() {
-        return downloadCount;
-    }
-
-    public void setDownloadCount(long downloadCount) {
-        this.downloadCount = downloadCount;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
-
-    public String getDownloadUrl() {
-        return downloadUrl;
-    }
-
-    public void setDownloadUrl(String downloadUrl) {
-        this.downloadUrl = downloadUrl;
-    }
-
-    public Long getStandardDocumentId() { return standardDocumentId; }
-    public void setStandardDocumentId(Long standardDocumentId) { this.standardDocumentId = standardDocumentId; }
-    public String getStandardDocumentTitle() { return standardDocumentTitle; }
-    public void setStandardDocumentTitle(String standardDocumentTitle) { this.standardDocumentTitle = standardDocumentTitle; }
-    public boolean isStandardPackage() { return standardPackage; }
-    public void setStandardPackage(boolean standardPackage) { this.standardPackage = standardPackage; }
-    public Long getParameterStandardId() { return parameterStandardId; }
-    public void setParameterStandardId(Long parameterStandardId) { this.parameterStandardId = parameterStandardId; }
-    public String getParameterStandardTitle() { return parameterStandardTitle; }
-    public void setParameterStandardTitle(String parameterStandardTitle) { this.parameterStandardTitle = parameterStandardTitle; }
-    public String getPackageStatus() { return packageStatus; }
-    public void setPackageStatus(String packageStatus) { this.packageStatus = packageStatus; }
-    public String getPackageError() { return packageError; }
-    public void setPackageError(String packageError) { this.packageError = packageError; }
 }

@@ -46,3 +46,9 @@ export function statusLabel(status) {
   }
   return map[status] || status
 }
+
+/** 格式化详情文本（转义 HTML 后换行转 <br>） */
+export function formatDetail(text) {
+  if (!text) return ''
+  return escapeHtml(text).replace(/\n/g, '<br>').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+}

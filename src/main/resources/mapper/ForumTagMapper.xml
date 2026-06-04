@@ -13,6 +13,12 @@
         INNER JOIN forum_post_tags fpt ON t.id = fpt.tag_id
         WHERE fpt.post_id = #{postId}
     </select>
+    <select id="findByPostIds" resultType="ForumTag">
+        SELECT t.*, fpt.post_id AS post_id FROM forum_tags t
+        INNER JOIN forum_post_tags fpt ON t.id = fpt.tag_id
+        WHERE fpt.post_id IN
+        <foreach collection="postIds" item="pid" open="(" separator="," close=")">#{pid}</foreach>
+    </select>
     <insert id="insertPostTag">INSERT INTO forum_post_tags (post_id, tag_id) VALUES (#{postId}, #{tagId})</insert>
     <delete id="deletePostTag">DELETE FROM forum_post_tags WHERE post_id = #{postId} AND tag_id = #{tagId}</delete>
     <delete id="deletePostTagsByPostId">DELETE FROM forum_post_tags WHERE post_id = #{postId}</delete>

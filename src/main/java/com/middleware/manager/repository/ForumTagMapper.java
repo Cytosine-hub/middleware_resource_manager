@@ -25,6 +25,8 @@ public interface ForumTagMapper {
 
     List<ForumTag> findByPostId(Long postId);
 
+    List<ForumTag> findByPostIds(@Param("postIds") List<Long> postIds);
+
     int insertPostTag(@Param("postId") Long postId, @Param("tagId") Long tagId);
 
     int deletePostTag(@Param("postId") Long postId, @Param("tagId") Long tagId);
