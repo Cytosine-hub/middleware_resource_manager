@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
 public class LinkResolver {
 
     private static final Logger log = LoggerFactory.getLogger(LinkResolver.class);
-    private static final Pattern WIKILINK_PATTERN = Pattern.compile("\\[\\[([^\\]]+)\\]\\]");
+    public static final Pattern WIKILINK_PATTERN = Pattern.compile("\\[\\[([^\\]]+)\\]\\]");
 
     private final WikiPageMapper pageMapper;
     private final WikiLinkMapper linkMapper;
@@ -62,8 +62,7 @@ public class LinkResolver {
                 link.setToPageId(targetId);
                 link.setLinkType("REFERENCES");
                 link.setConfidence(new BigDecimal("0.90"));
-                linkMapper.insertIgnore(link);
-                created++;
+                created += linkMapper.insertIgnore(link);
             }
         }
         log.info("Resolved {} wiki links from {} pages", created, pages.size());

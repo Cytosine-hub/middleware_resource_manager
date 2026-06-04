@@ -113,6 +113,7 @@ class LinkResolverTest {
             WikiPage target = createPage(2L, "Target Page", "CONFIG", "content");
 
             when(pageMapper.findAll()).thenReturn(Arrays.asList(source, target));
+            when(linkMapper.insertIgnore(any(WikiLink.class))).thenReturn(1);
 
             int created = linkResolver.resolveLinks(Arrays.asList(source, target));
 

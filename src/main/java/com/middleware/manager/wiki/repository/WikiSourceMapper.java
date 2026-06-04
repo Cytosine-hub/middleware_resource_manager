@@ -22,4 +22,8 @@ public interface WikiSourceMapper {
     int update(WikiSource source);
 
     int deleteById(@Param("id") Long id);
+
+    int countAll();
+
+    int countByIngested(@Param("ingested") boolean ingested);
 }

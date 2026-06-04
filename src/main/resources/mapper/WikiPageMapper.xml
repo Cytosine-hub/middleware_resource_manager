@@ -63,6 +63,10 @@
         SELECT COUNT(*) FROM wiki_pages WHERE status = #{status}
     </select>
 
+    <select id="countAll" resultType="int">
+        SELECT COUNT(*) FROM wiki_pages
+    </select>
+
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wiki_pages (title, page_type, category, software, version, content, summary, source_refs, status, compiled_by, compiled_at)
         VALUES (#{title}, #{pageType}, #{category}, #{software}, #{version}, #{content}, #{summary}, #{sourceRefs}, #{status}, #{compiledBy}, #{compiledAt})
@@ -97,6 +101,13 @@
         <foreach collection="ids" item="id" open="(" separator="," close=")">
             #{id}
         </foreach>
+    </select>
+
+    <select id="findByCategoryOrSoftware" resultMap="wikiPageResultMap">
+        SELECT * FROM wiki_pages
+        WHERE category = #{category} OR software = #{software}
+        ORDER BY updated_at DESC
+        LIMIT #{limit}
     </select>
 
 </mapper>

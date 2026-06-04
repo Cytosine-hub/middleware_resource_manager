@@ -182,14 +182,12 @@ public class WikiController {
         String category = (String) body.get("category");
         String software = (String) body.get("software");
         if (ids == null || ids.isEmpty()) return ResponseEntity.badRequest().build();
-        for (Object idObj : ids) {
-            Long id = Long.valueOf(idObj.toString());
-            WikiPage page = pageMapper.findById(id);
-            if (page != null) {
-                if (category != null && !category.isBlank()) page.setCategory(category);
-                if (software != null && !software.isBlank()) page.setSoftware(software);
-                pageMapper.update(page);
-            }
+        List<Long> idList = ids.stream().map(idObj -> Long.valueOf(idObj.toString())).toList();
+        List<WikiPage> pages = pageMapper.findByIds(idList);
+        for (WikiPage page : pages) {
+            if (category != null && !category.isBlank()) page.setCategory(category);
+            if (software != null && !software.isBlank()) page.setSoftware(software);
+            pageMapper.update(page);
         }
         return ResponseEntity.ok().build();
     }
@@ -358,10 +356,20 @@ public class WikiController {
     @GetMapping("/pages/{id}/links")
     public List<Map<String, Object>> getPageLinks(@PathVariable Long id) {
         List<WikiLink> links = linkMapper.findAllByPageId(id);
+        if (links.isEmpty()) return Collections.emptyList();
+        // 批量获取关联页面，避免 N+1 查询
+        Set<Long> relatedIds = new HashSet<>();
+        for (WikiLink link : links) {
+            relatedIds.add(link.getFromPageId().equals(id) ? link.getToPageId() : link.getFromPageId());
+        }
+        Map<Long, WikiPage> pageMap = new HashMap<>();
+        for (WikiPage p : pageMapper.findByIds(new ArrayList<>(relatedIds))) {
+            pageMap.put(p.getId(), p);
+        }
         List<Map<String, Object>> result = new ArrayList<>();
         for (WikiLink link : links) {
             Long relatedId = link.getFromPageId().equals(id) ? link.getToPageId() : link.getFromPageId();
-            WikiPage related = pageMapper.findById(relatedId);
+            WikiPage related = pageMap.get(relatedId);
             if (related != null) {
                 Map<String, Object> item = new HashMap<>();
                 item.put("linkId", link.getId());
@@ -380,13 +388,13 @@ public class WikiController {
     @GetMapping("/stats")
     public Map<String, Object> getStats() {
         Map<String, Object> stats = new HashMap<>();
-        stats.put("total_pages", pageMapper.findAll().size());
+        stats.put("total_pages", pageMapper.countAll());
         stats.put("active_pages", pageMapper.countByStatus("ACTIVE"));
         stats.put("draft_pages", pageMapper.countByStatus("DRAFT"));
         stats.put("contradicted_pages", pageMapper.countByStatus("CONTRADICTED"));
         stats.put("stale_pages", pageMapper.countByStatus("STALE"));
-        stats.put("total_sources", sourceMapper.findAll().size());
-        stats.put("uningested_sources", sourceMapper.findByIngested(false).size());
+        stats.put("total_sources", sourceMapper.countAll());
+        stats.put("uningested_sources", sourceMapper.countByIngested(false));
         return stats;
     }
 

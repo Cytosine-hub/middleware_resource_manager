@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.annotation.PostConstruct;
 import java.io.InputStream;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -37,7 +38,7 @@ public class IngestTaskService {
     @Value("${app.wiki.ingest.max-concurrent:2}")
     private int maxConcurrent;
 
-    private final Semaphore compileSemaphore = new Semaphore(2);
+    private Semaphore compileSemaphore;
 
     public IngestTaskService(IngestTaskMapper taskMapper, WikiSourceMapper sourceMapper,
                              IngestAgent ingestAgent, List<DocumentLoader> documentLoaders) {
@@ -45,6 +46,11 @@ public class IngestTaskService {
         this.sourceMapper = sourceMapper;
         this.ingestAgent = ingestAgent;
         this.documentLoaders = documentLoaders;
+    }
+
+    @PostConstruct
+    void init() {
+        this.compileSemaphore = new Semaphore(maxConcurrent);
     }
 
     /**
@@ -141,9 +147,8 @@ public class IngestTaskService {
             return;
         }
 
-        // 标记来源为编译中
-        source.setIngested(false);
-        sourceMapper.update(source);
+        // 保存原始状态，失败时恢复
+        Boolean originalIngested = source.getIngested();
 
         // 等待并发槽位
         try {
@@ -214,6 +219,9 @@ public class IngestTaskService {
         } catch (Exception e) {
             log.error("Ingest task {} failed: {}", taskId, e.getMessage(), e);
             taskMapper.updateStatus(taskId, "FAILED", e.getMessage());
+            // 恢复原始 ingested 状态
+            source.setIngested(originalIngested);
+            sourceMapper.update(source);
         } finally {
             compileSemaphore.release();
         }

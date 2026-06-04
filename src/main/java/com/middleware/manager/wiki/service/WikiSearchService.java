@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -35,9 +36,6 @@ public class WikiSearchService {
     @Value("${app.wiki.search.max-context-pages:8}")
     private int maxContextPages;
 
-    @Value("${app.wiki.search.max-content-chars:2000}")
-    private int maxContentChars;
-
     @Value("${app.wiki.search.graph-hop-limit:1}")
     private int graphHopLimit;
 
@@ -47,9 +45,16 @@ public class WikiSearchService {
     @Value("${app.wiki.search.fulltext-top-k:5}")
     private int fulltextTopK;
 
+    private ExecutorService searchExecutor;
+
     public WikiSearchService(WikiPageMapper pageMapper, WikiLinkMapper linkMapper) {
         this.pageMapper = pageMapper;
         this.linkMapper = linkMapper;
+    }
+
+    @PostConstruct
+    void init() {
+        this.searchExecutor = Executors.newFixedThreadPool(2);
     }
 
     public static class WikiSearchResult {
@@ -81,12 +86,11 @@ public class WikiSearchService {
         boolean hasVector = vectorStore != null && embeddingService != null;
 
         if (hasVector) {
-            // 并行执行
-            ExecutorService executor = Executors.newFixedThreadPool(2);
+            // 并行执行，使用共享线程池
             CompletableFuture<List<WikiPage>> vectorFuture = CompletableFuture.supplyAsync(
-                    () -> vectorSearch(query, vectorTopK), executor);
+                    () -> vectorSearch(query, vectorTopK), searchExecutor);
             CompletableFuture<List<WikiPage>> fulltextFuture = CompletableFuture.supplyAsync(
-                    () -> pageMapper.fulltextSearch(query, fulltextTopK), executor);
+                    () -> pageMapper.fulltextSearch(query, fulltextTopK), searchExecutor);
 
             try {
                 vectorHits = vectorFuture.get();
@@ -94,7 +98,6 @@ public class WikiSearchService {
             } catch (Exception e) {
                 log.warn("Parallel search failed: {}", e.getMessage());
             }
-            executor.shutdown();
         } else {
             // 无向量服务，仅 FULLTEXT
             fulltextHits = pageMapper.fulltextSearch(query, fulltextTopK);
@@ -121,17 +124,24 @@ public class WikiSearchService {
             }
         }
 
-        // === 阶段 2: 图扩展 ===
+        // === 阶段 2: 图扩展（支持多跳） ===
         Set<Long> directHitIds = new LinkedHashSet<>(pageScores.keySet());
         Set<Long> expandedIds = new LinkedHashSet<>(directHitIds);
 
-        for (Long pageId : directHitIds) {
-            List<WikiLink> links = linkMapper.findAllByPageId(pageId);
-            for (WikiLink link : links) {
-                Long relatedId = link.getFromPageId().equals(pageId)
-                        ? link.getToPageId() : link.getFromPageId();
-                expandedIds.add(relatedId);
+        Set<Long> currentHop = new LinkedHashSet<>(directHitIds);
+        for (int hop = 0; hop < graphHopLimit && !currentHop.isEmpty(); hop++) {
+            Set<Long> nextHop = new LinkedHashSet<>();
+            for (Long pageId : currentHop) {
+                List<WikiLink> links = linkMapper.findAllByPageId(pageId);
+                for (WikiLink link : links) {
+                    Long relatedId = link.getFromPageId().equals(pageId)
+                            ? link.getToPageId() : link.getFromPageId();
+                    if (expandedIds.add(relatedId)) {
+                        nextHop.add(relatedId);
+                    }
+                }
             }
+            currentHop = nextHop;
         }
 
         // 批量获取所有页面
@@ -192,9 +202,10 @@ public class WikiSearchService {
             }
         }
 
-        // 限制结果数
-        if (results.size() > maxContextPages) {
-            results = results.subList(0, maxContextPages);
+        // 限制结果数：取调用方请求的 topK 和配置上限的较小值
+        int limit = Math.min(topK, maxContextPages);
+        if (results.size() > limit) {
+            results = results.subList(0, limit);
         }
 
         return results;

@@ -3,7 +3,6 @@ package com.middleware.manager.wiki.service;
 import com.middleware.manager.wiki.entity.LintResult;
 import com.middleware.manager.wiki.entity.WikiPage;
 import com.middleware.manager.wiki.repository.LintResultMapper;
-import com.middleware.manager.wiki.repository.WikiLinkMapper;
 import com.middleware.manager.wiki.repository.WikiPageMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,17 +18,15 @@ import java.util.regex.Pattern;
 public class LintAgent {
 
     private static final Logger log = LoggerFactory.getLogger(LintAgent.class);
-    private static final Pattern WIKILINK_PATTERN = Pattern.compile("\\[\\[([^\\]]+)\\]\\]");
+    /** @see LinkResolver#WIKILINK_PATTERN */
+    private static final Pattern WIKILINK_PATTERN = LinkResolver.WIKILINK_PATTERN;
 
     private final WikiPageMapper pageMapper;
-    private final WikiLinkMapper linkMapper;
     private final LintResultMapper lintResultMapper;
 
     public LintAgent(WikiPageMapper pageMapper,
-                     WikiLinkMapper linkMapper,
                      LintResultMapper lintResultMapper) {
         this.pageMapper = pageMapper;
-        this.linkMapper = linkMapper;
         this.lintResultMapper = lintResultMapper;
     }
 

@@ -20,6 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -59,15 +60,21 @@ public class WikiExportService {
                 addZipEntry(zos, "pages/" + fileName, content);
             }
 
+            // 构建页面 ID → title 索引，用于批量解析链接
+            Map<Long, String> pageTitleMap = new HashMap<>();
+            for (WikiPage page : pages) {
+                pageTitleMap.put(page.getId(), page.getTitle());
+            }
+
             JsonArray linksArray = new JsonArray();
             for (WikiPage page : pages) {
                 List<WikiLink> links = linkMapper.findByFromPageId(page.getId());
                 for (WikiLink link : links) {
-                    if (pages.stream().anyMatch(p -> p.getId().equals(link.getToPageId()))) {
+                    String toTitle = pageTitleMap.get(link.getToPageId());
+                    if (toTitle != null) {
                         JsonObject linkObj = new JsonObject();
                         linkObj.addProperty("from", page.getTitle());
-                        WikiPage toPage = pages.stream().filter(p -> p.getId().equals(link.getToPageId())).findFirst().orElse(null);
-                        linkObj.addProperty("to", toPage != null ? toPage.getTitle() : "unknown");
+                        linkObj.addProperty("to", toTitle);
                         linkObj.addProperty("type", link.getLinkType());
                         if (link.getConfidence() != null) linkObj.addProperty("confidence", link.getConfidence());
                         linksArray.add(linkObj);

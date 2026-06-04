@@ -21,7 +21,9 @@
     </select>
 
     <select id="findAllByPageId" resultMap="wikiLinkResultMap">
-        SELECT * FROM wiki_links WHERE from_page_id = #{pageId} OR to_page_id = #{pageId}
+        SELECT * FROM wiki_links WHERE from_page_id = #{pageId}
+        UNION ALL
+        SELECT * FROM wiki_links WHERE to_page_id = #{pageId} AND from_page_id != #{pageId}
     </select>
 
     <select id="findAll" resultMap="wikiLinkResultMap">

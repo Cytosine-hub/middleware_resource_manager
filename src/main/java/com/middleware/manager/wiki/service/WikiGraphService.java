@@ -212,8 +212,8 @@ public class WikiGraphService {
 
     private String resolveLinkType(long from, long to, List<WikiLink> links) {
         for (WikiLink l : links) {
-            if ((l.getFromPageId() == from && l.getToPageId() == to) ||
-                (l.getFromPageId() == to && l.getToPageId() == from)) {
+            if ((l.getFromPageId().equals(from) && l.getToPageId().equals(to)) ||
+                (l.getFromPageId().equals(to) && l.getToPageId().equals(from))) {
                 return l.getLinkType();
             }
         }

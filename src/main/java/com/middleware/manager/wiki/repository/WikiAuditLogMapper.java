@@ -6,7 +6,7 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface WikiAuditLogMapper {
 
-    void insert(@Param("action") String action,
+    int insert(@Param("action") String action,
                 @Param("targetType") String targetType,
                 @Param("targetId") Long targetId,
                 @Param("actorId") Long actorId,

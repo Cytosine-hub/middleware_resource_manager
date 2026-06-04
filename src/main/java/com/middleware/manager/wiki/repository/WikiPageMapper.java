@@ -27,6 +27,8 @@ public interface WikiPageMapper {
 
     int countByStatus(@Param("status") String status);
 
+    int countAll();
+
     int insert(WikiPage page);
 
     int update(WikiPage page);
@@ -38,4 +40,8 @@ public interface WikiPageMapper {
     List<WikiPage> findStalePages(@Param("days") int daysSinceUpdate);
 
     List<WikiPage> findByIds(@Param("ids") List<Long> ids);
+
+    List<WikiPage> findByCategoryOrSoftware(@Param("category") String category,
+                                            @Param("software") String software,
+                                            @Param("limit") int limit);
 }

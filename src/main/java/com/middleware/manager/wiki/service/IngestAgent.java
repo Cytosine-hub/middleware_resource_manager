@@ -441,18 +441,14 @@ public class IngestAgent {
     }
 
     private String buildExistingPagesSummary(String category, String software) {
-        List<WikiPage> pages = pageMapper.findAll();
+        List<WikiPage> pages = (category != null || software != null)
+                ? pageMapper.findByCategoryOrSoftware(category, software, 20)
+                : pageMapper.findAll();
         StringBuilder sb = new StringBuilder();
-        int count = 0;
         for (WikiPage p : pages) {
-            if (count >= 20) break;
-            if (category != null && category.equals(p.getCategory()) ||
-                software != null && software.equals(p.getSoftware())) {
-                sb.append("- ").append(p.getTitle());
-                if (p.getSummary() != null) sb.append("：").append(p.getSummary());
-                sb.append("\n");
-                count++;
-            }
+            sb.append("- ").append(p.getTitle());
+            if (p.getSummary() != null) sb.append("：").append(p.getSummary());
+            sb.append("\n");
         }
         return sb.length() > 0 ? sb.toString() : "（暂无相关页面）";
     }

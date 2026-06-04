@@ -4,25 +4,27 @@ package com.middleware.manager.wiki.service;
  * Ingest 编译的两步 Chain-of-Thought Prompt 模板。
  * Step 1: 结构化分析（提取实体、概念、关系、矛盾）
  * Step 2: Wiki 页面生成（基于分析结果生成结构化 Markdown）
+ *
+ * 使用 {@code {{PLACEHOLDER}}} 占位符替代 String.formatted()，
+ * 避免用户内容中的 %s/%d 等格式化字符被错误消费。
  */
 public class IngestPromptTemplates {
 
     /**
      * Step 1: 结构化分析 Prompt
-     * 让 LLM 先"想"，输出结构化 JSON 分析结果。
      */
     public static String buildAnalysisPrompt(String documentContent, String existingPagesSummary, String softwareReference) {
         return """
             你是银行基础架构运维知识库的编译器。分析以下文档，提取结构化知识。
 
             ## 输入文档
-            %s
+            {{DOCUMENT_CONTENT}}
 
             ## 已有 Wiki 页面（用于矛盾检测）
-            %s
+            {{EXISTING_PAGES}}
 
             ## 已知软件分类参考（必须严格参照此表确定 category）
-            %s
+            {{SOFTWARE_REFERENCE}}
 
             ## 输出规则
             1. 只提取文档中明确提到的实体，不要推断
@@ -66,22 +68,23 @@ public class IngestPromptTemplates {
                 }
               ]
             }
-            """.formatted(documentContent, existingPagesSummary, softwareReference);
+            """.replace("{{DOCUMENT_CONTENT}}", documentContent)
+              .replace("{{EXISTING_PAGES}}", existingPagesSummary)
+              .replace("{{SOFTWARE_REFERENCE}}", softwareReference);
     }
 
     /**
      * Step 2: Wiki 页面生成 Prompt
-     * 基于 Step 1 的分析结果，生成结构化 Wiki 页面。
      */
     public static String buildPageGenerationPrompt(String documentContent, String analysisJson) {
         return """
             你是银行基础架构运维知识库的编译器。根据以下分析结果，生成 Wiki 页面。
 
             ## 原始文档
-            %s
+            {{DOCUMENT_CONTENT}}
 
             ## 分析结果
-            %s
+            {{ANALYSIS_JSON}}
 
             ## 页面生成规则
             1. 每个实体/概念生成一个独立的 Wiki 页面
@@ -109,22 +112,22 @@ public class IngestPromptTemplates {
                 "content": "文档内容的简要概述"
               }
             }
-            """.formatted(documentContent, analysisJson);
+            """.replace("{{DOCUMENT_CONTENT}}", documentContent)
+              .replace("{{ANALYSIS_JSON}}", analysisJson);
     }
 
     /**
      * 合并决策 Prompt
-     * 当页面已存在时，让 LLM 决定如何合并。
      */
     public static String buildMergeDecisionPrompt(String existingContent, String newContent) {
         return """
             你是知识库合并决策器。判断新内容与已有页面的关系。
 
             ## 已有页面内容
-            %s
+            {{EXISTING_CONTENT}}
 
             ## 新内容
-            %s
+            {{NEW_CONTENT}}
 
             ## 判断规则
             1. OVERWRITE: 新内容完全替代旧内容（旧内容已过时或有误）
@@ -136,6 +139,7 @@ public class IngestPromptTemplates {
               "action": "OVERWRITE/APPEND/CONTRADICT",
               "reason": "决策原因"
             }
-            """.formatted(existingContent, newContent);
+            """.replace("{{EXISTING_CONTENT}}", existingContent)
+              .replace("{{NEW_CONTENT}}", newContent);
     }
 }

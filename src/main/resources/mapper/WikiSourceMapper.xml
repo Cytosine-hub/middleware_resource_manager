@@ -49,4 +49,12 @@
         DELETE FROM wiki_sources WHERE id = #{id}
     </delete>
 
+    <select id="countAll" resultType="int">
+        SELECT COUNT(*) FROM wiki_sources
+    </select>
+
+    <select id="countByIngested" resultType="int">
+        SELECT COUNT(*) FROM wiki_sources WHERE ingested = #{ingested}
+    </select>
+
 </mapper>
