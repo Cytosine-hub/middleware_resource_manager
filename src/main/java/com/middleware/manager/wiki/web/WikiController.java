@@ -144,14 +144,21 @@ public class WikiController {
         int success = 0, failed = 0;
         for (WikiPage page : pages) {
             try {
+                String vectorId = "wiki_" + page.getId();
+                // 先删除旧向量
+                try {
+                    vectorStore.delete(vectorId);
+                } catch (Exception ignored) {}
+                // 插入新向量
                 String text = page.getTitle() + "\n" + (page.getSummary() != null ? page.getSummary() : "");
                 float[] vector = embeddingService.embed(text);
-                String vectorId = "wiki_" + page.getId();
                 Map<String, String> metadata = new HashMap<>();
                 metadata.put("source", "wiki");
                 metadata.put("pageId", String.valueOf(page.getId()));
                 metadata.put("title", page.getTitle());
                 metadata.put("pageType", page.getPageType());
+                metadata.put("content", page.getSummary() != null ? page.getSummary() : page.getTitle());
+                metadata.put("sourceTitle", page.getTitle());
                 vectorStore.add(vectorId, vector, metadata);
                 success++;
             } catch (Exception e) {
