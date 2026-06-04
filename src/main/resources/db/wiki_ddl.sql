@@ -1,5 +1,5 @@
 -- ============================================================
--- LLM Wiki 数据模型
+-- LLM Wiki 数据模型（无外键，应用层保证数据一致性）
 -- ============================================================
 
 -- Wiki 页面：LLM 编译后的结构化知识
@@ -10,10 +10,10 @@ CREATE TABLE IF NOT EXISTS wiki_pages (
     category VARCHAR(50),
     software VARCHAR(100),
     version VARCHAR(50),
-    content TEXT NOT NULL,
+    content LONGTEXT NOT NULL,
     summary VARCHAR(500),
     source_refs JSON,
-    status ENUM('DRAFT','ACTIVE','STALE','CONTRADICTED') DEFAULT 'ACTIVE',
+    status ENUM('DRAFT','PENDING_REVIEW','ACTIVE','STALE','CONTRADICTED','REJECTED') DEFAULT 'ACTIVE',
     contradiction_note TEXT,
     compiled_by VARCHAR(100),
     compiled_at TIMESTAMP NULL,
@@ -38,9 +38,7 @@ CREATE TABLE IF NOT EXISTS wiki_links (
     context VARCHAR(500),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_link (from_page_id, to_page_id, link_type),
-    INDEX idx_to_page (to_page_id),
-    FOREIGN KEY (from_page_id) REFERENCES wiki_pages(id) ON DELETE CASCADE,
-    FOREIGN KEY (to_page_id) REFERENCES wiki_pages(id) ON DELETE CASCADE
+    INDEX idx_to_page (to_page_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 原始文档（不可变，Raw Sources 层）
@@ -50,7 +48,7 @@ CREATE TABLE IF NOT EXISTS wiki_sources (
     source_type ENUM('UPLOAD','STANDARD_DOC','EXPERIENCE','WEB','MANUAL') NOT NULL,
     file_path VARCHAR(500),
     content_hash VARCHAR(64),
-    content TEXT,
+    content LONGTEXT,
     category VARCHAR(50),
     software VARCHAR(100),
     ingested BOOLEAN DEFAULT FALSE,
@@ -59,6 +57,26 @@ CREATE TABLE IF NOT EXISTS wiki_sources (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_ingested (ingested),
     INDEX idx_content_hash (content_hash)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 编译任务
+CREATE TABLE IF NOT EXISTS wiki_ingest_tasks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    source_id BIGINT,
+    file_name VARCHAR(200),
+    status ENUM('PENDING','PROCESSING','COMPLETED','FAILED') DEFAULT 'PENDING',
+    progress INT DEFAULT 0 COMMENT '0-100',
+    step VARCHAR(100) COMMENT 'current step description',
+    total_chunks INT DEFAULT 0,
+    completed_chunks INT DEFAULT 0,
+    pages_created INT DEFAULT 0,
+    pages_updated INT DEFAULT 0,
+    error_message TEXT,
+    operator_id BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_status (status),
+    INDEX idx_source (source_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 编译日志（审计 + 可追溯）
@@ -77,8 +95,7 @@ CREATE TABLE IF NOT EXISTS wiki_ingest_log (
     error_detail TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_source (source_id),
-    INDEX idx_operator (operator_id),
-    FOREIGN KEY (source_id) REFERENCES wiki_sources(id)
+    INDEX idx_operator (operator_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Lint 检查结果
@@ -93,7 +110,7 @@ CREATE TABLE IF NOT EXISTS wiki_lint_results (
     resolved_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_unresolved (resolved, severity),
-    FOREIGN KEY (page_id) REFERENCES wiki_pages(id) ON DELETE SET NULL
+    INDEX idx_page (page_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 操作审计日志
@@ -116,4 +133,29 @@ CREATE TABLE IF NOT EXISTS wiki_audit_log (
     INDEX idx_actor (actor_id),
     INDEX idx_action_time (action, created_at),
     INDEX idx_target (target_type, target_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 页面级权限覆盖
+CREATE TABLE IF NOT EXISTS wiki_page_permissions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    page_id BIGINT NOT NULL,
+    permission_type ENUM('VISIBLE','RESTRICTED','HIDDEN') NOT NULL DEFAULT 'VISIBLE',
+    target_roles JSON,
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_page_id (page_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 访问申请
+CREATE TABLE IF NOT EXISTS wiki_access_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    page_id BIGINT NOT NULL,
+    requester_id BIGINT NOT NULL,
+    status ENUM('PENDING','APPROVED','REJECTED') DEFAULT 'PENDING',
+    reason TEXT,
+    reviewed_by BIGINT,
+    reviewed_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_page (page_id),
+    INDEX idx_requester (requester_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

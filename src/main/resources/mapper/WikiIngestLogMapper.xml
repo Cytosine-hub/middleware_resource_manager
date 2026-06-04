@@ -31,4 +31,8 @@
         VALUES (#{sourceId}, #{operatorId}, #{pagesCreated}, #{pagesUpdated}, #{linksCreated}, #{contradictionsFound}, #{llmModel}, #{llmTokensUsed}, #{durationMs}, #{status}, #{errorDetail})
     </insert>
 
+    <delete id="deleteBySourceId">
+        DELETE FROM wiki_ingest_log WHERE source_id = #{sourceId}
+    </delete>
+
 </mapper>

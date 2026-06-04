@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.middleware.manager.wiki.repository.WikiAuditLogMapper">
+
+    <insert id="insert">
+        INSERT INTO wiki_audit_log (action, target_type, target_id, actor_id, actor_role, actor_ip, detail)
+        VALUES (#{action}, #{targetType}, #{targetId}, #{actorId}, #{actorRole}, #{actorIp}, #{detail})
+    </insert>
+
+</mapper>

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.middleware.manager.wiki.repository.IngestTaskMapper">
+
+    <resultMap id="taskResultMap" type="IngestTask">
+        <id property="id" column="id"/>
+        <result property="sourceId" column="source_id"/>
+        <result property="fileName" column="file_name"/>
+        <result property="status" column="status"/>
+        <result property="progress" column="progress"/>
+        <result property="step" column="step"/>
+        <result property="totalChunks" column="total_chunks"/>
+        <result property="completedChunks" column="completed_chunks"/>
+        <result property="pagesCreated" column="pages_created"/>
+        <result property="pagesUpdated" column="pages_updated"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="operatorId" column="operator_id"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="findById" resultMap="taskResultMap">
+        SELECT * FROM wiki_ingest_tasks WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultMap="taskResultMap">
+        SELECT * FROM wiki_ingest_tasks ORDER BY created_at DESC
+    </select>
+
+    <select id="findByStatus" resultMap="taskResultMap">
+        SELECT * FROM wiki_ingest_tasks WHERE status = #{status} ORDER BY created_at DESC
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO wiki_ingest_tasks (source_id, file_name, status, progress, step, total_chunks, operator_id)
+        VALUES (#{sourceId}, #{fileName}, #{status}, #{progress}, #{step}, #{totalChunks}, #{operatorId})
+    </insert>
+
+    <update id="update">
+        UPDATE wiki_ingest_tasks
+        SET source_id=#{sourceId}, file_name=#{fileName}, status=#{status}, progress=#{progress},
+            step=#{step}, total_chunks=#{totalChunks}, completed_chunks=#{completedChunks},
+            pages_created=#{pagesCreated}, pages_updated=#{pagesUpdated}, error_message=#{errorMessage},
+            operator_id=#{operatorId}
+        WHERE id=#{id}
+    </update>
+
+    <update id="updateProgress">
+        UPDATE wiki_ingest_tasks
+        SET progress=#{progress}, step=#{step}, completed_chunks=#{completedChunks}, status='PROCESSING'
+        WHERE id=#{id}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE wiki_ingest_tasks
+        SET status=#{status}, error_message=#{errorMessage}
+        WHERE id=#{id}
+    </update>
+
+    <update id="updateResult">
+        UPDATE wiki_ingest_tasks
+        SET pages_created=#{pagesCreated}, pages_updated=#{pagesUpdated}, status='COMPLETED', progress=100
+        WHERE id=#{id}
+    </update>
+
+    <delete id="deleteBySourceId">
+        DELETE FROM wiki_ingest_tasks WHERE source_id = #{sourceId}
+    </delete>
+</mapper>

@@ -6,6 +6,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.middleware.manager.knowledge.embedding.EmbeddingService;
 import com.middleware.manager.knowledge.store.VectorStore;
+import com.middleware.manager.domain.SoftwareType;
+import com.middleware.manager.repository.SoftwareTypeMapper;
 import com.middleware.manager.wiki.entity.WikiIngestLog;
 import com.middleware.manager.wiki.entity.WikiPage;
 import com.middleware.manager.wiki.entity.WikiSource;
@@ -40,7 +42,9 @@ public class IngestAgent {
     private final LinkResolver linkResolver;
     private final EmbeddingService embeddingService;
     private final VectorStore vectorStore;
+    private final SoftwareTypeMapper softwareTypeMapper;
     private final Gson gson = new Gson();
+    private final int maxContentChars;
 
     @Value("${app.vector.type:milvus}")
     private String vectorType;
@@ -51,7 +55,9 @@ public class IngestAgent {
                        WikiIngestLogMapper logMapper,
                        LinkResolver linkResolver,
                        EmbeddingService embeddingService,
-                       VectorStore vectorStore) {
+                       VectorStore vectorStore,
+                       SoftwareTypeMapper softwareTypeMapper,
+                       @Value("${app.wiki.ingest.max-content-chars:50000}") int maxContentChars) {
         this.chatModel = chatModel;
         this.pageMapper = pageMapper;
         this.sourceMapper = sourceMapper;
@@ -59,6 +65,8 @@ public class IngestAgent {
         this.linkResolver = linkResolver;
         this.embeddingService = embeddingService;
         this.vectorStore = vectorStore;
+        this.softwareTypeMapper = softwareTypeMapper;
+        this.maxContentChars = maxContentChars;
     }
 
     public static class IngestResult {
@@ -97,8 +105,17 @@ public class IngestAgent {
 
             String existingSummary = buildExistingPagesSummary(source.getCategory(), source.getSoftware());
 
-            log.info("Ingest Step 1: Analyzing source '{}'", source.getTitle());
-            String analysisPrompt = IngestPromptTemplates.buildAnalysisPrompt(source.getContent(), existingSummary);
+            // 截断过长内容，避免超出 LLM 上下文窗口
+            String content = source.getContent();
+            if (content.length() > maxContentChars) {
+                log.warn("Source '{}' content too long ({} chars), truncating to {} chars",
+                        source.getTitle(), content.length(), maxContentChars);
+                content = content.substring(0, maxContentChars) + "\n\n[... 文档内容过长，已截断 ...]";
+            }
+
+            log.info("Ingest Step 1: Analyzing source '{}' ({} chars)", source.getTitle(), content.length());
+            String softwareRef = buildSoftwareReference();
+            String analysisPrompt = IngestPromptTemplates.buildAnalysisPrompt(content, existingSummary, softwareRef);
             String analysisJson = callLlm(analysisPrompt);
             ingestLog.setLlmModel("configured");
 
@@ -114,7 +131,7 @@ public class IngestAgent {
             }
 
             log.info("Ingest Step 2: Generating Wiki pages for source '{}'", source.getTitle());
-            String generationPrompt = IngestPromptTemplates.buildPageGenerationPrompt(source.getContent(), analysisJson);
+            String generationPrompt = IngestPromptTemplates.buildPageGenerationPrompt(content, analysisJson);
             String pagesJson = callLlm(generationPrompt);
 
             JsonObject pagesResult = parseJson(pagesJson);
@@ -187,6 +204,7 @@ public class IngestAgent {
                         float[] vector = embeddingService.embed(text);
                         String vectorId = "wiki_" + page.getId();
                         Map<String, String> metadata = new HashMap<>();
+                        metadata.put("source", "wiki");
                         metadata.put("pageId", String.valueOf(page.getId()));
                         metadata.put("title", page.getTitle());
                         metadata.put("pageType", page.getPageType());
@@ -231,6 +249,121 @@ public class IngestAgent {
         return result;
     }
 
+    /**
+     * 直接编译内容，不创建/更新 WikiSource（用于分段编译）
+     */
+    public IngestResult ingestContent(String content, String title, String category, String software, Long operatorId) {
+        IngestResult result = new IngestResult();
+
+        try {
+            String existingSummary = buildExistingPagesSummary(category, software);
+
+            // 截断
+            if (content.length() > maxContentChars) {
+                content = content.substring(0, maxContentChars) + "\n\n[... 已截断 ...]";
+            }
+
+            log.info("IngestContent Step 1: Analyzing '{}' ({} chars)", title, content.length());
+            String softwareRef = buildSoftwareReference();
+            String analysisPrompt = IngestPromptTemplates.buildAnalysisPrompt(content, existingSummary, softwareRef);
+            String analysisJson = callLlm(analysisPrompt);
+
+            JsonObject analysis = parseJson(analysisJson);
+            if (analysis == null) {
+                log.error("Failed to parse analysis JSON for '{}'", title);
+                result.setStatus("FAILED");
+                return result;
+            }
+
+            log.info("IngestContent Step 2: Generating pages for '{}'", title);
+            String generationPrompt = IngestPromptTemplates.buildPageGenerationPrompt(content, analysisJson);
+            String pagesJson = callLlm(generationPrompt);
+
+            JsonObject pagesResult = parseJson(pagesJson);
+            if (pagesResult == null || !pagesResult.has("pages")) {
+                log.error("Failed to parse pages JSON for '{}'", title);
+                result.setStatus("FAILED");
+                return result;
+            }
+
+            // 保存页面
+            int created = 0, updated = 0;
+            JsonArray pages = pagesResult.getAsJsonArray("pages");
+            for (JsonElement pageElem : pages) {
+                JsonObject pageObj = pageElem.getAsJsonObject();
+                String pageTitle = getAsString(pageObj, "title");
+                String pageType = getAsString(pageObj, "page_type");
+                if (pageTitle == null || pageType == null) continue;
+
+                // 去掉分段后缀，用原始标题
+                String cleanTitle = pageTitle.replaceAll("\\s*\\[\\d+\\]$", "");
+
+                WikiPage existing = pageMapper.findByTitleAndType(cleanTitle, pageType);
+                if (existing != null) {
+                    String mergeDecision = callLlm(IngestPromptTemplates.buildMergeDecisionPrompt(
+                            existing.getContent(), getAsString(pageObj, "content")));
+                    JsonObject decision = parseJson(mergeDecision);
+                    String action = decision != null ? getAsString(decision, "decision") : "OVERWRITE";
+
+                    if ("CONTRADICT".equals(action)) {
+                        existing.setStatus("CONTRADICTED");
+                        existing.setContradictionNote(getAsString(decision, "note"));
+                        pageMapper.update(existing);
+                    } else if ("APPEND".equals(action)) {
+                        existing.setContent(existing.getContent() + "\n\n" + getAsString(pageObj, "content"));
+                        existing.setUpdatedAt(LocalDateTime.now());
+                        pageMapper.update(existing);
+                    } else {
+                        existing.setContent(getAsString(pageObj, "content"));
+                        existing.setSummary(getAsString(pageObj, "summary"));
+                        existing.setUpdatedAt(LocalDateTime.now());
+                        pageMapper.update(existing);
+                    }
+                    updated++;
+                } else {
+                    WikiPage newPage = new WikiPage();
+                    newPage.setTitle(cleanTitle);
+                    newPage.setPageType(pageType);
+                    newPage.setCategory(category);
+                    newPage.setSoftware(software);
+                    newPage.setVersion(getAsString(pageObj, "version"));
+                    newPage.setContent(getAsString(pageObj, "content"));
+                    newPage.setSummary(getAsString(pageObj, "summary"));
+                    newPage.setStatus("DRAFT");
+                    newPage.setCompiledBy("configured");
+                    pageMapper.insert(newPage);
+                    created++;
+                }
+            }
+
+            // 解析链接
+            List<WikiPage> savedPages = new ArrayList<>();
+            for (JsonElement pageElem : pages) {
+                JsonObject pageObj = pageElem.getAsJsonObject();
+                String pageTitle = getAsString(pageObj, "title");
+                if (pageTitle == null) continue;
+                String cleanTitle = pageTitle.replaceAll("\\s*\\[\\d+\\]$", "");
+                WikiPage savedPage = pageMapper.findByTitleAndType(cleanTitle, getAsString(pageObj, "page_type"));
+                if (savedPage != null) {
+                    savedPages.add(savedPage);
+                }
+            }
+            if (!savedPages.isEmpty()) {
+                linkResolver.resolveLinks(savedPages);
+            }
+
+            result.setPagesCreated(created);
+            result.setPagesUpdated(updated);
+            result.setStatus("SUCCESS");
+
+        } catch (Exception e) {
+            log.error("IngestContent failed for '{}': {}", title, e.getMessage(), e);
+            result.setStatus("FAILED");
+        }
+
+        return result;
+    }
+
     private String callLlm(String prompt) {
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(new SystemMessage("你是一个严格的知识编译器。只输出要求的格式，不要包含任何其他文字。"));
@@ -256,16 +389,30 @@ public class IngestAgent {
     private JsonObject parseJson(String text) {
         if (text == null) return null;
         text = text.trim();
+
+        // 去掉 markdown 代码块
         if (text.startsWith("```json")) text = text.substring(7);
         if (text.startsWith("```")) text = text.substring(3);
         if (text.endsWith("```")) text = text.substring(0, text.length() - 3);
         text = text.trim();
+
+        // 直接尝试解析
         try {
             return gson.fromJson(text, JsonObject.class);
-        } catch (Exception e) {
-            log.warn("Failed to parse JSON: {}", e.getMessage());
-            return null;
+        } catch (Exception ignored) {}
+
+        // 尝试提取第一个 { ... } 块
+        int start = text.indexOf('{');
+        int end = text.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            try {
+                return gson.fromJson(text.substring(start, end + 1), JsonObject.class);
+            } catch (Exception ignored) {}
         }
+
+        log.warn("Failed to parse JSON from LLM response ({} chars): {}...",
+                text.length(), text.substring(0, Math.min(200, text.length())));
+        return null;
     }
 
     private String getAsString(JsonObject obj, String key) {
@@ -308,6 +455,21 @@ public class IngestAgent {
             }
         }
         return sb.length() > 0 ? sb.toString() : "（暂无相关页面）";
+    }
+
+    private String buildSoftwareReference() {
+        List<SoftwareType> types = softwareTypeMapper.findAllByOrderByCategoryAscNameAsc();
+        StringBuilder sb = new StringBuilder();
+        String currentCategory = null;
+        for (SoftwareType st : types) {
+            if (!st.getCategory().equals(currentCategory)) {
+                if (currentCategory != null) sb.append("\n");
+                sb.append("【").append(st.getCategory()).append("】");
+                currentCategory = st.getCategory();
+            }
+            sb.append(st.getName()).append(" ");
+        }
+        return sb.length() > 0 ? sb.toString() : "（暂无软件分类数据）";
     }
 
     public static String sha256(String input) {

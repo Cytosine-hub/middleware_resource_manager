@@ -17,7 +17,7 @@
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO chat_messages (session_id, role, content, references_text, created_at)
-        VALUES (#{sessionId}, #{role}, #{content}, #{referencesText}, #{createdAt})
+        VALUES (#{sessionId}, #{role}, #{content}, #{referencesText}, COALESCE(#{createdAt}, NOW()))
     </insert>
 
 </mapper>

@@ -36,4 +36,6 @@ public interface WikiPageMapper {
     List<WikiPage> findOrphanPages();
 
     List<WikiPage> findStalePages(@Param("days") int daysSinceUpdate);
+
+    List<WikiPage> findByIds(@Param("ids") List<Long> ids);
 }

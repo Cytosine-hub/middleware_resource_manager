@@ -14,4 +14,6 @@ public interface WikiIngestLogMapper {
     List<WikiIngestLog> findRecent(@Param("limit") int limit);
 
     int insert(WikiIngestLog log);
+
+    int deleteBySourceId(@Param("sourceId") Long sourceId);
 }

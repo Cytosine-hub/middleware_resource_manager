@@ -12,6 +12,7 @@
           <button v-if="auth.token" :class="{ active: route.name === 'public' }" @click="goPublic()">下载中心</button>
           <button v-if="auth.token" :class="{ active: route.name?.startsWith('forum') }" @click="goForum()">论坛</button>
           <button v-if="auth.token && siteConfig.knowledgeEnabled" :class="{ active: route.name === 'knowledge' }" @click="goKnowledge()">知识库</button>
+          <button v-if="auth.token" :class="{ active: route.name === 'wiki' }" @click="goWiki()">Wiki</button>
           <button v-if="auth.token && siteConfig.diagnosticsEnabled" :class="{ active: route.name === 'diagnostics' }" @click="goDiagnostics()">智能排查</button>
           <button v-if="canAccessAdmin" :class="{ active: route.name === 'admin' || route.name === 'documentEditor' }" @click="goAdmin()">管理后台</button>
         </nav>
@@ -363,6 +364,7 @@
       </section>
 
       <KnowledgePanel v-else-if="route.name === 'knowledge' && siteConfig.knowledgeEnabled" :auth="auth" :notify="notify" />
+      <WikiPanel v-else-if="route.name === 'wiki'" :auth="auth" :notify="notify" />
       <DiagnosticsPanel v-else-if="route.name === 'diagnostics' && siteConfig.diagnosticsEnabled" :auth="auth" />
 
       <section v-else-if="route.name === 'commands'" class="workspace commands-page">
@@ -1271,6 +1273,7 @@ import ForumPostDetail from './components/ForumPostDetail.vue'
 import ForumPostEditor from './components/ForumPostEditor.vue'
 import ForumPersonalCenter from './components/ForumPersonalCenter.vue'
 import KnowledgePanel from './components/KnowledgePanel.vue'
+import WikiPanel from './components/WikiPanel.vue'
 import DiagnosticsPanel from './components/DiagnosticsPanel.vue'
 
 function sha256(str) {
@@ -1429,6 +1432,7 @@ const pageTitle = computed(() => {
   if (route.name === 'documentEditor') return '文档编辑'
   if (route.name && route.name.startsWith('forum')) return 'infra论坛'
   if (route.name === 'knowledge') return '知识库管理'
+  if (route.name === 'wiki') return 'Wiki 知识库'
   if (route.name === 'diagnostics') return '智能排查'
   if (route.name === 'commands') return '常用命令'
   return '管理后台'
@@ -1886,6 +1890,7 @@ function parseRoute() {
   if (forumPostMatch) return { name: 'forumDetail', postId: forumPostMatch[1] }
   if (hash === '/forum' || hash.startsWith('/forum')) return { name: 'forum', postId: null }
   if (hash === '/knowledge' || hash === '/knowledge/') return { name: 'knowledge' }
+  if (hash === '/wiki' || hash === '/wiki/') return { name: 'wiki' }
   if (hash === '/diagnostics' || hash === '/diagnostics/') return { name: 'diagnostics' }
   const detailMatch = hash.match(/^\/downloads\/(.+)$/)
   if (detailMatch) return { name: 'public', token: detailMatch[1] }
@@ -2211,6 +2216,7 @@ function goForumNew() {
 function goForumEdit(id) { window.location.hash = `#/forum/edit/${id}` }
 function goForumMine() { window.location.hash = '#/forum/mine' }
 function goKnowledge() { window.location.hash = '#/knowledge' }
+function goWiki() { window.location.hash = '#/wiki' }
 function goDiagnostics() { window.location.hash = '#/diagnostics' }
 function goCommands() { window.location.hash = '#/commands' }
 function onForumPostSaved() { goForum() }
@@ -3372,6 +3378,11 @@ onMounted(() => {
     auth.user = saved.user
   }
   syncRoute()
+  window.addEventListener('auth:logout', () => {
+    auth.token = ''
+    auth.user = null
+    window.location.hash = '#/home'
+  })
   window.addEventListener('beforeunload', (e) => {
     if (uploading.value) {
       e.preventDefault()

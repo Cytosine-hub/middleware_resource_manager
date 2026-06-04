@@ -81,14 +81,21 @@
     </delete>
 
     <select id="findOrphanPages" resultMap="wikiPageResultMap">
-        SELECT p.* FROM wiki_pages p
-        LEFT JOIN wiki_links l ON p.id = l.to_page_id
-        WHERE l.id IS NULL AND p.status = 'ACTIVE' AND p.page_type != 'OVERVIEW'
+        SELECT * FROM wiki_pages
+        WHERE status = 'ACTIVE' AND page_type != 'OVERVIEW'
+          AND id NOT IN (SELECT DISTINCT to_page_id FROM wiki_links)
     </select>
 
     <select id="findStalePages" resultMap="wikiPageResultMap">
         SELECT * FROM wiki_pages
         WHERE status = 'ACTIVE' AND updated_at &lt; DATE_SUB(NOW(), INTERVAL #{days} DAY)
+    </select>
+
+    <select id="findByIds" resultMap="wikiPageResultMap">
+        SELECT * FROM wiki_pages WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
     </select>
 
 </mapper>

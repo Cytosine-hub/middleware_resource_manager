@@ -1,0 +1,15 @@
+[Unit]
+Description=MySQL Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/app/mysql/bin/mysqld --defaults-file=/app/mysql/etc/my.cnf --user=root
+ExecStop=/app/mysql/bin/mysqladmin -u root -S /app/mysql/tmp/mysql.sock shutdown
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

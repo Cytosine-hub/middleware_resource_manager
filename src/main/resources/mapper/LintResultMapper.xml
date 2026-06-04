@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.middleware.manager.wiki.repository.LintResultMapper">
+
+    <resultMap id="lintResultMap" type="LintResult">
+        <id property="id" column="id"/>
+        <result property="lintType" column="lint_type"/>
+        <result property="pageId" column="page_id"/>
+        <result property="description" column="description"/>
+        <result property="severity" column="severity"/>
+        <result property="resolved" column="resolved"/>
+        <result property="resolvedBy" column="resolved_by"/>
+        <result property="resolvedAt" column="resolved_at"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <select id="findAll" resultMap="lintResultMap">
+        SELECT * FROM wiki_lint_results ORDER BY created_at DESC
+    </select>
+
+    <select id="findUnresolved" resultMap="lintResultMap">
+        SELECT * FROM wiki_lint_results WHERE resolved = FALSE ORDER BY severity DESC, created_at DESC
+    </select>
+
+    <select id="findBySeverity" resultMap="lintResultMap">
+        SELECT * FROM wiki_lint_results WHERE severity = #{severity} ORDER BY created_at DESC
+    </select>
+
+    <select id="findByPageId" resultMap="lintResultMap">
+        SELECT * FROM wiki_lint_results WHERE page_id = #{pageId} ORDER BY created_at DESC
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO wiki_lint_results (lint_type, page_id, description, severity, resolved)
+        VALUES (#{lintType}, #{pageId}, #{description}, #{severity}, #{resolved})
+    </insert>
+
+    <update id="resolve">
+        UPDATE wiki_lint_results SET resolved = TRUE, resolved_by = #{resolvedBy}, resolved_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteResolved">
+        DELETE FROM wiki_lint_results WHERE resolved = TRUE
+    </delete>
+
+    <select id="countUnresolved" resultType="int">
+        SELECT COUNT(*) FROM wiki_lint_results WHERE resolved = FALSE
+    </select>
+
+</mapper>

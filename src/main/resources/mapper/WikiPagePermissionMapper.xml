@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.middleware.manager.wiki.repository.WikiPagePermissionMapper">
+
+    <resultMap id="permissionResultMap" type="WikiPagePermission">
+        <id property="id" column="id"/>
+        <result property="pageId" column="page_id"/>
+        <result property="permissionType" column="permission_type"/>
+        <result property="targetRoles" column="target_roles"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <select id="findByPageId" resultMap="permissionResultMap">
+        SELECT * FROM wiki_page_permissions WHERE page_id = #{pageId}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO wiki_page_permissions (page_id, permission_type, target_roles, created_by)
+        VALUES (#{pageId}, #{permissionType}, #{targetRoles}, #{createdBy})
+    </insert>
+
+    <update id="update">
+        UPDATE wiki_page_permissions
+        SET permission_type = #{permissionType}, target_roles = #{targetRoles}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteByPageId">
+        DELETE FROM wiki_page_permissions WHERE page_id = #{pageId}
+    </delete>
+
+</mapper>

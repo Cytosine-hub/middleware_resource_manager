@@ -20,7 +20,7 @@
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO chat_sessions (title, mode, created_at, updated_at)
-        VALUES (#{title}, #{mode}, #{createdAt}, #{updatedAt})
+        VALUES (#{title}, #{mode}, COALESCE(#{createdAt}, NOW()), COALESCE(#{updatedAt}, NOW()))
     </insert>
 
     <update id="update">

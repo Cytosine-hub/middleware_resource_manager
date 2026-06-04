@@ -134,7 +134,7 @@ public class AgentController {
 
     @PostMapping("/skills")
     public Map<String, Object> saveSkill(@RequestBody Skill skill) {
-        skillLoader.insert(skill);
+        skillLoader.save(skill);
         return Map.of("status", "ok", "name", skill.getName());
     }
 
@@ -149,7 +149,7 @@ public class AgentController {
         if (skill.getName() == null || skill.getName().isBlank()) {
             return Map.of("status", "error", "message", "name 不能为空");
         }
-        skillLoader.insert(skill);
+        skillLoader.save(skill);
         return Map.of("status", "ok", "name", skill.getName());
     }
 

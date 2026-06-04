@@ -11,7 +11,7 @@ public class IngestPromptTemplates {
      * Step 1: 结构化分析 Prompt
      * 让 LLM 先"想"，输出结构化 JSON 分析结果。
      */
-    public static String buildAnalysisPrompt(String documentContent, String existingPagesSummary) {
+    public static String buildAnalysisPrompt(String documentContent, String existingPagesSummary, String softwareReference) {
         return """
             你是银行基础架构运维知识库的编译器。分析以下文档，提取结构化知识。
 
@@ -21,11 +21,15 @@ public class IngestPromptTemplates {
             ## 已有 Wiki 页面（用于矛盾检测）
             %s
 
+            ## 已知软件分类参考（必须严格参照此表确定 category）
+            %s
+
             ## 输出规则
             1. 只提取文档中明确提到的实体，不要推断
             2. 版本号必须精确提取，不要省略
             3. 矛盾检测：如果新文档的建议与已有页面冲突，必须标记，即使你不确定
-            4. 输出必须是合法 JSON，不要包含任何其他文字
+            4. category 必须从参考表中匹配，如果文档中的软件不在表中，根据软件性质推断最合适的分类
+            5. 输出必须是合法 JSON，不要包含任何其他文字
 
             ## 输出 JSON 格式
             {
@@ -62,7 +66,7 @@ public class IngestPromptTemplates {
                 }
               ]
             }
-            """.formatted(documentContent, existingPagesSummary);
+            """.formatted(documentContent, existingPagesSummary, softwareReference);
     }
 
     /**

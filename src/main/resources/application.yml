@@ -40,6 +40,9 @@ app:
   modules:
     knowledge-enabled: ${KNOWLEDGE_ENABLED:true}
     diagnostics-enabled: ${DIAGNOSTICS_ENABLED:true}
+  llm:
+    max-concurrent: ${LLM_MAX_CONCURRENT:3}
+    timeout-seconds: ${LLM_TIMEOUT_SECONDS:300}
 
 # ========== 知识库 & Agent 配置 ==========
   ai:
@@ -53,6 +56,17 @@ app:
     host: ${VECTOR_HOST:localhost}
     port: ${VECTOR_PORT:19530}
     collection: ${VECTOR_COLLECTION:knowledge_chunks}
+  wiki:
+    search:
+      max-context-pages: ${WIKI_MAX_CONTEXT_PAGES:8}
+      max-content-chars: ${WIKI_MAX_CONTENT_CHARS:2000}
+      graph-hop-limit: ${WIKI_GRAPH_HOP_LIMIT:1}
+      fulltext-min-results: ${WIKI_FULLTEXT_MIN_RESULTS:3}
+      min-results-for-wiki: ${WIKI_MIN_RESULTS:2}
+    ingest:
+      max-content-chars: ${WIKI_INGEST_MAX_CHARS:20000}
+      chunk-overlap: ${WIKI_CHUNK_OVERLAP:500}
+      parallel-chunks: ${WIKI_PARALLEL_CHUNKS:3}
   # Zabbix 监控配置
   zabbix:
     url: ${ZABBIX_URL:http://localhost:8080/api_jsonrpc.php}
@@ -69,6 +83,7 @@ langchain4j:
       model-name: mimo-v2.5-pro
       max-tokens: 4096
       temperature: 0.1
+      timeout: PT120S
       log-requests: true
       log-responses: true
     embedding-model:

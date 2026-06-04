@@ -56,7 +56,7 @@ export async function request(path, options = {}) {
   if (!response.ok) {
     if (response.status === 401) {
       clearAuth()
-      window.location.hash = '#/login'
+      window.dispatchEvent(new Event('auth:logout'))
     }
     let message = response.statusText || 'Request failed'
     try {

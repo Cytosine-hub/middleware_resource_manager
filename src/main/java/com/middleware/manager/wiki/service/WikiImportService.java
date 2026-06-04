@@ -39,17 +39,38 @@ public class WikiImportService {
         private int linksCreated;
         private int conflicts;
         private String status;
+        private List<ConflictDetail> conflictDetails = new ArrayList<>();
 
         public int getPagesCreated() { return pagesCreated; }
         public int getPagesUpdated() { return pagesUpdated; }
         public int getLinksCreated() { return linksCreated; }
         public int getConflicts() { return conflicts; }
         public String getStatus() { return status; }
+        public List<ConflictDetail> getConflictDetails() { return conflictDetails; }
         public void setPagesCreated(int v) { this.pagesCreated = v; }
         public void setPagesUpdated(int v) { this.pagesUpdated = v; }
         public void setLinksCreated(int v) { this.linksCreated = v; }
         public void setConflicts(int v) { this.conflicts = v; }
         public void setStatus(String v) { this.status = v; }
+    }
+
+    public static class ConflictDetail {
+        private String title;
+        private String pageType;
+        private Long existingPageId;
+        private Long importedPageId;
+
+        public ConflictDetail(String title, String pageType, Long existingPageId, Long importedPageId) {
+            this.title = title;
+            this.pageType = pageType;
+            this.existingPageId = existingPageId;
+            this.importedPageId = importedPageId;
+        }
+
+        public String getTitle() { return title; }
+        public String getPageType() { return pageType; }
+        public Long getExistingPageId() { return existingPageId; }
+        public Long getImportedPageId() { return importedPageId; }
     }
 
     public ImportResult importFromZip(byte[] zipBytes) throws IOException {
@@ -79,8 +100,20 @@ public class WikiImportService {
             WikiPage existing = pageMapper.findByTitleAndType(page.getTitle(), page.getPageType());
             if (existing != null) {
                 existing.setStatus("CONTRADICTED");
-                existing.setContradictionNote("与导入包冲突，待审核");
+                String note = buildConflictNote(existing, page);
+                existing.setContradictionNote(note);
                 pageMapper.update(existing);
+                // 保存导入版本为新的 DRAFT 页面，加后缀区分
+                page.setTitle(page.getTitle() + " [导入版本]");
+                page.setStatus("DRAFT");
+                page.setContradictionNote("这是导入包中的版本，与「" + existing.getTitle().replace(" [导入版本]", "") + "」冲突。审核后可合并或丢弃。");
+                pageMapper.insert(page);
+                result.getConflictDetails().add(new ConflictDetail(
+                        existing.getTitle().replace(" [导入版本]", ""),
+                        existing.getPageType(),
+                        existing.getId(),
+                        page.getId()
+                ));
                 conflicts++;
             } else {
                 page.setStatus("DRAFT");
@@ -108,6 +141,46 @@ public class WikiImportService {
 
         log.info("Import completed: created={}, links={}, conflicts={}", created, linksCreated, conflicts);
         return result;
+    }
+
+    private String buildConflictNote(WikiPage existing, WikiPage imported) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("【冲突来源】导入包\n");
+        sb.append("【检测时间】").append(java.time.LocalDateTime.now().toString().replace("T", " ")).append("\n\n");
+
+        // 差异对比
+        sb.append("=== 现有版本 ===\n");
+        sb.append("标题: ").append(existing.getTitle()).append("\n");
+        sb.append("类型: ").append(existing.getPageType()).append("\n");
+        sb.append("版本: ").append(existing.getVersion() != null ? existing.getVersion() : "无").append("\n");
+        sb.append("摘要: ").append(existing.getSummary() != null ? existing.getSummary() : "无").append("\n");
+        sb.append("内容长度: ").append(existing.getContent() != null ? existing.getContent().length() : 0).append(" 字符\n\n");
+
+        sb.append("=== 导入版本 ===\n");
+        sb.append("标题: ").append(imported.getTitle()).append("\n");
+        sb.append("类型: ").append(imported.getPageType()).append("\n");
+        sb.append("版本: ").append(imported.getVersion() != null ? imported.getVersion() : "无").append("\n");
+        sb.append("摘要: ").append(imported.getSummary() != null ? imported.getSummary() : "无").append("\n");
+        sb.append("内容长度: ").append(imported.getContent() != null ? imported.getContent().length() : 0).append(" 字符\n\n");
+
+        // 内容差异摘要
+        if (existing.getContent() != null && imported.getContent() != null) {
+            String existSum = existing.getSummary() != null ? existing.getSummary() : "";
+            String importSum = imported.getSummary() != null ? imported.getSummary() : "";
+            if (!existSum.equals(importSum)) {
+                sb.append("【摘要差异】\n");
+                sb.append("  现有: ").append(existSum.isEmpty() ? "(空)" : existSum).append("\n");
+                sb.append("  导入: ").append(importSum.isEmpty() ? "(空)" : importSum).append("\n");
+            }
+            if (!existing.getContent().equals(imported.getContent())) {
+                sb.append("【内容差异】内容不同，");
+                int diff = imported.getContent().length() - existing.getContent().length();
+                sb.append("导入版本").append(diff > 0 ? "多" : "少").append(Math.abs(diff)).append("个字符\n");
+            }
+        }
+
+        sb.append("\n导入版本已保存为「").append(imported.getTitle()).append("」，可查看对比后裁决。");
+        return sb.toString();
     }
 
     private WikiPage parsePageMarkdown(String markdown) {

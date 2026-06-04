@@ -3,6 +3,8 @@ package com.middleware.manager.knowledge.agent;
 import com.google.gson.Gson;
 import com.middleware.manager.knowledge.service.KnowledgeService;
 import com.middleware.manager.knowledge.service.KnowledgeService.SearchResult;
+import com.middleware.manager.wiki.entity.WikiPage;
+import com.middleware.manager.wiki.service.WikiSearchService;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -15,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -34,18 +37,23 @@ public class TroubleshootAgent {
             "- 再给出排查步骤\n" +
             "- 最后给出解决方案\n\n" +
             "信息来源标注规则（必须严格遵守）：\n" +
-            "- 引用知识库内容时，在相关段落后标注【知识库：来源标题】\n" +
+            "- 如果上下文来自 Wiki 知识库，引用时标注【Wiki：页面标题】\n" +
+            "- 如果上下文来自知识库文档，引用时标注【知识库：来源标题】\n" +
             "- 基于你自身知识补充的内容，在相关段落后标注【模型知识】\n" +
             "- 如果知识库中完全没有相关信息，明确告知用户：'知识库中未找到相关内容，以下基于模型通用知识给出建议'";
 
     private static final int MAX_HISTORY_MESSAGES = 10;
     private static final int DEFAULT_SEARCH_TOP_K = 5;
     private static final int MAX_RETRIES = 5;
+    private static final int MAX_CONTEXT_CHARS = 6000;
 
     private final ChatModel chatModel;
 
     @Autowired
     private KnowledgeService knowledgeService;
+
+    @Autowired(required = false)
+    private WikiSearchService wikiSearchService;
 
     @Autowired
     private ChatSessionMapper chatSessionMapper;
@@ -96,12 +104,34 @@ public class TroubleshootAgent {
             chatSessionMapper.update(session);
         }
 
-        // 2. Retrieve relevant knowledge
-        List<SearchResult> searchResults = knowledgeService.search(userMessage, DEFAULT_SEARCH_TOP_K);
+        // 2. Retrieve relevant knowledge — Wiki first, chunk fallback
         List<String> references = new ArrayList<>();
-        for (SearchResult r : searchResults) {
-            if (r.getSourceTitle() != null) {
-                references.add(r.getSourceTitle());
+        String contextMessage;
+
+        // Try Wiki search first
+        List<WikiSearchService.WikiSearchResult> wikiResults = Collections.emptyList();
+        if (wikiSearchService != null) {
+            try {
+                wikiResults = wikiSearchService.search(userMessage, DEFAULT_SEARCH_TOP_K);
+            } catch (Exception e) {
+                log.warn("Wiki search failed, falling back to chunk search: {}", e.getMessage());
+            }
+        }
+
+        if (wikiResults.size() >= 2) {
+            // Wiki has sufficient results — use Wiki context
+            contextMessage = buildWikiContextMessage(userMessage, wikiResults);
+            for (WikiSearchService.WikiSearchResult r : wikiResults) {
+                references.add(r.getPage().getTitle());
+            }
+        } else {
+            // Fall back to existing chunk-based search
+            List<SearchResult> searchResults = knowledgeService.search(userMessage, DEFAULT_SEARCH_TOP_K);
+            contextMessage = buildContextMessage(userMessage, searchResults);
+            for (SearchResult r : searchResults) {
+                if (r.getSourceTitle() != null) {
+                    references.add(r.getSourceTitle());
+                }
             }
         }
 
@@ -125,7 +155,6 @@ public class TroubleshootAgent {
         }
 
         // Current question with knowledge context
-        String contextMessage = buildContextMessage(userMessage, searchResults);
         // Replace the last user message with the context-enriched version
         if (!messages.isEmpty() && messages.get(messages.size() - 1) instanceof UserMessage) {
             messages.set(messages.size() - 1, new UserMessage(contextMessage));
@@ -182,6 +211,51 @@ public class TroubleshootAgent {
      */
     public List<ChatSession> getAllSessions() {
         return chatSessionMapper.findAllByOrderByUpdatedAtDesc();
+    }
+
+    /**
+     * Build a user message enriched with Wiki context.
+     */
+    private String buildWikiContextMessage(String userMessage,
+            List<WikiSearchService.WikiSearchResult> results) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("用户问题：").append(userMessage).append("\n\n");
+        if (!results.isEmpty()) {
+            sb.append("以下是 Wiki 知识库中的相关页面：\n\n");
+            int totalChars = sb.length();
+            for (int i = 0; i < results.size(); i++) {
+                WikiPage page = results.get(i).getPage();
+                String content = page.getContent();
+                if (content == null) content = "";
+
+                // Truncate if running out of budget
+                int remaining = MAX_CONTEXT_CHARS - totalChars - 200;
+                if (remaining <= 0) break;
+                if (content.length() > remaining) {
+                    content = content.substring(0, remaining) + "...(truncated)";
+                }
+
+                String entry = String.format("【Wiki %d】%s (类型:%s, 分类:%s)\n%s\n",
+                        i + 1,
+                        page.getTitle(),
+                        page.getPageType() != null ? page.getPageType() : "未知",
+                        page.getCategory() != null ? page.getCategory() : "通用",
+                        content);
+                sb.append(entry);
+                totalChars += entry.length();
+
+                // Show related page titles
+                List<String> related = results.get(i).getRelatedPageTitles();
+                if (related != null && !related.isEmpty()) {
+                    String relatedLine = "关联页面: " + String.join(", ", related) + "\n\n";
+                    sb.append(relatedLine);
+                    totalChars += relatedLine.length();
+                } else {
+                    sb.append("\n");
+                }
+            }
+        }
+        return sb.toString();
     }
 
     /**
