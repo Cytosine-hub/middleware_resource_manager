@@ -481,6 +481,7 @@ export function useAdmin(auth, notify, confirm) {
       fd.append('parameterStandardId', selectedStandard.value.id)
       const result = await request('/api/admin/standard-parameters/import', { method: 'POST', body: fd })
       paramImportResult.value = result; await loadStandardParameters(); notify('导入完成', 'success')
+      showParamImportDialog.value = false; paramImportResult.value = null; paramImportFile.value = null
     } catch (e) { notify(e.message || '导入失败', 'error') }
     finally { paramImporting.value = false }
   }
