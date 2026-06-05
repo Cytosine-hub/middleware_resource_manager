@@ -40,7 +40,7 @@ export function clearAuth() {
 }
 
 export async function request(path, options = {}) {
-  const token = options.token || localStorage.getItem(TOKEN_KEY)
+  const token = 'token' in options ? options.token : localStorage.getItem(TOKEN_KEY)
   const headers = new Headers(options.headers || {})
 
   if (token) {
