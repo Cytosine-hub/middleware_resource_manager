@@ -610,15 +610,7 @@ const previewTocActiveId = ref('')
 // ── RBAC helpers 已迁移到 composables/useAuth.js ──
 
 const adminPublishedParam = computed(() => adminFilters.published === '' ? '' : `&published=${adminFilters.published}`)
-const adminSectionLabel = computed(() => {
-  if (adminSection.value === 'files') return { eyebrow: 'Files', title: '文件管理' }
-  if (adminSection.value === 'types') return { eyebrow: 'Types', title: '类型管理' }
-  if (adminSection.value === 'standardPublish') return { eyebrow: 'Standards', title: '参数标准' }
-  if (adminSection.value === 'documentMaintenance') return { eyebrow: 'Documents', title: '标准文档' }
-  if (adminSection.value === 'reviews') return { eyebrow: 'Reviews', title: '审核管理' }
-  if (adminSection.value === 'settings') return { eyebrow: 'Settings', title: '系统设置' }
-  return { eyebrow: 'Admin', title: '用户管理' }
-})
+
 const pageTitle = computed(() => {
   if (route.name === 'home') return '运营集成中心门户'
   if (route.name === 'public') return '软件下载'
@@ -631,10 +623,6 @@ const pageTitle = computed(() => {
   if (route.name === 'commands') return '常用命令'
   return '管理后台'
 })
-// 公共标准页面 computed 已迁移到 StandardsPage.vue
-
-// 公共标准页面 computed 已迁移到 StandardsPage.vue
-
 // 公共标准页面 computed 已迁移到 StandardsPage.vue
 
 const activeSoftwareTypes = computed(() => softwareTypes.value.filter(type => type.active))
@@ -660,7 +648,6 @@ const releaseParameterStandardOptions = computed(() => {
 const importSoftwareOptions = computed(() => softwareTypesByCategory(importForm.category, true))
 const standardCategoryOptions = computed(() => standardForm.id ? softwareTypeCategories.value : activeTypeCategories.value)
 const standardSoftwareOptions = computed(() => softwareTypesByCategory(standardForm.category, !standardForm.id))
-const standardFilterSoftwareOptions = computed(() => softwareTypesByCategory(standardFilters.category, false))
 const filteredSoftwareTypes = computed(() => {
   const name = typeFilters.name.trim().toLowerCase()
   return softwareTypes.value.filter(type => {
@@ -707,26 +694,11 @@ const standardDocumentOptions = computed(() => {
   if (adminSection.value === 'standardPublish') return standardDocuments.value
   return allParameterStandards.value
 })
-const standardDocumentCategories = computed(() => uniqueOptions(standardDocumentOptions.value.map(doc => doc.category)))
 const standardPage = computed(() => {
   const totalElements = filteredStandardDocuments.value.length
   const totalPages = Math.max(Math.ceil(totalElements / standardFilters.size), 1)
   const page = Math.min(standardFilters.page, totalPages - 1)
   return { content: [], page, size: standardFilters.size, totalElements, totalPages, first: page <= 0, last: page >= totalPages - 1 }
-})
-const pagedStandardDocuments = computed(() => {
-  const start = standardPage.value.page * standardFilters.size
-  return filteredStandardDocuments.value.slice(start, start + standardFilters.size)
-})
-const parameterPage = computed(() => {
-  const totalElements = standardParameters.value.length
-  const totalPages = Math.max(Math.ceil(totalElements / parameterFilters.size), 1)
-  const page = Math.min(parameterFilters.page, totalPages - 1)
-  return { content: [], page, size: parameterFilters.size, totalElements, totalPages, first: page <= 0, last: page >= totalPages - 1 }
-})
-const pagedStandardParameters = computed(() => {
-  const start = parameterPage.value.page * parameterFilters.size
-  return standardParameters.value.slice(start, start + parameterFilters.size)
 })
 const selectedStandardParameters = computed(() => {
   if (!selectedStandard.value) return []
