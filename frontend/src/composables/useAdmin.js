@@ -461,7 +461,13 @@ export function useAdmin(auth, notify, confirm) {
     if (!parameterForm.code.trim() || !parameterForm.name.trim()) { notify('编码和名称必填', 'error'); return }
     try {
       const url = parameterForm.id ? `/api/admin/standard-parameters/${parameterForm.id}` : '/api/admin/standard-parameters'
-      await request(url, { method: parameterForm.id ? 'PUT' : 'POST', body: { ...parameterForm, standardDocumentId: selectedStandard.value?.id } })
+      const body = { ...parameterForm }
+      if (adminSection.value === 'standardPublish') {
+        body.parameterStandardId = selectedStandard.value?.id
+      } else {
+        body.standardDocumentId = selectedStandard.value?.id
+      }
+      await request(url, { method: parameterForm.id ? 'PUT' : 'POST', body })
       notify('已保存', 'success'); closeParameterDialog(); await loadStandardParameters()
     } catch (e) { notify(e.message || '保存失败', 'error') }
   }
