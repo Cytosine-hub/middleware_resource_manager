@@ -44,102 +44,12 @@
         @cancel="onDocumentEditorCancel"
       />
       <template v-else>
-      <section v-if="route.name === 'home'" class="portal-page">
-        <div class="portal-hero">
-          <div class="portal-copy">
-            <p class="eyebrow">统一入口</p>
-            <h2>资源下载、标准发布、漏洞通告与技术交流</h2>
-            <p>面向基础设施运维场景，集中呈现软件资产、规范文件、安全信息和论坛入口。</p>
-          </div>
-          <div class="portal-stats">
-            <div>
-              <strong>{{ publicPage.totalElements }}</strong>
-              <span>已发布资源</span>
-            </div>
-            <div>
-              <strong>5</strong>
-              <span>门户模块</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="portal-grid">
-          <article class="portal-card primary" @click="goPublic()">
-            <div class="portal-icon">软</div>
-            <div>
-              <h3>软件下载</h3>
-              <p>查看已发布的中间件安装包、版本说明、平台信息和下载链接。</p>
-            </div>
-            <button>进入下载中心</button>
-          </article>
-
-          <article class="portal-card" @click="goStandards()">
-            <div class="portal-icon">标</div>
-            <div>
-              <h3>标准发布</h3>
-              <p>集中发布基础设施规范、部署标准、运维手册和检查基线。</p>
-            </div>
-            <button>查看标准</button>
-          </article>
-
-          <article class="portal-card warning" @click="openPortalModule('漏洞发布')">
-            <div class="portal-icon">漏</div>
-            <div>
-              <h3>漏洞发布</h3>
-              <p>跟踪漏洞公告、影响范围、修复建议和版本升级要求。</p>
-            </div>
-            <button>查看漏洞</button>
-          </article>
-
-          <article class="portal-card forum" @click="goForum()">
-            <div class="portal-icon">论</div>
-            <div>
-              <h3>infra论坛</h3>
-              <p>沉淀基础设施实践经验，支持问题讨论、方案交流和知识共享。</p>
-            </div>
-            <button>进入论坛</button>
-          </article>
-        </div>
-
-        <div class="section-heading portal-tools-heading">
-          <div>
-            <p class="eyebrow">Tools</p>
-            <h3>常用工具</h3>
-          </div>
-        </div>
-        <div class="portal-grid portal-tools-grid">
-          <article class="portal-card portal-tool">
-            <div class="portal-icon tool-icon">监</div>
-            <div><h3>监控面板</h3><p>服务器性能、中间件状态、告警信息统一查看。</p></div>
-            <button class="ghost">查看</button>
-          </article>
-          <article class="portal-card portal-tool" @click="goCommands()">
-            <div class="portal-icon tool-icon">令</div>
-            <div><h3>常用命令</h3><p>中间件常用运维命令速查手册。</p></div>
-            <button class="ghost">查看</button>
-          </article>
-        </div>
-
-        <section class="portal-latest">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Latest</p>
-              <h3>最新软件发布</h3>
-            </div>
-            <button class="ghost" @click="goPublic()">更多</button>
-          </div>
-          <div class="latest-list">
-            <article v-for="release in publicPage.content.slice(0, 4)" :key="release.downloadToken">
-              <div>
-                <h4>{{ release.middlewareName }}</h4>
-                <p>{{ release.version }} · {{ release.platform || '通用平台' }}</p>
-              </div>
-              <button class="ghost" @click.stop="openDetail(release.downloadToken)">详情</button>
-            </article>
-            <p v-if="publicPage.content.length === 0" class="empty-state">暂无已发布软件资源。</p>
-          </div>
-        </section>
-      </section>
+      <HomePage
+        v-if="route.name === 'home'"
+        @navigate="navigate"
+        @open-detail="openDetail"
+        @notify="notify"
+      />
 
       <section v-else-if="route.name === 'public'" class="workspace">
         <div class="toolbar">
@@ -1136,6 +1046,7 @@ import ForumPersonalCenter from './components/ForumPersonalCenter.vue'
 import KnowledgePanel from './components/KnowledgePanel.vue'
 import WikiPanel from './components/WikiPanel.vue'
 import DiagnosticsPanel from './components/DiagnosticsPanel.vue'
+import HomePage from './pages/HomePage.vue'
 import Toast from './components/ui/Toast.vue'
 import ConfirmDialog from './components/ui/ConfirmDialog.vue'
 import FormModal from './components/ui/FormModal.vue'
