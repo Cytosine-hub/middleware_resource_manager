@@ -285,8 +285,8 @@ const admin = useAdmin(auth, notify, confirmAction)
 const {
   adminSection, showPassword, editing, uploading, softwareTypes,
   showParamImportDialog, allParameterStandards, standardDocuments, standardParameters, selectedStandard,
-  selectedReviewDiff, allReviews, userFormTarget, userList, systemSettings,
-  adminFilters, typeFilters, standardFilters, maintenanceDocumentFilters, reviewFilters, reviewPage,
+  selectedReviewDiff, userFormTarget, userList, systemSettings,
+  adminFilters, typeFilters, standardFilters, maintenanceDocumentFilters, reviewFilters,
   adminPage, releaseForm, passwordForm, typeForm, standardForm, userForm,
   loadAdmin, loadSoftwareTypes, loadSoftwareCategories, loadSoftwareMetadata, loadStandardModule, loadAllParameterStandards,
   loadStandardDocuments, loadStandardParameters, saveSystemSettings,
@@ -300,6 +300,7 @@ const {
   changePassword,
   softwareTypeCategories, filteredStandardDocuments, pagedSoftwareTypes,
   selectedStandardParameters, pagedMaintenanceDocuments,
+  filteredReviews, reviewPageInfo, pagedReviews,
   changeTypePage, applyTypeFilters, changeStandardPage, applyStandardFilters, handleStandardFilterCategoryChange,
   openStandardDetail, backToStandardList, changeMaintenanceDocumentPage, applyMaintenanceDocumentFilters,
   changeReviewPage, applyReviewFilters,
@@ -323,21 +324,6 @@ const pageTitle = computed(() => {
   if (route.name === 'diagnostics') return '智能排查'
   if (route.name === 'commands') return '常用命令'
   return '管理后台'
-})
-const filteredReviews = computed(() => {
-  const status = reviewFilters.status
-  if (!status) return allReviews.value
-  return allReviews.value.filter(r => r.status === status)
-})
-const reviewPageInfo = computed(() => {
-  const totalElements = filteredReviews.value.length
-  const totalPages = Math.max(Math.ceil(totalElements / reviewPage.size), 1)
-  const page = Math.min(reviewPage.page, totalPages - 1)
-  return { content: [], page, size: reviewPage.size, totalElements, totalPages, first: page <= 0, last: page >= totalPages - 1 }
-})
-const pagedReviews = computed(() => {
-  const start = reviewPageInfo.value.page * reviewPage.size
-  return filteredReviews.value.slice(start, start + reviewPage.size)
 })
 
 // syncRoute 包含路由变化后的数据加载副作用
@@ -448,15 +434,11 @@ function goDocumentEditorEdit(id) {
 }
 
 function onDocumentEditorSaved() {
-  notify('文档已保存', 'success')
-  adminSection.value = 'documentMaintenance'
-  loadStandardDocuments()
-  window.location.hash = '#/admin'
+  notify('文档已保存', 'success'); adminSection.value = 'documentMaintenance'
+  loadStandardDocuments(); window.location.hash = '#/admin'
 }
-
 function onDocumentEditorCancel() {
-  window.location.hash = '#/admin'
-  setTimeout(() => { adminSection.value = 'documentMaintenance' }, 0)
+  window.location.hash = '#/admin'; setTimeout(() => { adminSection.value = 'documentMaintenance' }, 0)
 }
 
 function previewDocument(document) {
@@ -478,26 +460,12 @@ async function loadSiteConfig() {
 }
 
 function handleUnhandledRejection(event) {
-  const message = event.reason?.message || '请求失败'
-  notify(message, 'error')
-  if (event.reason?.status === 401) {
-    logout(false)
-  }
+  notify(event.reason?.message || '请求失败', 'error')
+  if (event.reason?.status === 401) logout(false)
   event.preventDefault()
 }
-
-function handleBeforeUnload(e) {
-  if (uploading.value) {
-    e.preventDefault()
-    e.returnValue = ''
-  }
-}
-
-function handleAuthLogout() {
-  auth.token = ''
-  auth.user = null
-  window.location.hash = '#/home'
-}
+function handleBeforeUnload(e) { if (uploading.value) { e.preventDefault(); e.returnValue = '' } }
+function handleAuthLogout() { auth.token = ''; auth.user = null; window.location.hash = '#/home' }
 
 onMounted(() => {
   loadSiteConfig()

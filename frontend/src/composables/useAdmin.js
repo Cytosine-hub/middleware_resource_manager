@@ -656,6 +656,21 @@ export function useAdmin(auth, notify, confirm) {
     const start = page * maintenanceDocumentFilters.size
     return maintenanceDocumentsComputed.value.slice(start, start + maintenanceDocumentFilters.size)
   })
+  const filteredReviews = computed(() => {
+    const status = reviewFilters.status
+    if (!status) return allReviews.value
+    return allReviews.value.filter(r => r.status === status)
+  })
+  const reviewPageInfo = computed(() => {
+    const totalElements = filteredReviews.value.length
+    const totalPages = Math.max(Math.ceil(totalElements / reviewPage.size), 1)
+    const page = Math.min(reviewPage.page, totalPages - 1)
+    return { content: [], page, size: reviewPage.size, totalElements, totalPages, first: page <= 0, last: page >= totalPages - 1 }
+  })
+  const pagedReviews = computed(() => {
+    const start = reviewPageInfo.value.page * reviewPage.size
+    return filteredReviews.value.slice(start, start + reviewPage.size)
+  })
 
   return {
     // State
@@ -676,6 +691,7 @@ export function useAdmin(auth, notify, confirm) {
     filteredSoftwareTypes, typePageComputed, pagedSoftwareTypes,
     filteredStandardDocuments, standardDocumentOptions, standardPageComputed, selectedStandardParameters,
     maintenanceDocumentsComputed, maintenanceDocumentPageComputed, pagedMaintenanceDocuments,
+    filteredReviews, reviewPageInfo, pagedReviews,
     // Functions
     loadAdmin, loadSoftwareTypes, loadSoftwareCategories, loadSoftwareMetadata,
     loadStandardDocuments, loadStandardModule, loadAllParameterStandards, loadStandardParameters, loadSystemSettings, saveSystemSettings,
