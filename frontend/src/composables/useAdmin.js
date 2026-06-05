@@ -484,7 +484,16 @@ export function useAdmin(auth, notify, confirm) {
     finally { paramImporting.value = false }
   }
   async function downloadParameterTemplate() {
-    try { window.open('/api/admin/standard-parameters/template', '_blank') } catch { notify('下载失败', 'error') }
+    try {
+      const token = localStorage.getItem('mrm.token')
+      const resp = await fetch('/api/admin/standard-parameters/template', { headers: { Authorization: `Bearer ${token}` } })
+      if (!resp.ok) throw new Error('下载失败')
+      const blob = await resp.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download = '参数导入模板.xlsx'
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) { notify(e.message || '下载失败', 'error') }
   }
 
   // ── 审核管理 ──
