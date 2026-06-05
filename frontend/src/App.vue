@@ -243,13 +243,12 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 import { request } from './api'
 import { useAuth } from './composables/useAuth'
 import { useNotify } from './composables/useNotify'
 import { useRoute } from './composables/useRoute'
-import Pagination from './components/Pagination.vue'
 import DocumentEditor from './components/DocumentEditor.vue'
 import ForumPostList from './components/ForumPostList.vue'
 import ForumPostDetail from './components/ForumPostDetail.vue'
@@ -272,83 +271,46 @@ import DocumentsSection from './pages/admin/DocumentsSection.vue'
 import SettingsSection from './pages/admin/SettingsSection.vue'
 import Toast from './components/ui/Toast.vue'
 import ConfirmDialog from './components/ui/ConfirmDialog.vue'
+import FormModal from './components/ui/FormModal.vue'
 import DocumentPreview from './components/DocumentPreview.vue'
 import AdminModals from './components/AdminModals.vue'
 import { useAdmin } from './composables/useAdmin'
 
-const { auth, login: authLogin, logout: authLogout, restoreAuth, sha256,
-  currentUserRole, isSysAdmin, isCategoryAdmin, isManager, canAccessAdmin, isReadOnly, managedCategory } = useAuth()
-const { notice, notify, confirmDialog, confirm: confirmAction, handleConfirm, cancelConfirm } = useNotify()
+const { auth, login: authLogin, logout: authLogout, restoreAuth,
+  currentUserRole, isSysAdmin, isCategoryAdmin, canAccessAdmin, isReadOnly, managedCategory } = useAuth()
+const { notice, notify, confirmDialog, confirm: confirmAction } = useNotify()
 const { route, navigate } = useRoute()
 
-// ── 管理后台 composable ──
 const admin = useAdmin(auth, notify, confirmAction)
 const {
-  // 状态
-  adminSection, showPassword, showImport, importing, importResult, showImportResultDialog,
-  editing, uploading, uploadProgress, deleteTarget, deletingRelease,
-  showTypeDialog, showCategoryDialog, softwareCategories, softwareTypes,
-  showStandardDialog, showParameterDialog, showParamImportDialog, paramImporting, paramImportResult, paramImportFile,
-  allParameterStandards, standardDocuments, standardParameters, selectedStandard,
-  selectedReview, selectedReviewDiff, reviewComment, allReviews, showRevisionModal, revisionList, revisionDocTitle,
-  showUserDialog, showRoleDialog, userFormTarget, userList, allRoles, systemSettings,
-  adminFilters, typeFilters, standardFilters, parameterFilters, maintenanceDocumentFilters, reviewFilters, reviewPage,
-  adminPage, releaseForm, importForm, passwordForm, categoryForm, typeForm, standardForm, parameterForm, userForm,
-  // 加载函数
+  adminSection, showPassword, editing, uploading, softwareTypes,
+  showParamImportDialog, allParameterStandards, standardDocuments, standardParameters, selectedStandard,
+  selectedReviewDiff, allReviews, userFormTarget, userList, systemSettings,
+  adminFilters, typeFilters, standardFilters, maintenanceDocumentFilters, reviewFilters, reviewPage,
+  adminPage, releaseForm, passwordForm, typeForm, standardForm, userForm,
   loadAdmin, loadSoftwareTypes, loadSoftwareCategories, loadSoftwareMetadata, loadStandardModule, loadAllParameterStandards,
-  loadStandardDocuments, loadStandardParameters, loadSystemSettings, saveSystemSettings, loadUsers, loadRoles,
-  // 资源 CRUD
-  startCreate, startEdit, cancelEdit, handleReleaseFileChange, saveRelease, togglePublish,
-  openDeleteReleaseDialog, closeDeleteReleaseDialog, confirmDeleteRelease, regeneratePackage,
-  // 批量导入
-  openImportPage, closeImportPage, submitImport,
-  // 类型管理
-  openCreateCategoryDialog, closeCategoryDialog, saveCategory,
-  openCreateTypeDialog, closeTypeDialog, saveType,
-  // 标准管理
-  openCreateStandardDialog, openEditStandardDialog, closeStandardDialog, saveStandard,
+  loadStandardDocuments, loadStandardParameters, saveSystemSettings,
+  startCreate, startEdit, togglePublish, openDeleteReleaseDialog, regeneratePackage,
+  openImportPage, openCreateCategoryDialog, openCreateTypeDialog,
+  openCreateStandardDialog, openEditStandardDialog,
   submitForReview, startModify, cancelModify, confirmDeleteDoc,
-  // 参数管理
-  openCreateParameterDialog, closeParameterDialog, saveParameter,
-  handleParamImportFileChange, importParameters, downloadParameterTemplate, copyParameter,
-  // 审核管理
-  loadReviews, openReviewDetail, closeReviewDetail, reviewApprove, reviewReject,
-  openRevisionHistory,
-  // 用户管理
-  openCreateUserDialog, closeUserDialog, createUser, openRoleDialog, closeRoleDialog, changeUserRole, deleteUserAccount,
-  resetUserPassword, openChangeRoleDialog,
-  // 密码
+  openCreateParameterDialog, downloadParameterTemplate, copyParameter,
+  openReviewDetail, openRevisionHistory,
+  openCreateUserDialog, changeUserRole, deleteUserAccount, resetUserPassword, openChangeRoleDialog,
   changePassword,
-  // Computed
-  activeSoftwareTypes, softwareTypeCategories, activeTypeCategories,
-  releaseCategoryOptions, releaseSoftwareOptions, releaseStandardOptions, releaseParameterStandardOptions,
-  importSoftwareOptions, standardCategoryOptions, standardSoftwareOptions,
-  filteredSoftwareTypes, typePageComputed, pagedSoftwareTypes,
-  filteredStandardDocuments, standardDocumentOptions, standardPageComputed, selectedStandardParameters,
-  maintenanceDocumentsComputed, maintenanceDocumentPageComputed, pagedMaintenanceDocuments,
-  // 筛选/分页
+  softwareTypeCategories, filteredStandardDocuments, pagedSoftwareTypes,
+  selectedStandardParameters, pagedMaintenanceDocuments,
   changeTypePage, applyTypeFilters, changeStandardPage, applyStandardFilters, handleStandardFilterCategoryChange,
   openStandardDetail, backToStandardList, changeMaintenanceDocumentPage, applyMaintenanceDocumentFilters,
   changeReviewPage, applyReviewFilters,
-  // 工具函数
-  getStandardLabel, formatTime, statusLabel, statusClass, reviewStatusClass,
-  // 切换管理区域
+  getStandardLabel, reviewStatusClass,
   switchAdminSection, changeAdminPage
 } = admin
 
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true })
 const siteConfig = reactive({ knowledgeEnabled: true, diagnosticsEnabled: true })
-// 下载进度已迁移到 DownloadsPage.vue
-// 公共页面状态已迁移到各页面组件（HomePage/DownloadsPage/StandardsPage）
-// ── 管理后台状态已迁移到 composables/useAdmin.js ──
 const loginForm = reactive({ username: '', password: '' })
 const selectedPreviewDocument = ref(null)
-const previewTocActiveId = ref('')
-// 审核/差异对话框状态已迁移到 ReviewsSection
-
-// ── 常用命令已迁移到 CommandsPage.vue ──
-
-// ── RBAC helpers 已迁移到 composables/useAuth.js ──
 
 const pageTitle = computed(() => {
   if (route.name === 'home') return '运营集成中心门户'
@@ -362,9 +324,6 @@ const pageTitle = computed(() => {
   if (route.name === 'commands') return '常用命令'
   return '管理后台'
 })
-// 公共标准页面 computed 已迁移到 StandardsPage.vue
-
-// 审核 computed — 从 allReviews 派生分页
 const filteredReviews = computed(() => {
   const status = reviewFilters.status
   if (!status) return allReviews.value
@@ -380,12 +339,8 @@ const pagedReviews = computed(() => {
   const start = reviewPageInfo.value.page * reviewPage.size
   return filteredReviews.value.slice(start, start + reviewPage.size)
 })
-const diffLines = computed(() => (selectedReviewDiff.value || '').split('\n'))
 
-// 文档预览 computed 已迁移到 DocumentPreview.vue
-
-// parseRoute/syncRoute 基础逻辑在 composables/useRoute.js
-// 这里的 syncRoute 包含路由变化后的数据加载副作用
+// syncRoute 包含路由变化后的数据加载副作用
 function syncRoute() {
   const hash = window.location.hash.replace(/^#/, '')
   let next
@@ -407,7 +362,6 @@ function syncRoute() {
   else if (hash === '/standards') next = { name: 'standards', standardId: null, standardType: null }
   else if (hash.startsWith('/commands')) next = { name: 'commands' }
   else next = { name: 'public', token: null }
-  route.name = next.name
   route.name = next.name
   route.token = next.token
   route.standardId = next.standardId
@@ -443,10 +397,6 @@ function updateDocumentTitle() {
   document.title = `${pageTitle.value} - 运营集成中心`
 }
 
-// 公共页面数据加载已迁移到各页面组件（HomePage/DownloadsPage/StandardsPage）
-// loadAdmin/loadSoftwareTypes/loadStandardModule/loadStandardDocuments/loadStandardParameters
-// 已迁移到 composables/useAdmin.js
-
 async function login() {
   try {
     await authLogin(loginForm.username, loginForm.password)
@@ -470,29 +420,24 @@ async function logout(showMessage = true) {
   await authLogout()
   loginForm.username = ''
   loginForm.password = ''
-  selectedRelease.value = null
-  selectedPublicStandard.value = null
   selectedStandard.value = null
   editing.value = false
   showPassword.value = false
   adminSection.value = 'files'
   Object.assign(adminFilters, { keyword: '', platform: '', published: '', page: 0, size: 10 })
-  Object.assign(releaseForm, defaultReleaseForm())
-  Object.assign(typeForm, defaultTypeForm())
-  Object.assign(standardForm, defaultStandardForm())
+  Object.assign(releaseForm, { id: null, category: '', softwareTypeId: '', middlewareName: '', version: '', platform: '', description: '', releasedAt: '', published: false, file: null, originalFileName: '', standardDocumentId: null, standardPackage: false, parameterStandardId: null })
+  Object.assign(typeForm, { id: null, category: '中间件', name: '', description: '', active: true })
+  Object.assign(standardForm, { id: null, category: '', softwareTypeId: '', softwareVersion: '', code: '', summary: '', content: '# 参数标准\n\n' })
   Object.assign(userForm, { username: '', displayName: '', password: '', role: '开发经理' })
   userFormTarget.value = null
   if (showMessage) notify('已退出')
   window.location.hash = '#/home'
 }
 
-// 论坛发帖需检查登录状态
 function goForumNew() {
   if (!auth.token) { navigate('admin'); return }
   navigate('forum/new')
 }
-
-// handleDownload 已迁移到 DownloadsPage.vue
 
 function goDocumentEditor() {
   window.location.hash = '#/admin/document-editor'
@@ -514,11 +459,6 @@ function onDocumentEditorCancel() {
   setTimeout(() => { adminSection.value = 'documentMaintenance' }, 0)
 }
 
-// 公共页面函数已迁移到各页面组件
-
-// 筛选/分页/标准文档CRUD/审核/工具函数 已迁移到 composables/useAdmin.js
-
-// 文档预览函数已迁移到 DocumentPreview.vue
 function previewDocument(document) {
   selectedPreviewDocument.value = document
   if (document.relatedStandardDocumentId) {
@@ -528,8 +468,6 @@ function previewDocument(document) {
   }
 }
 function closePreviewDocument() { selectedPreviewDocument.value = null }
-
-// 用户管理函数已迁移到 composables/useAdmin.js
 
 async function loadSiteConfig() {
   try {
