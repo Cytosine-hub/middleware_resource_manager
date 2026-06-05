@@ -57,10 +57,10 @@ const currentLabel = computed(() => allSections.find(s => s.key === props.sectio
 </script>
 
 <style scoped>
-.admin-layout { display: flex; min-height: calc(100vh - 60px); }
+.admin-layout { display: flex; height: calc(100vh - 84px); overflow: hidden; }
 .admin-sidebar {
   width: 220px; background: var(--color-bg-secondary); border-right: 1px solid var(--color-border);
-  padding: var(--space-xl); display: flex; flex-direction: column;
+  padding: var(--space-xl); display: flex; flex-direction: column; flex-shrink: 0;
 }
 .sidebar-title { margin-bottom: var(--space-xl); }
 .sidebar-title .eyebrow { color: var(--color-text-tertiary); font-size: var(--text-xs); text-transform: uppercase; margin: 0; }
@@ -74,9 +74,13 @@ const currentLabel = computed(() => allSections.find(s => s.key === props.sectio
 .side-nav button:hover { background: var(--color-bg-tertiary); color: var(--color-text); }
 .side-nav button.active { background: var(--color-primary-light); color: var(--color-primary); font-weight: 600; }
 .sidebar-actions { display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-lg); }
-.admin-content { flex: 1; padding: var(--space-xl); overflow-y: auto; }
-.admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-xl); }
+.admin-content { flex: 1; padding: var(--space-xl); overflow-y: auto; display: flex; flex-direction: column; min-height: 0; }
+.admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-xl); flex-shrink: 0; }
 .admin-header .eyebrow { color: var(--color-text-tertiary); font-size: var(--text-xs); text-transform: uppercase; margin: 0; }
 .admin-header h2 { margin: var(--space-xs) 0 0; font-size: var(--text-2xl); }
 .admin-actions { display: flex; gap: var(--space-sm); }
+.admin-content > :deep(div) { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.admin-content > :deep(div) > .list-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.admin-content > :deep(div) > .list-panel > .table-wrap { flex: 1; overflow-y: auto; min-height: 0; }
+.admin-content > :deep(div) > .list-panel > nav { flex-shrink: 0; justify-content: flex-end; padding-top: 12px; }
 </style>
