@@ -31,6 +31,7 @@
 
 <script setup>
 import Pagination from '../../components/Pagination.vue'
+import { formatTime } from '../../utils'
 
 const props = defineProps({
   reviews: { type: Array, default: () => [] },
@@ -47,11 +48,6 @@ function statusClass(status) {
   if (status === 'APPROVED') return 'ok'
   if (status === 'REJECTED') return 'off'
   return ''
-}
-
-function formatTime(t) {
-  if (!t) return '-'
-  try { return new Date(t).toLocaleString('zh-CN') } catch { return String(t) }
 }
 
 function canReview(record) {

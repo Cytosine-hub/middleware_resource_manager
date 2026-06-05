@@ -60,3 +60,13 @@ export function documentTypeLabel(type) {
   if (type === 'MANUAL') return '手册'
   return '参数标准'
 }
+
+/** 格式化时间（支持数组和字符串格式） */
+export function formatTime(time) {
+  if (!time) return '-'
+  if (Array.isArray(time)) {
+    const [y, m, d, h, min] = time
+    return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')} ${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`
+  }
+  return String(time).replace('T', ' ').substring(0, 16)
+}

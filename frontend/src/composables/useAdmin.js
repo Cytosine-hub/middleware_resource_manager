@@ -4,6 +4,7 @@
  */
 import { reactive, ref, computed } from 'vue'
 import { request } from '../api'
+import { formatTime } from '../utils'
 
 async function sha256Hash(str) {
   try {
@@ -136,14 +137,6 @@ export function useAdmin(auth, notify, confirm) {
     if (!standard) return '-'
     return [standard.category, standard.software, standard.softwareVersion].filter(Boolean).join(' / ') +
       (standard.version ? ` · V${standard.version}` : '')
-  }
-  function formatTime(time) {
-    if (!time) return '-'
-    if (Array.isArray(time)) {
-      const [y, m, d, h, min] = time
-      return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')} ${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`
-    }
-    return String(time).replace('T', ' ').substring(0, 16)
   }
 
   // ── 加载函数 ──
