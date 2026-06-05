@@ -171,7 +171,7 @@ export function useAdmin(auth, notify, confirm) {
     try {
       const data = await request('/api/admin/parameter-standards')
       const list = Array.isArray(data) ? data : (data?.content ?? [])
-      allParameterStandards.value = list.filter(d => d.status === 'PUBLISHED')
+      allParameterStandards.value = list
     } catch { allParameterStandards.value = [] }
   }
 
