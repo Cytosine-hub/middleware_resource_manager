@@ -98,63 +98,15 @@
       <WikiPanel v-else-if="route.name === 'wiki'" :auth="auth" :notify="notify" />
       <DiagnosticsPanel v-else-if="route.name === 'diagnostics' && siteConfig.diagnosticsEnabled" :auth="auth" :notify="notify" />
 
-      <section v-else-if="route.name === 'commands'" class="workspace commands-page">
-        <div class="toolbar">
-          <button class="ghost" @click="goHome()">← 返回首页</button>
-          <h2 style="margin-left:12px;flex:1">常用命令</h2>
-          <input v-model.trim="cmdSearch" placeholder="搜索命令..." style="max-width:260px" />
-          <button v-if="isSysAdmin || managedCategory" @click="openCreateCommandDialog()">新增命令</button>
-        </div>
-        <div class="commands-layout">
-          <aside class="commands-sidebar">
-            <div class="type-list">
-              <button :class="{ active: selectedCmdType === null }" @click="selectedCmdType = null">全部</button>
-              <template v-for="cat in cmdTypeCategories" :key="cat">
-                <div class="type-category-label">{{ cat }}</div>
-                <button v-for="t in cmdTypesByCategory(cat)" :key="t.id" :class="{ active: selectedCmdType === t.id }" @click="selectedCmdType = t.id">{{ t.name }}</button>
-              </template>
-            </div>
-          </aside>
-          <main class="commands-main">
-            <div class="command-list">
-              <article v-for="cmd in filteredCommands" :key="cmd.id" class="command-card" @click="cmd._expanded = !cmd._expanded">
-                <div class="command-header">
-                  <span class="command-type-tag">{{ getCmdTypeName(cmd) }}</span>
-                  <span class="command-brief">{{ cmd.briefDescription }}</span>
-                  <span v-for="cat in parseCategories(cmd.categories)" :key="cat" class="command-cat-tag">{{ cat }}</span>
-                  <div style="margin-left:auto;display:flex;gap:6px">
-                    <button class="ghost" @click.stop="copyCommand(cmd.commandFormat)">复制</button>
-                    <button v-if="canManageCommand(cmd)" class="ghost" @click.stop="openEditCommandDialog(cmd)">编辑</button>
-                    <button v-if="canManageCommand(cmd)" class="danger" @click.stop="deleteCommand(cmd)">删除</button>
-                  </div>
-                </div>
-                <pre class="command-code">{{ cmd.commandFormat }}</pre>
-                <div v-if="cmd._expanded && cmd.detailedDescription" class="command-detail">
-                  <div v-html="formatDetail(cmd.detailedDescription)"></div>
-                </div>
-              </article>
-              <p v-if="filteredCommands.length === 0" class="empty-state">暂无匹配的命令。</p>
-            </div>
-          </main>
-        </div>
-
-        <FormModal v-model="showCommandDialog" :title="cmdForm.id ? '编辑常用命令' : '新增常用命令'" @submit="saveCommand()">
-          <div class="form-grid single">
-            <label>所属类型
-              <select v-model="cmdForm.softwareTypeId" required>
-                <option value="" disabled>请选择</option>
-                <optgroup v-for="cat in cmdFormCategories" :key="cat" :label="cat">
-                  <option v-for="t in cmdFormTypesByCategory(cat)" :key="t.id" :value="t.id">{{ t.name }}</option>
-                </optgroup>
-              </select>
-            </label>
-            <label>命令格式<textarea v-model.trim="cmdForm.commandFormat" required rows="4" placeholder="如: redis-cli -h $HOST -p $PORT info"></textarea></label>
-            <label>简要说明<input v-model.trim="cmdForm.briefDescription" required maxlength="500" placeholder="如: 查看基础信息" /></label>
-            <label>详细说明<textarea v-model.trim="cmdForm.detailedDescription" rows="6" placeholder="命令的详细说明、参数解释等"></textarea></label>
-            <label>分类标签<input v-model.trim="cmdForm.categories" placeholder="多个标签用逗号分隔，如: 基础,常用,查询" /></label>
-          </div>
-        </FormModal>
-      </section>
+      <CommandsPage
+        v-else-if="route.name === 'commands'"
+        :auth="auth"
+        :isSysAdmin="isSysAdmin"
+        :managedCategory="managedCategory"
+        :softwareTypes="softwareTypes"
+        :notify="notify"
+        :confirm="confirmAction"
+      />
 
       <section v-else class="workspace">
         <div v-if="!auth.token" class="login-page">
@@ -870,6 +822,7 @@ import DiagnosticsPanel from './components/DiagnosticsPanel.vue'
 import HomePage from './pages/HomePage.vue'
 import DownloadsPage from './pages/DownloadsPage.vue'
 import StandardsPage from './pages/StandardsPage.vue'
+import CommandsPage from './pages/CommandsPage.vue'
 import Toast from './components/ui/Toast.vue'
 import ConfirmDialog from './components/ui/ConfirmDialog.vue'
 import FormModal from './components/ui/FormModal.vue'
