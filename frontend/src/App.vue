@@ -595,8 +595,6 @@ const previewTocActiveId = ref('')
 
 // ── RBAC helpers 已迁移到 composables/useAuth.js ──
 
-const adminPublishedParam = computed(() => adminFilters.published === '' ? '' : `&published=${adminFilters.published}`)
-
 const pageTitle = computed(() => {
   if (route.name === 'home') return '运营集成中心门户'
   if (route.name === 'public') return '软件下载'
@@ -860,7 +858,8 @@ function updateDocumentTitle() {
 function applyPage(target, source) { Object.assign(target, source) }
 
 async function loadAdmin() {
-  const query = `keyword=${encodeURIComponent(adminFilters.keyword)}&platform=${encodeURIComponent(adminFilters.platform)}&page=${adminFilters.page}&size=${adminFilters.size}${adminPublishedParam.value}`
+  const pub = adminFilters.published !== '' ? `&published=${adminFilters.published}` : ''
+  const query = `keyword=${encodeURIComponent(adminFilters.keyword)}&platform=${encodeURIComponent(adminFilters.platform)}&page=${adminFilters.page}&size=${adminFilters.size}${pub}`
   applyPage(adminPage, await request(`/api/admin/releases?${query}`))
 }
 
