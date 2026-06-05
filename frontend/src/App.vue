@@ -567,9 +567,10 @@ const { auth, login: authLogin, logout: authLogout, restoreAuth, sha256,
 const { notice, notify, confirmDialog, confirm: confirmAction, handleConfirm, cancelConfirm } = useNotify()
 const { route, navigate } = useRoute()
 
-// ── 管理后台 composable（仅状态，函数保留 App.vue 版本以保持副作用逻辑）──
+// ── 管理后台 composable ──
 const admin = useAdmin(auth, notify, confirmAction)
 const {
+  // 状态
   adminSection, showPassword, showImport, importing, importResult, showImportResultDialog,
   editing, uploading, uploadProgress, deleteTarget, deletingRelease,
   showTypeDialog, showCategoryDialog, softwareCategories, softwareTypes,
@@ -578,7 +579,33 @@ const {
   selectedReview, selectedReviewDiff, reviewComment, allReviews, showRevisionModal, revisionList, revisionDocTitle,
   showUserDialog, showRoleDialog, userFormTarget, userList, allRoles, systemSettings,
   adminFilters, typeFilters, standardFilters, parameterFilters, maintenanceDocumentFilters, reviewFilters, reviewPage,
-  adminPage, releaseForm, importForm, passwordForm, categoryForm, typeForm, standardForm, parameterForm, userForm
+  adminPage, releaseForm, importForm, passwordForm, categoryForm, typeForm, standardForm, parameterForm, userForm,
+  // 加载函数
+  loadSoftwareCategories, loadSoftwareMetadata, loadAllParameterStandards,
+  loadSystemSettings, saveSystemSettings, loadUsers, loadRoles,
+  // 资源 CRUD
+  startCreate, startEdit, cancelEdit, handleReleaseFileChange, saveRelease, togglePublish,
+  openDeleteReleaseDialog, closeDeleteReleaseDialog, confirmDeleteRelease,
+  // 批量导入
+  openImportPage, closeImportPage, submitImport,
+  // 类型管理
+  openCreateCategoryDialog, closeCategoryDialog, saveCategory,
+  openCreateTypeDialog, closeTypeDialog, saveType,
+  // 标准管理
+  openCreateStandardDialog, closeStandardDialog, saveStandard,
+  // 参数管理
+  openCreateParameterDialog, closeParameterDialog, saveParameter,
+  handleParamImportFileChange, importParameters, downloadParameterTemplate,
+  // 审核管理
+  loadReviews, openReviewDetail, closeReviewDetail, reviewApprove, reviewReject,
+  openRevisionHistory,
+  // 用户管理
+  openCreateUserDialog, closeUserDialog, createUser, openRoleDialog, closeRoleDialog, changeUserRole, deleteUserAccount,
+  resetUserPassword,
+  // 密码
+  changePassword,
+  // 切换管理区域
+  switchAdminSection, changeAdminPage
 } = admin
 
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true })
@@ -1023,159 +1050,8 @@ function applyMaintenanceDocumentFilters() {
   maintenanceDocumentFilters.page = 0
 }
 
-function switchAdminSection(section) {
-  adminSection.value = section
-  closeImportPage()
-  editing.value = false
-  selectedStandard.value = null
-  if (section === 'types') {
-    loadSoftwareTypes()
-    loadSoftwareCategories()
-  } else if (section === 'standardPublish' || section === 'documentMaintenance') {
-    loadSoftwareTypes()
-    loadSoftwareCategories()
-    loadStandardModule()
-    loadAllParameterStandards()
-  } else if (section === 'users') {
-    loadUsers()
-  } else if (section === 'reviews') {
-    loadReviews()
-  } else if (section === 'settings') {
-    loadSystemSettings()
-  } else {
-    loadAdmin()
-    loadSoftwareTypes()
-    loadSoftwareCategories()
-    loadAllParameterStandards()
-  }
-}
-
-function openImportPage() {
-  editing.value = false
-  importResult.value = null
-  Object.assign(importForm, defaultImportForm())
-  showImport.value = true
-}
-
-function closeImportPage() {
-  if (importing.value) return
-  showImport.value = false
-}
-
-function startCreate() {
-  Object.assign(releaseForm, defaultReleaseForm())
-  editing.value = true
-}
-
-function startEdit(release) {
-  if (release.published) {
-    notify('已发布资源不能编辑，请先下架后再编辑', 'error')
-    return
-  }
-  const selectedType = findSoftwareType(release.softwareTypeId)
-  Object.assign(releaseForm, {
-    id: release.id,
-    category: release.softwareTypeCategory || selectedType?.category || '',
-    softwareTypeId: release.softwareTypeId || '',
-    middlewareName: release.middlewareName,
-    version: release.version,
-    platform: release.platform || '',
-    description: release.description || '',
-    releasedAt: release.releasedAt || '',
-    published: release.published,
-    file: null,
-    originalFileName: release.originalFileName || '',
-    standardDocumentId: release.standardDocumentId || null,
-    standardPackage: release.standardPackage || false,
-    parameterStandardId: release.parameterStandardId || null
-  })
-  editing.value = true
-}
-
-function cancelEdit() {
-  editing.value = false
-  Object.assign(releaseForm, defaultReleaseForm())
-}
-
-function handleReleaseFileChange(event) {
-  releaseForm.file = event.target.files?.[0] || null
-}
-
-async function saveRelease() {
-  const formData = new FormData()
-  const selectedType = findSoftwareType(releaseForm.softwareTypeId)
-  if (!selectedType) {
-    notify('请选择软件类型')
-    return
-  }
-  if (!releaseForm.id && !releaseForm.file) {
-    notify('请上传安装包', 'error')
-    return
-  }
-  releaseForm.middlewareName = selectedType.name
-  for (const key of ['middlewareName', 'version', 'platform', 'description', 'releasedAt', 'published', 'standardDocumentId']) {
-    formData.append(key, releaseForm[key] ?? '')
-  }
-  formData.append('softwareTypeId', releaseForm.softwareTypeId)
-  formData.append('standardPackage', releaseForm.standardPackage)
-  if (releaseForm.standardPackage && releaseForm.parameterStandardId) {
-    formData.append('parameterStandardId', releaseForm.parameterStandardId)
-  }
-  if (releaseForm.file) {
-    formData.append('file', releaseForm.file)
-  }
-
-  const url = releaseForm.id ? `/api/admin/releases/${releaseForm.id}` : '/api/admin/releases'
-  const method = releaseForm.id ? 'PUT' : 'POST'
-
-  uploading.value = true
-  uploadProgress.value = 0
-
-  try {
-    await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) uploadProgress.value = Math.round(e.loaded / e.total * 100)
-      }
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(JSON.parse(xhr.responseText || 'null'))
-        } else {
-          let message = '保存失败'
-          try {
-            const payload = JSON.parse(xhr.responseText)
-            const fieldErrors = payload.fieldErrors ? Object.values(payload.fieldErrors).filter(Boolean) : []
-            message = fieldErrors.length ? fieldErrors.join('；') : (payload.message || message)
-          } catch {}
-          reject(new Error(message))
-        }
-      }
-      xhr.onerror = () => reject(new Error('网络错误'))
-      xhr.open(method, url)
-      xhr.setRequestHeader('Authorization', 'Bearer ' + auth.token)
-      xhr.send(formData)
-    })
-    notify('资源已保存', 'success')
-    cancelEdit()
-    await loadAdmin()
-  } catch (error) {
-    notify(error.message || '保存失败', 'error')
-  } finally {
-    uploading.value = false
-    uploadProgress.value = 0
-  }
-}
-
-async function togglePublish(release) {
-  const actionText = release.published ? '下架' : '发布'
-  try {
-    await request(`/api/admin/releases/${release.id}/${release.published ? 'unpublish' : 'publish'}`, { method: 'POST' })
-    notify(`资源已${actionText}`, 'success')
-    await loadAdmin()
-  } catch (error) {
-    notify(error.message || `资源${actionText}失败`, 'error')
-  }
-}
+// switchAdminSection/openImportPage/closeImportPage/startCreate/startEdit/cancelEdit/handleReleaseFileChange
+// saveRelease/togglePublish 已迁移到 composables/useAdmin.js
 
 async function regeneratePackage(release) {
   try {
@@ -1187,78 +1063,9 @@ async function regeneratePackage(release) {
   }
 }
 
-function openDeleteReleaseDialog(release) {
-  if (release.published) {
-    notify('已发布资源不能删除，请先下架后再删除', 'error')
-    return
-  }
-  deleteTarget.value = release
-}
+// openDeleteReleaseDialog/closeDeleteReleaseDialog/confirmDeleteRelease 已迁移到 composables/useAdmin.js
 
-function closeDeleteReleaseDialog() {
-  if (deletingRelease.value) return
-  deleteTarget.value = null
-}
-
-async function confirmDeleteRelease() {
-  const release = deleteTarget.value
-  if (!release) return
-  if (release.published) {
-    notify('已发布资源不能删除，请先下架后再删除', 'error')
-    deleteTarget.value = null
-    return
-  }
-
-  const shouldMoveToPreviousPage = adminPage.content.length <= 1 && adminFilters.page > 0
-  deletingRelease.value = true
-  try {
-    await request(`/api/admin/releases/${release.id}`, { method: 'DELETE' })
-    if (shouldMoveToPreviousPage) {
-      adminFilters.page -= 1
-    }
-    deleteTarget.value = null
-    notify('资源已删除', 'success')
-  } catch (error) {
-    notify(error.message || '删除失败', 'error')
-    return
-  } finally {
-    deletingRelease.value = false
-  }
-
-  try {
-    await loadAdmin()
-  } catch (error) {
-    notify(error.message || '删除成功，但列表刷新失败', 'error')
-  }
-}
-
-async function submitImport() {
-  if (importing.value) return
-  const selectedType = findSoftwareType(importForm.softwareTypeId)
-  if (!selectedType) {
-    notify('请选择软件类型')
-    return
-  }
-  importing.value = true
-  try {
-    const { category, ...payload } = importForm
-    const body = {
-      ...payload,
-      middlewareName: selectedType.name
-    }
-    const result = await request('/api/admin/releases/import', { method: 'POST', body })
-    importResult.value = result
-    showImportResultDialog.value = true
-    Object.assign(importForm, defaultImportForm())
-    showImport.value = false
-    notify('批量导入完成', 'success')
-    await loadAdmin()
-  } catch (error) {
-    notify(error.message || '批量导入失败', 'error')
-  } finally {
-    importing.value = false
-  }
-}
+// submitImport 已迁移到 composables/useAdmin.js
 
 function findSoftwareType(id) {
   return softwareTypes.value.find(type => String(type.id) === String(id))
@@ -1289,90 +1096,7 @@ function displayTitle(doc) {
   return [doc.category, doc.software, doc.version].filter(Boolean).join(' / ') || doc.title
 }
 
-function openCreateCategoryDialog() {
-  categoryForm.name = ''
-  showCategoryDialog.value = true
-}
-
-function closeCategoryDialog() {
-  showCategoryDialog.value = false
-  categoryForm.name = ''
-}
-
-async function saveCategory() {
-  try {
-    softwareCategories.value = await request('/api/admin/software-type-categories', {
-      method: 'POST',
-      body: categoryForm
-    })
-    notify('分类已新增', 'success')
-    closeCategoryDialog()
-  } catch (error) {
-    notify(error.message || '分类新增失败', 'error')
-  }
-}
-
-function startCreateType() {
-  Object.assign(typeForm, defaultTypeForm())
-}
-
-function startEditType(type) {
-  Object.assign(typeForm, {
-    id: type.id,
-    category: type.category,
-    name: type.name,
-    description: type.description || '',
-    active: type.active
-  })
-}
-
-function openCreateTypeDialog() {
-  startCreateType()
-  showTypeDialog.value = true
-}
-
-function openEditTypeDialog(type) {
-  startEditType(type)
-  showTypeDialog.value = true
-}
-
-function closeTypeDialog() {
-  showTypeDialog.value = false
-  startCreateType()
-}
-
-async function saveType() {
-  const actionText = typeForm.id ? '修改' : '新增'
-  try {
-    await request(typeForm.id ? `/api/admin/software-types/${typeForm.id}` : '/api/admin/software-types', {
-      method: typeForm.id ? 'PUT' : 'POST',
-      body: typeForm
-    })
-    notify(`类型已${actionText}`, 'success')
-    closeTypeDialog()
-    await loadSoftwareMetadata()
-  } catch (error) {
-    notify(error.message || `类型${actionText}失败`, 'error')
-  }
-}
-
-async function deleteType(type) {
-  confirmAction(`确认删除类型 ${type.category} / ${type.name}？`, () => doDeleteType(type))
-}
-async function doDeleteType(type) {
-  try {
-    await request(`/api/admin/software-types/${type.id}`, { method: 'DELETE' })
-    notify('类型已删除', 'success')
-    await loadSoftwareMetadata()
-  } catch (error) {
-    notify(error.message || '类型删除失败', 'error')
-  }
-}
-
-function openCreateStandardDialog() {
-  Object.assign(standardForm, defaultStandardForm())
-  showStandardDialog.value = true
-}
+// closeTypeDialog/saveType/deleteType/openCreateStandardDialog 已迁移到 composables/useAdmin.js
 
 function openEditStandardDialog(document) {
   const selectedType = findSoftwareType(document.softwareTypeId || findSoftwareTypeIdByCategoryAndName(document.category, document.software))
@@ -1388,50 +1112,7 @@ function openEditStandardDialog(document) {
   showStandardDialog.value = true
 }
 
-function closeStandardDialog() {
-  showStandardDialog.value = false
-  Object.assign(standardForm, defaultStandardForm())
-}
-
-function buildStandardTitle(selectedType) {
-  return [selectedType?.category, selectedType?.name, standardForm.softwareVersion]
-    .filter(Boolean)
-    .join(' / ')
-}
-
-async function saveStandard() {
-  const selectedType = findSoftwareType(standardForm.softwareTypeId)
-  if (!selectedType) {
-    notify('请选择软件类型')
-    return
-  }
-  const apiBase = standardApiBase()
-  const body = {
-    id: standardForm.id,
-    title: buildStandardTitle(selectedType),
-    softwareTypeId: selectedType.id,
-    category: selectedType.category,
-    software: selectedType.name,
-    softwareVersion: standardForm.softwareVersion,
-    code: standardForm.code,
-    content: standardForm.content || '# 参数标准\n\n'
-  }
-  if (adminSection.value !== 'standardPublish') {
-    body.summary = standardForm.summary
-  }
-  const actionText = standardForm.id ? '修改' : '新增'
-  try {
-    await request(standardForm.id ? `${apiBase}/${standardForm.id}` : apiBase, {
-      method: standardForm.id ? 'PUT' : 'POST',
-      body
-    })
-    notify(`标准已${actionText}`, 'success')
-    closeStandardDialog()
-    await loadStandardDocuments()
-  } catch (error) {
-    notify(error.message || `标准${actionText}失败`, 'error')
-  }
-}
+// closeStandardDialog/buildStandardTitle/saveStandard 已迁移到 composables/useAdmin.js
 
 function statusLabel(status) {
   const map = { DRAFT: '草稿', PENDING_REVIEW: '审核中', PUBLISHED: '已发布', MODIFYING: '修改中' }
@@ -1555,91 +1236,8 @@ function formatTime(time) {
   return String(time).replace('T', ' ').substring(0, 16)
 }
 
-async function loadReviews() {
-  try {
-    allReviews.value = await request('/api/admin/reviews')
-  } catch (error) {
-    allReviews.value = []
-  }
-}
-
-function applyReviewFilters() {
-  reviewPage.page = 0
-}
-
-async function loadSystemSettings() {
-  try {
-    const data = await request('/api/admin/settings')
-    Object.assign(systemSettings, data)
-  } catch {}
-}
-
-async function saveSystemSettings() {
-  try {
-    await request('/api/admin/settings', { method: 'PUT', body: systemSettings })
-    notify('系统设置已保存', 'success')
-    loadSiteConfig()
-  } catch (e) {
-    notify(e.message || '保存失败', 'error')
-  }
-}
-
-async function openReviewDetail(record) {
-  try {
-    const detail = await request(`/api/admin/reviews/${record.id}`)
-    selectedReview.value = detail
-    selectedReviewDiff.value = detail.diff || '无差异信息'
-    reviewComment.value = ''
-  } catch (error) {
-    notify(error.message || '加载审核详情失败', 'error')
-  }
-}
-
-function closeReviewDetail() {
-  selectedReview.value = null
-  selectedReviewDiff.value = ''
-}
-
-async function openRevisionHistory(doc, documentType) {
-  revisionDocTitle.value = doc.title || doc.software || '文档'
-  try {
-    const list = await request(`/api/admin/revisions?documentId=${doc.id}&documentType=${encodeURIComponent(documentType)}`)
-    revisionList.value = Array.isArray(list) ? list : []
-    showRevisionModal.value = true
-  } catch (error) {
-    notify(error.message || '加载修订历史失败', 'error')
-  }
-}
-
-async function reviewApprove(record) {
-  try {
-    await request(`/api/admin/reviews/${record.id}/approve`, {
-      method: 'POST',
-      body: { comment: reviewComment.value || null }
-    })
-    notify('审核已通过', 'success')
-    closeReviewDetail()
-    await loadReviews()
-    await loadStandardDocuments()
-  } catch (error) {
-    notify(error.message || '审核通过失败', 'error')
-  }
-}
-
-async function reviewReject(record) {
-  try {
-    await request(`/api/admin/reviews/${record.id}/reject`, {
-      method: 'POST',
-      body: { comment: reviewComment.value || null }
-    })
-    notify('已驳回', 'success')
-    closeReviewDetail()
-    await loadReviews()
-    await loadStandardDocuments()
-  } catch (error) {
-    notify(error.message || '驳回失败', 'error')
-  }
-}
+// 审核/设置函数已迁移到 composables/useAdmin.js
+function applyReviewFilters() { reviewPage.page = 0 }
 
 function previewDocument(document) {
   selectedPreviewDocument.value = document
@@ -1678,199 +1276,21 @@ function scrollToPreviewHeading(id) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
 }
 
-function openCreateParameterDialog() {
-  if (!selectedStandard.value) {
-    notify('请先选择标准')
-    return
-  }
-  const bindingField = adminSection.value === 'standardPublish' ? 'parameterStandardId' : 'standardDocumentId'
-  Object.assign(parameterForm, defaultParameterForm(), { [bindingField]: selectedStandard.value.id })
-  showParameterDialog.value = true
-}
-
-function openEditParameterDialog(parameter) {
-  const bindingField = adminSection.value === 'standardPublish' ? 'parameterStandardId' : 'standardDocumentId'
-  Object.assign(parameterForm, {
-    id: parameter.id,
-    [bindingField]: parameter[bindingField] || selectedStandard.value?.id || null,
-    code: parameter.code,
-    name: parameter.name,
-    value: parameter.value,
-    category: parameter.category || '',
-    description: parameter.description || '',
-    active: parameter.active,
-    deploymentStandard: parameter.deploymentStandard || false
-  })
-  showParameterDialog.value = true
-}
-
-function closeParameterDialog() {
-  showParameterDialog.value = false
-  Object.assign(parameterForm, defaultParameterForm())
-}
-
-async function saveParameter() {
-  const bindingField = adminSection.value === 'standardPublish' ? 'parameterStandardId' : 'standardDocumentId'
-  const targetStandardId = selectedStandard.value?.id || parameterForm[bindingField]
-  if (!targetStandardId) {
-    notify('参数必须绑定到标准')
-    return
-  }
-  const body = {
-    ...parameterForm,
-    [bindingField]: targetStandardId
-  }
-  const actionText = parameterForm.id ? '修改' : '新增'
-  try {
-    await request(parameterForm.id ? `/api/admin/standard-parameters/${parameterForm.id}` : '/api/admin/standard-parameters', {
-      method: parameterForm.id ? 'PUT' : 'POST',
-      body
-    })
-    notify(`标准参数已${actionText}`, 'success')
-    closeParameterDialog()
-    await loadStandardParameters(targetStandardId)
-  } catch (error) {
-    notify(error.message || `标准参数${actionText}失败`, 'error')
-  }
-}
-
+// 参数管理函数已迁移到 composables/useAdmin.js
 async function copyParameter(parameter) {
   const text = `{{${parameter.code}}}`
   await navigator.clipboard.writeText(text)
   notify(`已复制 ${text}`, 'success')
 }
 
-// showParamImportDialog, paramImportFile, paramImporting, paramImportResult 已迁移到 composable
-function handleParamImportFileChange(e) {
-  paramImportFile.value = e.target.files[0] || null
-}
-
-function downloadParameterTemplate() {
-  fetch('/api/admin/standard-parameters/template', {
-    headers: { 'Authorization': `Bearer ${auth.token}` }
-  }).then(res => res.blob()).then(blob => {
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'parameter-template.xlsx'
-    a.click()
-    URL.revokeObjectURL(url)
-  }).catch(() => notify('模板下载失败', 'error'))
-}
-
-async function importParameters() {
-  if (!paramImportFile.value) {
-    notify('请选择 Excel 文件', 'error')
-    return
-  }
-  const psId = selectedStandard.value?.id
-  if (!psId) {
-    notify('请先选择参数标准', 'error')
-    return
-  }
-  paramImporting.value = true
-  paramImportResult.value = null
-  try {
-    const formData = new FormData()
-    formData.append('file', paramImportFile.value)
-    formData.append('parameterStandardId', psId)
-    const res = await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(JSON.parse(xhr.responseText))
-        } else {
-          reject(new Error('导入失败'))
-        }
-      }
-      xhr.onerror = () => reject(new Error('网络错误'))
-      xhr.open('POST', '/api/admin/standard-parameters/import')
-      xhr.setRequestHeader('Authorization', 'Bearer ' + auth.token)
-      xhr.send(formData)
-    })
-    paramImportResult.value = res
-    await loadStandardParameters(psId)
-    if (res.skipped === 0) {
-      notify(`成功导入 ${res.imported} 条参数`, 'success')
-    }
-  } catch (error) {
-    notify(error.message || '导入失败', 'error')
-  } finally {
-    paramImporting.value = false
-  }
-}
-
 // changePassword/loadUsers/loadRoles 已迁移到 composables/useAdmin.js
 
-function openCreateUserDialog() {
-  Object.assign(userForm, { username: '', displayName: '', password: '', role: '开发经理' })
-  if (!allRoles.value.length) loadRoles()
-  showUserDialog.value = true
-}
-
-function closeUserDialog() {
-  showUserDialog.value = false
-}
-
-async function createUser() {
-  try {
-    const pwHash = await sha256(userForm.password)
-    await request('/api/admin/users', { method: 'POST', body: { ...userForm, password: pwHash } })
-    notify('用户已创建', 'success')
-    closeUserDialog()
-    await loadUsers()
-  } catch (error) {
-    notify(error.message || '创建失败', 'error')
-  }
-}
-
+// 用户管理函数已迁移到 composables/useAdmin.js
 function openChangeRoleDialog(user) {
   userFormTarget.value = user
   userForm.role = user.role
   if (!allRoles.value.length) loadRoles()
   showRoleDialog.value = true
-}
-
-function closeRoleDialog() {
-  showRoleDialog.value = false
-  userFormTarget.value = null
-}
-
-async function changeUserRole() {
-  if (!userFormTarget.value) return
-  try {
-    await request(`/api/admin/users/${userFormTarget.value.id}/role`, { method: 'PUT', body: { role: userForm.role } })
-    notify('角色已更新', 'success')
-    closeRoleDialog()
-    await loadUsers()
-  } catch (error) {
-    notify(error.message || '更新失败', 'error')
-  }
-}
-
-async function resetUserPassword(user) {
-  const newPwd = prompt('请输入新密码（至少6位）：')
-  if (!newPwd) return
-  const pwHash = await sha256(newPwd)
-  try {
-    await request(`/api/admin/users/${user.id}/reset-password`, { method: 'POST', body: { newPassword: pwHash } })
-    notify('密码已重置', 'success')
-  } catch (error) {
-    notify(error.message || '重置失败', 'error')
-  }
-}
-
-async function deleteUserAccount(user) {
-  confirmAction(`确认删除用户 ${user.username}？此操作不可撤销。`, () => doDeleteUser(user))
-}
-async function doDeleteUser(user) {
-  try {
-    await request(`/api/admin/users/${user.id}`, { method: 'DELETE' })
-    notify('用户已删除', 'success')
-    await loadUsers()
-  } catch (error) {
-    notify(error.message || '删除失败', 'error')
-  }
 }
 
 async function loadSiteConfig() {
