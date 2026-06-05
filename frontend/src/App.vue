@@ -1084,6 +1084,8 @@ function updateDocumentTitle() {
 
 // 公共页面数据加载已迁移到各页面组件（HomePage/DownloadsPage/StandardsPage）
 
+function applyPage(target, source) { Object.assign(target, source) }
+
 async function loadAdmin() {
   const query = `keyword=${encodeURIComponent(adminFilters.keyword)}&platform=${encodeURIComponent(adminFilters.platform)}&page=${adminFilters.page}&size=${adminFilters.size}${adminPublishedParam.value}`
   applyPage(adminPage, await request(`/api/admin/releases?${query}`))
@@ -1191,6 +1193,14 @@ async function logout(showMessage = true) {
   window.location.hash = '#/home'
 }
 
+// 导航函数（模板中引用）
+function goHome() { window.location.hash = '#/home' }
+function goPublic() { window.location.hash = '#/downloads' }
+function goStandards() { window.location.hash = '#/standards' }
+function goKnowledge() { window.location.hash = '#/knowledge' }
+function goWiki() { window.location.hash = '#/wiki' }
+function goDiagnostics() { window.location.hash = '#/diagnostics' }
+function goCommands() { window.location.hash = '#/commands' }
 function goAdmin() { window.location.hash = '#/admin' }
 function goLogin() { window.location.hash = '#/admin' }
 function goForum() { window.location.hash = '#/forum' }

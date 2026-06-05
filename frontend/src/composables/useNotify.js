@@ -4,7 +4,7 @@
  */
 import { ref } from 'vue'
 
-const notice = ref('')
+const notice = ref(null)
 const confirmDialog = ref(null)
 
 export function useNotify() {
@@ -12,7 +12,7 @@ export function useNotify() {
     notice.value = { message, type }
     const duration = type === 'error' ? 5000 : 3000
     window.setTimeout(() => {
-      if (notice.value?.message === message) notice.value = ''
+      if (notice.value?.message === message) notice.value = null
     }, duration)
   }
 
