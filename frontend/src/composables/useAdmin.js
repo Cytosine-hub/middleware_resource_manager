@@ -485,7 +485,8 @@ export function useAdmin(auth, notify, confirm) {
   async function loadReviews() {
     const q = reviewFilters.status ? `status=${reviewFilters.status}` : ''
     const data = await request(`/api/admin/reviews?${q}&page=${reviewPage.page}&size=${reviewPage.size}`)
-    applyPage(reviewListPage, data); allReviews.value = data?.content || []
+    const list = Array.isArray(data) ? data : (data?.content ?? [])
+    applyPage(reviewListPage, data); allReviews.value = list
   }
   async function openReviewDetail(record) {
     try {
