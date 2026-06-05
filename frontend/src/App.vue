@@ -128,54 +128,35 @@
         </div>
 
         <template v-else>
-          <div class="admin-layout">
-            <aside class="admin-sidebar">
-              <div class="sidebar-title">
-                <p class="eyebrow">Admin</p>
-                <h2>管理台</h2>
-              </div>
-              <nav class="side-nav" aria-label="Admin">
-                <button :class="{ active: adminSection === 'files' }" @click="switchAdminSection('files')">文件管理</button>
-                <button v-if="isSysAdmin" :class="{ active: adminSection === 'types' }" @click="switchAdminSection('types')">类型管理</button>
-                <button :class="{ active: adminSection === 'standardPublish' }" @click="switchAdminSection('standardPublish')">参数标准</button>
-                <button :class="{ active: adminSection === 'documentMaintenance' }" @click="switchAdminSection('documentMaintenance')">标准文档</button>
-                <button :class="{ active: adminSection === 'reviews' }" @click="switchAdminSection('reviews')">审核管理</button>
-                <button v-if="isSysAdmin" :class="{ active: adminSection === 'users' }" @click="switchAdminSection('users')">用户管理</button>
-                <button v-if="isSysAdmin" :class="{ active: adminSection === 'settings' }" @click="switchAdminSection('settings')">系统设置</button>
-              </nav>
-              <div class="sidebar-actions">
-                <button class="ghost" @click="showPassword = !showPassword">修改密码</button>
-                <button class="danger" @click="logout()">退出</button>
-              </div>
-            </aside>
-
-            <section class="admin-content">
-              <div class="admin-header">
-                <div>
-                  <p class="eyebrow">{{ adminSectionLabel.eyebrow }}</p>
-                  <h2>{{ adminSectionLabel.title }}</h2>
-                </div>
-                <div v-if="adminSection === 'files'" class="admin-actions">
-                  <button class="ghost" @click="openImportPage()">批量导入</button>
-                  <button @click="startCreate()">新增资源</button>
-                </div>
-                <div v-else-if="adminSection === 'types'" class="admin-actions">
-                  <button class="ghost" @click="loadSoftwareMetadata()">刷新</button>
-                  <button class="ghost" @click="openCreateCategoryDialog()">新增分类</button>
-                  <button @click="openCreateTypeDialog()">新增类型</button>
-                </div>
-                <div v-else-if="adminSection === 'standardPublish'" class="admin-actions">
-                  <button class="ghost" @click="loadStandardModule()">刷新</button>
-                  <button @click="openCreateStandardDialog()">新增标准</button>
-                </div>
-                <div v-else-if="adminSection === 'documentMaintenance'" class="admin-actions">
-                  <button class="ghost" @click="loadStandardDocuments()">刷新</button>
-                  <button @click="goDocumentEditor()">新增文档</button>
-                </div>
-                <div v-else-if="adminSection === 'users'" class="admin-actions">
-                  <button @click="openCreateUserDialog()">新增用户</button>
-                </div>
-              </div>
+          <AdminPage
+            :section="adminSection"
+            :isSysAdmin="isSysAdmin"
+            @switchSection="switchAdminSection"
+            @showPassword="showPassword = !showPassword"
+            @logout="logout()"
+          >
+            <template #header-actions>
+              <template v-if="adminSection === 'files'">
+                <button class="ghost" @click="openImportPage()">批量导入</button>
+                <button @click="startCreate()">新增资源</button>
+              </template>
+              <template v-else-if="adminSection === 'types'">
+                <button class="ghost" @click="loadSoftwareMetadata()">刷新</button>
+                <button class="ghost" @click="openCreateCategoryDialog()">新增分类</button>
+                <button @click="openCreateTypeDialog()">新增类型</button>
+              </template>
+              <template v-else-if="adminSection === 'standardPublish'">
+                <button class="ghost" @click="loadStandardModule()">刷新</button>
+                <button @click="openCreateStandardDialog()">新增标准</button>
+              </template>
+              <template v-else-if="adminSection === 'documentMaintenance'">
+                <button class="ghost" @click="loadStandardDocuments()">刷新</button>
+                <button @click="goDocumentEditor()">新增文档</button>
+              </template>
+              <template v-else-if="adminSection === 'users'">
+                <button @click="openCreateUserDialog()">新增用户</button>
+              </template>
+            </template>
 
               <FormModal v-model="showPassword" title="修改密码" @submit="changePassword">
                 <div class="form-grid single">
@@ -479,8 +460,7 @@
                   </div>
                 </div>
               </section>
-            </section>
-          </div>
+          </AdminPage>
         </template>
       </section>
       </template>
@@ -823,6 +803,7 @@ import HomePage from './pages/HomePage.vue'
 import DownloadsPage from './pages/DownloadsPage.vue'
 import StandardsPage from './pages/StandardsPage.vue'
 import CommandsPage from './pages/CommandsPage.vue'
+import AdminPage from './pages/admin/AdminPage.vue'
 import Toast from './components/ui/Toast.vue'
 import ConfirmDialog from './components/ui/ConfirmDialog.vue'
 import FormModal from './components/ui/FormModal.vue'
