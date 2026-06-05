@@ -382,51 +382,13 @@
       </template>
     </FormModal>
 
-    <div v-if="selectedPreviewDocument" class="modal-backdrop doc-preview-backdrop">
-      <div class="doc-preview-full">
-        <div class="doc-preview-toolbar">
-          <h3>文档预览</h3>
-          <button type="button" class="ghost" @click="closePreviewDocument()">返回列表</button>
-        </div>
-        <div class="doc-preview-layout">
-          <aside class="post-dir-panel">
-            <div class="post-dir-header">
-              <h3>文档列表</h3>
-            </div>
-            <div class="post-dir-list">
-              <button
-                v-for="doc in maintenanceDocuments"
-                :key="doc.id"
-                :class="['post-dir-item', { active: String(doc.id) === String(selectedPreviewDocument?.id) }]"
-                @click="previewDocument(doc)"
-              >{{ displayTitle(doc) }}</button>
-            </div>
-          </aside>
-          <article class="doc-preview-main">
-            <div class="post-article">
-              <h1 class="post-title">{{ displayTitle(selectedPreviewDocument) }}</h1>
-              <div class="post-author-line">
-                <span class="post-date">{{ documentTypeLabel(selectedPreviewDocument.documentType) }}</span>
-                <span class="post-date">{{ selectedPreviewDocument.category || '-' }} / {{ selectedPreviewDocument.software || '-' }}</span>
-                <span class="post-date">{{ formatDate(selectedPreviewDocument.updatedAt) }}</span>
-              </div>
-              <p v-if="selectedPreviewDocument.summary" class="description" style="margin-bottom:16px">{{ selectedPreviewDocument.summary }}</p>
-              <div class="post-body markdown-preview" v-html="previewRenderedHtml"></div>
-            </div>
-          </article>
-          <aside class="post-toc-panel" v-if="previewTocItems.length">
-            <h4 class="toc-title">文档大纲</h4>
-            <button
-              v-for="item in previewTocItems"
-              :key="item.id"
-              :class="['toc-link', { active: previewTocActiveId === item.id }]"
-              :style="{ '--toc-level': item.level - 1 }"
-              @click="scrollToPreviewHeading(item.id)"
-            >{{ item.text }}</button>
-          </aside>
-        </div>
-      </div>
-    </div>
+    <DocumentPreview
+      :document="selectedPreviewDocument"
+      :documents="maintenanceDocuments"
+      :parameters="standardParameters"
+      @close="closePreviewDocument()"
+      @preview="previewDocument"
+    />
 
     <FormModal v-model="showUserDialog" title="新增用户" submitText="创建" @submit="createUser">
       <div class="form-grid single">
@@ -560,6 +522,7 @@ import FormModal from './components/ui/FormModal.vue'
 import BaseModal from './components/ui/BaseModal.vue'
 import BaseButton from './components/ui/BaseButton.vue'
 import LoadingSpinner from './components/ui/LoadingSpinner.vue'
+import DocumentPreview from './components/DocumentPreview.vue'
 import { useAdmin } from './composables/useAdmin'
 
 const { auth, login: authLogin, logout: authLogout, restoreAuth, sha256,
@@ -668,34 +631,7 @@ const pagedReviews = computed(() => {
   return filteredReviews.value.slice(start, start + reviewPage.size)
 })
 
-const previewRenderedHtml = computed(() => {
-  const doc = selectedPreviewDocument.value
-  if (!doc) return ''
-  let rendered = doc.renderedContent || doc.content || ''
-  for (const param of standardParameters.value) {
-    rendered = rendered.split(`{{${param.code}}}`).join(param.value)
-  }
-  let html = renderMarkdown(rendered)
-  let idx = 0
-  html = html.replace(/<(h[1-3])([^>]*)>([\s\S]*?)<\/\1>/g, (_, tag, attrs, inner) => {
-    if (/id=/.test(attrs)) return `<${tag}${attrs}>${inner}</${tag}>`
-    return `<${tag}${attrs} id="pv-toc-${idx++}">${inner}</${tag}>`
-  })
-  return html
-})
-
-const previewTocItems = computed(() => {
-  const items = []
-  const re = /<(h[1-3])[^>]*id="([^"]*)"[^>]*>([\s\S]*?)<\/\1>/g
-  let m
-  while ((m = re.exec(previewRenderedHtml.value))) {
-    const level = parseInt(m[1][1])
-    const id = m[2]
-    const text = m[3].replace(/<[^>]+>/g, '').trim()
-    if (text) items.push({ level, id, text })
-  }
-  return items
-})
+// 文档预览 computed 已迁移到 DocumentPreview.vue
 
 // 辅助函数已迁移到 composables/useAdmin.js
 function emptyPage(size) { return { content: [], page: 0, size, totalElements: 0, totalPages: 0, first: true, last: true } }
@@ -1100,42 +1036,16 @@ function formatTime(time) {
 // 审核/设置函数已迁移到 composables/useAdmin.js
 function applyReviewFilters() { reviewPage.page = 0 }
 
+// 文档预览函数已迁移到 DocumentPreview.vue
 function previewDocument(document) {
   selectedPreviewDocument.value = document
-  previewTocActiveId.value = ''
   if (document.relatedStandardDocumentId) {
     loadStandardParameters(document.relatedStandardDocumentId)
   } else {
     standardParameters.value = []
   }
-  nextTick(() => initPreviewScrollSpy())
 }
-
-function closePreviewDocument() {
-  selectedPreviewDocument.value = null
-  previewTocActiveId.value = ''
-  if (previewScrollHandler) { window.removeEventListener('scroll', previewScrollHandler); previewScrollHandler = null }
-}
-
-let previewScrollHandler = null
-function initPreviewScrollSpy() {
-  if (previewScrollHandler) window.removeEventListener('scroll', previewScrollHandler)
-  previewScrollHandler = () => {
-    const items = previewTocItems.value
-    if (!items.length) return
-    let current = ''
-    for (const item of items) {
-      const el = document.getElementById(item.id)
-      if (el && el.getBoundingClientRect().top <= 120) current = item.id
-    }
-    previewTocActiveId.value = current
-  }
-  window.addEventListener('scroll', previewScrollHandler, { passive: true })
-}
-
-function scrollToPreviewHeading(id) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
-}
+function closePreviewDocument() { selectedPreviewDocument.value = null }
 
 // 参数管理函数已迁移到 composables/useAdmin.js
 async function copyParameter(parameter) {
