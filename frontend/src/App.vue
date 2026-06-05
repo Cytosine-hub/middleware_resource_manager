@@ -166,300 +166,55 @@
                 </div>
               </FormModal>
 
-              <template v-if="adminSection === 'files'">
-                <div class="toolbar">
-                  <div class="filters admin-filters">
-                    <input v-model.trim="adminFilters.keyword" placeholder="搜索资源" @keyup.enter="loadAdmin()" />
-                    <input v-model.trim="adminFilters.platform" placeholder="平台" @keyup.enter="loadAdmin()" />
-                    <select v-model="adminFilters.published" @change="loadAdmin()">
-                      <option value="">全部状态</option>
-                      <option value="true">已发布</option>
-                      <option value="false">未发布</option>
-                    </select>
-                    <button @click="loadAdmin()">查询</button>
-                  </div>
-                </div>
-
-                <div class="list-panel">
-                  <div class="table-wrap">
-                    <table class="resource-table">
-                      <colgroup>
-                        <col class="resource-name" />
-                        <col class="resource-version" />
-                        <col class="resource-platform" />
-                        <col class="resource-status" />
-                        <col class="resource-standard" />
-                        <col class="resource-file" />
-                        <col class="resource-downloads" />
-                        <col class="resource-actions" />
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          <th>名称</th>
-                          <th>版本</th>
-                          <th>平台</th>
-                          <th>状态</th>
-                          <th>关联标准</th>
-                          <th>文件</th>
-                          <th>下载</th>
-                          <th>操作</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="release in adminPage.content" :key="release.id">
-                          <td :title="release.middlewareName">{{ release.middlewareName }}</td>
-                          <td :title="release.version">{{ release.version }}</td>
-                          <td :title="release.platform || '-'">{{ release.platform || '-' }}</td>
-                          <td>
-                            <span :class="['status', release.published ? 'ok' : 'off']">{{ release.published ? '已发布' : '未发布' }}</span>
-                            <span v-if="release.standardPackage" :class="['status', packageStatusClass(release.packageStatus)]" style="margin-left:4px">{{ packageStatusLabel(release.packageStatus) }}</span>
-                          </td>
-                          <td :title="release.standardDocumentId ? getStandardLabel(release.standardDocumentId) : '-'">{{ release.standardDocumentId ? getStandardLabel(release.standardDocumentId) : '-' }}</td>
-                          <td :title="release.originalFileName">
-                            {{ release.originalFileName }}
-                            <span v-if="release.standardPackage && release.packageStatus === 'FAILED'" class="package-error-hint" :title="release.packageError">⚠</span>
-                          </td>
-                          <td>{{ release.downloadCount }}</td>
-                          <td class="row-actions">
-                            <button
-                              class="ghost"
-                              :disabled="release.published"
-                              :title="release.published ? '已发布资源不能编辑，请先下架' : '编辑'"
-                              @click="startEdit(release)"
-                            >编辑</button>
-                            <button class="ghost" @click="togglePublish(release)">{{ release.published ? '下架' : '发布' }}</button>
-                            <button v-if="release.standardPackage && (release.packageStatus === 'FAILED' || release.packageStatus === 'SUCCESS')" class="ghost" @click="regeneratePackage(release)">重新生成</button>
-                            <button
-                              class="danger"
-                              :disabled="release.published"
-                              :title="release.published ? '已发布资源不能删除，请先下架' : '删除'"
-                              @click="openDeleteReleaseDialog(release)"
-                            >删除</button>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                  <Pagination :page="adminPage" @change="changeAdminPage" />
-                </div>
-              </template>
-
-              <section v-else-if="adminSection === 'types'" class="utility-panel type-panel">
-                <div class="filters type-filters">
-                  <select v-model="typeFilters.category">
-                    <option value="">全部分类</option>
-                    <option v-for="category in softwareTypeCategories" :key="category" :value="category">{{ category }}</option>
-                  </select>
-                  <input v-model.trim="typeFilters.name" placeholder="软件名称" @keyup.enter="applyTypeFilters()" />
-                  <button type="button" @click="applyTypeFilters()">查询</button>
-                </div>
-                <div class="list-panel type-list-panel">
-                  <div class="type-list">
-                    <article v-for="type in pagedSoftwareTypes" :key="type.id" class="type-item">
-                      <div>
-                        <strong>{{ type.category }} / {{ type.name }}</strong>
-                        <p>{{ type.description || '暂无说明' }}</p>
-                      </div>
-                      <span :class="['status', type.active ? 'ok' : 'off']">{{ type.active ? '启用' : '停用' }}</span>
-                      <button class="ghost" @click="openEditTypeDialog(type)">编辑</button>
-                      <button class="danger" @click="deleteType(type)">删除</button>
-                    </article>
-                  </div>
-                  <Pagination :page="typePage" @change="changeTypePage" />
-                </div>
-              </section>
-
-              <section v-else-if="adminSection === 'standardPublish'" class="utility-panel type-panel">
-                <template v-if="!selectedStandard">
-                  <div class="standards-filter-bar">
-                    <select v-model="standardFilters.category" @change="handleStandardFilterCategoryChange">
-                      <option value="">软件分类</option>
-                      <option v-for="category in softwareTypeCategories" :key="category" :value="category">{{ category }}</option>
-                    </select>
-                  </div>
-                  <div class="standards-table-wrap">
-                    <table class="standards-table">
-                      <thead>
-                        <tr>
-                          <th>名称</th>
-                          <th>软件类型</th>
-                          <th>版本</th>
-                          <th>标准版本</th>
-                          <th>状态</th>
-                          <th>编码</th>
-                          <th>操作</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="doc in filteredStandardDocuments" :key="doc.id">
-                          <td>
-                            <button class="link-btn" @click="openStandardDetail(doc)">{{ doc.software || '-' }}</button>
-                          </td>
-                          <td>{{ doc.category || '-' }}</td>
-                          <td>{{ doc.softwareVersion || '-' }}</td>
-                          <td>{{ (adminSection === 'standardPublish' ? (doc.version || '-') : (doc.standardVersion || '-')) }}</td>
-                          <td><span :class="['status', doc._statusClass || statusClass(doc.status)]">{{ doc.statusLabel || statusLabel(doc.status) }}</span></td>
-                          <td>{{ doc.code || '-' }}</td>
-                          <td class="table-actions">
-                            <button class="ghost" @click="openStandardDetail(doc)">详情</button>
-                            <button v-if="doc.canEdit" class="ghost" @click="openEditStandardDialog(doc)">编辑</button>
-                            <button v-if="doc.availableActions?.includes('submit-review')" class="ghost" @click="submitForReview(doc)">提交审核</button>
-                            <button v-if="doc.availableActions?.includes('start-modify')" class="ghost" @click="startModify(doc)">开始修改</button>
-                            <button v-if="doc.availableActions?.includes('cancel-modify')" class="ghost" @click="cancelModify(doc)">取消修改</button>
-                            <button v-if="doc.status === 'PUBLISHED'" class="ghost" @click="openRevisionHistory(doc, 'PARAMETER_STANDARD')">修订历史</button>
-                            <button v-if="doc.availableActions?.includes('delete')" class="ghost danger" @click="confirmDeleteDoc(doc)">删除</button>
-                          </td>
-                        </tr>
-                        <tr v-if="filteredStandardDocuments.length === 0">
-                          <td colspan="7" class="empty-state">暂无标准记录</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                  <Pagination :page="standardPage" @change="changeStandardPage" />
-                </template>
-
-                <template v-else>
-                  <div class="panel-title">
-                    <div>
-                      <h3>{{ selectedStandard.category || '-' }} / {{ selectedStandard.software || '-' }}</h3>
-                      <p class="muted">软件版本：{{ selectedStandard.softwareVersion || '-' }} · 版本：{{ selectedStandard.version || '-' }}</p>
-                    </div>
-                    <div class="admin-actions">
-                      <button type="button" class="ghost" @click="backToStandardList()">返回列表</button>
-                      <button type="button" class="ghost" @click="downloadParameterTemplate()">下载模板</button>
-                      <button v-if="selectedStandard.status !== 'PUBLISHED'" type="button" class="ghost" @click="showParamImportDialog = true">批量导入</button>
-                      <button v-if="selectedStandard.status !== 'PUBLISHED'" type="button" @click="openCreateParameterDialog()">新增参数</button>
-                    </div>
-                  </div>
-                  <div class="list-panel type-list-panel">
-                    <div class="type-list">
-                      <article v-for="param in selectedStandardParameters" :key="param.id" class="parameter-item">
-                        <div>
-                          <strong>{{ param.code }}</strong>
-                          <span v-if="param.deploymentStandard" class="status ok" style="margin-left:8px;font-size:12px;">部署标准</span>
-                          <p>{{ param.name }} = {{ param.value }}</p>
-                          <p>{{ param.category || '未分类' }} · {{ param.description || '暂无说明' }}</p>
-                        </div>
-                        <button class="ghost" @click="copyParameter(param)">复制占位符</button>
-                        <button v-if="selectedStandard.status !== 'PUBLISHED'" class="ghost" @click="openEditParameterDialog(param)">编辑</button>
-                      </article>
-                      <p v-if="selectedStandardParameters.length === 0" class="empty-state">该标准暂未配置参数。</p>
-                    </div>
-                  </div>
-                </template>
-              </section>
-
-              <section v-else-if="adminSection === 'reviews'" class="utility-panel type-panel">
-                <div class="list-panel type-list-panel">
-                  <div class="filters document-filters">
-                    <select v-model="reviewFilters.status" @change="applyReviewFilters()">
-                      <option value="">全部状态</option>
-                      <option value="PENDING">待审核</option>
-                      <option value="APPROVED">已通过</option>
-                      <option value="REJECTED">已驳回</option>
-                    </select>
-                  </div>
-                  <div class="type-list">
-                    <article v-for="record in pagedReviews" :key="record.id" class="parameter-item document-item">
-                      <div>
-                        <strong>{{ record.documentType === 'PARAMETER_STANDARD' ? [record.category, record.software].filter(Boolean).join(' / ') : record.documentTitle }}</strong>
-                        <p>
-                          <span :class="['status', reviewStatusClass(record.status)]">{{ record.statusLabel }}</span>
-                          V{{ record.documentVersion || '-' }} · {{ record.category || '-' }} / {{ record.software || '-' }}
-                        </p>
-                        <p>提交人：{{ record.submitterDisplayName || record.submitterUsername }} · {{ formatTime(record.submittedAt) }}</p>
-                      </div>
-                      <button class="ghost" @click="openReviewDetail(record)">查看</button>
-                      <button v-if="record.status === 'PENDING' && (isSysAdmin || (isCategoryAdmin && managedCategory === record.category))" class="ghost" @click="openReviewDetail(record)">审核</button>
-                    </article>
-                    <p v-if="pagedReviews.length === 0" class="empty-state">暂无审核记录。</p>
-                  </div>
-                  <Pagination :page="reviewPageInfo" @change="changeReviewPage" />
-                </div>
-              </section>
-
-              <section v-else-if="adminSection === 'users'" class="utility-panel type-panel">
-                <div class="list-panel type-list-panel">
-                  <div class="type-list">
-                    <article v-for="user in userList" :key="user.id" class="parameter-item document-item">
-                      <div>
-                        <strong>{{ user.displayName || user.username }}</strong>
-                        <p>账号：{{ user.username }} · {{ user.role }} · {{ formatDate(user.createdAt) }}</p>
-                      </div>
-                      <button class="ghost" @click="openChangeRoleDialog(user)">改角色</button>
-                      <button class="ghost" @click="resetUserPassword(user)">重置密码</button>
-                      <button v-if="user.role !== '系统管理员' || userCountByRole('系统管理员') > 1" class="ghost danger" @click="deleteUserAccount(user)">删除</button>
-                    </article>
-                    <p v-if="userList.length === 0" class="empty-state">暂无用户。</p>
-                  </div>
-                </div>
-              </section>
-
-              <section v-else-if="adminSection === 'documentMaintenance'" class="utility-panel type-panel">
-                <div class="filters document-filters">
-                  <select v-model="maintenanceDocumentFilters.documentType" @change="applyMaintenanceDocumentFilters()">
-                    <option value="">全部类型</option>
-                    <option value="MANUAL">手册</option>
-                    <option value="ARTICLE">文章</option>
-                  </select>
-                  <select v-model="maintenanceDocumentFilters.status" @change="applyMaintenanceDocumentFilters()">
-                    <option value="">全部状态</option>
-                    <option value="DRAFT">草稿</option>
-                    <option value="PENDING_REVIEW">审核中</option>
-                    <option value="PUBLISHED">已发布</option>
-                    <option value="MODIFYING">修改中</option>
-                  </select>
-                  <input v-model.trim="maintenanceDocumentFilters.keyword" placeholder="搜索标题/摘要" @keyup.enter="applyMaintenanceDocumentFilters()" />
-                  <button type="button" @click="applyMaintenanceDocumentFilters()">查询</button>
-                </div>
-                <div class="list-panel type-list-panel">
-                  <div class="type-list">
-                    <article v-for="doc in pagedMaintenanceDocuments" :key="doc.id" class="parameter-item document-item">
-                      <div>
-                        <strong>{{ displayTitle(doc) }}</strong>
-                        <p>
-                          <span :class="['status', doc._statusClass || statusClass(doc.status)]">{{ doc.statusLabel || statusLabel(doc.status) }}</span>
-                          V{{ doc.version || '-' }} · {{ doc.documentType === 'ARTICLE' ? '文章' : doc.documentType === 'MANUAL' ? '手册' : '参数标准' }}
-                          <span v-if="doc.reviewComment" class="review-hint" :title="doc.reviewComment">（审核意见）</span>
-                        </p>
-                        <p>关联标准：{{ getStandardLabel(doc.relatedStandardDocumentId) }}</p>
-                      </div>
-                      <button class="ghost" @click="previewDocument(doc)">预览</button>
-                      <button v-if="doc.canEdit" class="ghost" @click="goDocumentEditorEdit(doc.id)">编辑</button>
-                      <button v-if="doc.availableActions?.includes('submit-review')" class="ghost" @click="submitForReview(doc)">提交审核</button>
-                      <button v-if="doc.availableActions?.includes('start-modify')" class="ghost" @click="startModify(doc)">开始修改</button>
-                      <button v-if="doc.availableActions?.includes('cancel-modify')" class="ghost" @click="cancelModify(doc)">取消修改</button>
-                      <button v-if="doc.status === 'PUBLISHED'" class="ghost" @click="openRevisionHistory(doc, doc.documentType || 'MANUAL')">修订历史</button>
-                      <button v-if="doc.availableActions?.includes('delete')" class="ghost danger" @click="confirmDeleteDoc(doc)">删除</button>
-                    </article>
-                    <p v-if="pagedMaintenanceDocuments.length === 0" class="empty-state">暂无文档，点击"新增文档"创建手册或文章。</p>
-                  </div>
-                  <Pagination :page="maintenanceDocumentPage" @change="changeMaintenanceDocumentPage" />
-                </div>
-              </section>
-              <section v-else-if="adminSection === 'settings'" class="utility-panel type-panel">
-                <div class="settings-panel">
-                  <h3>模块开关</h3>
-                  <div class="setting-item">
-                    <label class="setting-label">
-                      <input type="checkbox" v-model="systemSettings['knowledge-enabled']" true-value="true" false-value="false" />
-                      <span>知识库模块</span>
-                    </label>
-                    <p class="setting-desc">开启后用户可使用知识库上传文档、语义检索等功能</p>
-                  </div>
-                  <div class="setting-item">
-                    <label class="setting-label">
-                      <input type="checkbox" v-model="systemSettings['diagnostics-enabled']" true-value="true" false-value="false" />
-                      <span>智能排查模块</span>
-                    </label>
-                    <p class="setting-desc">开启后用户可使用 AI 智能排查和运维助手功能</p>
-                  </div>
-                  <div class="form-actions" style="margin-top:20px">
-                    <button @click="saveSystemSettings()">保存设置</button>
-                  </div>
-                </div>
-              </section>
+              <FilesSection v-if="adminSection === 'files'"
+                :releases="adminPage.content" :filters="adminFilters" :pageInfo="adminPage"
+                :getStandardLabel="getStandardLabel"
+                @search="loadAdmin" @edit="startEdit" @togglePublish="togglePublish"
+                @regenerate="regeneratePackage" @delete="openDeleteReleaseDialog"
+                @changePage="changeAdminPage"
+              />
+              <TypesSection v-else-if="adminSection === 'types'"
+                :types="pagedSoftwareTypes" :categories="softwareTypeCategories"
+                :filters="typeFilters" :pageInfo="typePage"
+                @applyFilters="applyTypeFilters" @editType="openEditTypeDialog"
+                @deleteType="deleteType" @changePage="changeTypePage"
+              />
+              <StandardsSection v-else-if="adminSection === 'standardPublish'"
+                :standards="filteredStandardDocuments" :categories="softwareTypeCategories"
+                :filters="standardFilters" :pageInfo="standardPage"
+                :selectedStandard="selectedStandard" :parameters="selectedStandardParameters"
+                @filterCategoryChange="handleStandardFilterCategoryChange"
+                @openDetail="openStandardDetail" @editStandard="openEditStandardDialog"
+                @submitReview="submitForReview" @startModify="startModify" @cancelModify="cancelModify"
+                @revisionHistory="(doc) => openRevisionHistory(doc, 'PARAMETER_STANDARD')"
+                @deleteStandard="confirmDeleteDoc" @changePage="changeStandardPage"
+                @backToList="backToStandardList" @downloadTemplate="downloadParameterTemplate"
+                @importParams="showParamImportDialog = true" @createParam="openCreateParameterDialog"
+                @copyParam="copyParameter" @editParam="openEditParameterDialog"
+              />
+              <ReviewsSection v-else-if="adminSection === 'reviews'"
+                :reviews="pagedReviews" :filterStatus="reviewFilters.status" :pageInfo="reviewPageInfo"
+                :isSysAdmin="isSysAdmin" :isCategoryAdmin="isCategoryAdmin" :managedCategory="managedCategory"
+                @filterChange="(v) => { reviewFilters.status = v; applyReviewFilters() }"
+                @viewDetail="openReviewDetail" @changePage="changeReviewPage"
+              />
+              <UsersSection v-else-if="adminSection === 'users'"
+                :users="userList"
+                @changeRole="openChangeRoleDialog" @resetPassword="resetUserPassword"
+                @deleteUser="deleteUserAccount"
+              />
+              <DocumentsSection v-else-if="adminSection === 'documentMaintenance'"
+                :documents="pagedMaintenanceDocuments" :filters="maintenanceDocumentFilters"
+                :pageInfo="maintenanceDocumentPage" :getStandardLabel="getStandardLabel"
+                @applyFilters="applyMaintenanceDocumentFilters" @preview="previewDocument"
+                @edit="(doc) => goDocumentEditorEdit(doc.id)" @submitReview="submitForReview"
+                @startModify="startModify" @cancelModify="cancelModify"
+                @revisionHistory="(doc) => openRevisionHistory(doc, doc.documentType || 'MANUAL')"
+                @delete="confirmDeleteDoc" @changePage="changeMaintenanceDocumentPage"
+              />
+              <SettingsSection v-else-if="adminSection === 'settings'"
+                :settings="systemSettings" @save="saveSystemSettings"
+              />
           </AdminPage>
         </template>
       </section>
@@ -804,6 +559,13 @@ import DownloadsPage from './pages/DownloadsPage.vue'
 import StandardsPage from './pages/StandardsPage.vue'
 import CommandsPage from './pages/CommandsPage.vue'
 import AdminPage from './pages/admin/AdminPage.vue'
+import FilesSection from './pages/admin/FilesSection.vue'
+import TypesSection from './pages/admin/TypesSection.vue'
+import StandardsSection from './pages/admin/StandardsSection.vue'
+import ReviewsSection from './pages/admin/ReviewsSection.vue'
+import UsersSection from './pages/admin/UsersSection.vue'
+import DocumentsSection from './pages/admin/DocumentsSection.vue'
+import SettingsSection from './pages/admin/SettingsSection.vue'
 import Toast from './components/ui/Toast.vue'
 import ConfirmDialog from './components/ui/ConfirmDialog.vue'
 import FormModal from './components/ui/FormModal.vue'
