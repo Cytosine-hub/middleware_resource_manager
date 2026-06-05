@@ -1444,16 +1444,6 @@ function statusClass(status) {
   return map[status] || 'off'
 }
 
-function packageStatusLabel(status) {
-  const map = { PENDING: '待生成', PROCESSING: '生成中', SUCCESS: '已生成', FAILED: '生成失败' }
-  return map[status] || ''
-}
-
-function packageStatusClass(status) {
-  const map = { PENDING: 'off', PROCESSING: 'pending-review', SUCCESS: 'ok', FAILED: 'error' }
-  return map[status] || 'off'
-}
-
 const actionMap = {
   DRAFT: ['submit-review', 'edit', 'delete'],
   PUBLISHED: ['start-modify'],
@@ -1620,11 +1610,6 @@ async function openRevisionHistory(doc, documentType) {
   } catch (error) {
     notify(error.message || '加载修订历史失败', 'error')
   }
-}
-
-function closeRevisionModal() {
-  showRevisionModal.value = false
-  revisionList.value = []
 }
 
 async function reviewApprove(record) {
@@ -1817,10 +1802,6 @@ async function importParameters() {
 }
 
 // changePassword/loadUsers/loadRoles 已迁移到 composables/useAdmin.js
-
-function userCountByRole(role) {
-  return userList.value.filter(u => u.role === role).length
-}
 
 function openCreateUserDialog() {
   Object.assign(userForm, { username: '', displayName: '', password: '', role: '开发经理' })
