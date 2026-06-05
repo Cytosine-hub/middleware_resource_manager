@@ -544,7 +544,7 @@ import { request } from './api'
 import { useAuth } from './composables/useAuth'
 import { useNotify } from './composables/useNotify'
 import { useRoute } from './composables/useRoute'
-import { formatBytes, formatDetail } from './utils'
+import { formatBytes, formatDetail, formatDate, renderMarkdown } from './utils'
 import Pagination from './components/Pagination.vue'
 import DocumentEditor from './components/DocumentEditor.vue'
 import ForumPostList from './components/ForumPostList.vue'
@@ -767,8 +767,7 @@ const previewRenderedHtml = computed(() => {
   for (const param of standardParameters.value) {
     rendered = rendered.split(`{{${param.code}}}`).join(param.value)
   }
-  let html = ''
-  try { html = markdown.render(rendered) } catch { html = '<p style="color:#b7333d">Markdown 渲染出错</p>' }
+  let html = renderMarkdown(rendered)
   let idx = 0
   html = html.replace(/<(h[1-3])([^>]*)>([\s\S]*?)<\/\1>/g, (_, tag, attrs, inner) => {
     if (/id=/.test(attrs)) return `<${tag}${attrs}>${inner}</${tag}>`
@@ -1671,10 +1670,7 @@ function reviewStatusClass(status) {
   return map[status] || 'off'
 }
 
-function renderMarkdown(text) {
-  if (!text) return ''
-  try { return markdown.render(text) } catch { return '<pre>' + text + '</pre>' }
-}
+// renderMarkdown 已迁移到 utils/index.js
 
 function formatTime(time) {
   if (!time) return '-'
