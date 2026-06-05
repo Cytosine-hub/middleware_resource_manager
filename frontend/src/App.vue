@@ -175,13 +175,13 @@
               />
               <TypesSection v-else-if="adminSection === 'types'"
                 :types="pagedSoftwareTypes" :categories="softwareTypeCategories"
-                :filters="typeFilters" :pageInfo="typePage"
+                :filters="typeFilters" :pageInfo="typePageComputed"
                 @applyFilters="applyTypeFilters" @editType="openEditTypeDialog"
                 @deleteType="deleteType" @changePage="changeTypePage"
               />
               <StandardsSection v-else-if="adminSection === 'standardPublish'"
                 :standards="filteredStandardDocuments" :categories="softwareTypeCategories"
-                :filters="standardFilters" :pageInfo="standardPage"
+                :filters="standardFilters" :pageInfo="standardPageComputed"
                 :selectedStandard="selectedStandard" :parameters="selectedStandardParameters"
                 @filterCategoryChange="handleStandardFilterCategoryChange"
                 @openDetail="openStandardDetail" @editStandard="openEditStandardDialog"
@@ -205,7 +205,7 @@
               />
               <DocumentsSection v-else-if="adminSection === 'documentMaintenance'"
                 :documents="pagedMaintenanceDocuments" :filters="maintenanceDocumentFilters"
-                :pageInfo="maintenanceDocumentPage" :getStandardLabel="getStandardLabel"
+                :pageInfo="maintenanceDocumentPageComputed" :getStandardLabel="getStandardLabel"
                 @applyFilters="applyMaintenanceDocumentFilters" @preview="previewDocument"
                 @edit="(doc) => goDocumentEditorEdit(doc.id)" @submitReview="submitForReview"
                 @startModify="startModify" @cancelModify="cancelModify"
@@ -298,8 +298,8 @@ const {
   openReviewDetail, openRevisionHistory,
   openCreateUserDialog, changeUserRole, deleteUserAccount, resetUserPassword, openChangeRoleDialog,
   changePassword,
-  softwareTypeCategories, filteredStandardDocuments, pagedSoftwareTypes,
-  selectedStandardParameters, pagedMaintenanceDocuments,
+  softwareTypeCategories, filteredStandardDocuments, pagedSoftwareTypes, typePageComputed, standardPageComputed,
+  selectedStandardParameters, pagedMaintenanceDocuments, maintenanceDocumentPageComputed,
   filteredReviews, reviewPageInfo, pagedReviews,
   changeTypePage, applyTypeFilters, changeStandardPage, applyStandardFilters, handleStandardFilterCategoryChange,
   openStandardDetail, backToStandardList, changeMaintenanceDocumentPage, applyMaintenanceDocumentFilters,

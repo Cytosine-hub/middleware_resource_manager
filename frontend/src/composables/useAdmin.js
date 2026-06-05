@@ -148,7 +148,7 @@ export function useAdmin(auth, notify, confirm) {
 
   async function loadSoftwareTypes() {
     softwareTypes.value = await request('/api/admin/software-types')
-    if (typeFilters.page >= typePage.value.totalPages) typeFilters.page = Math.max(typePage.value.totalPages - 1, 0)
+    if (typeFilters.page >= typePageComputed.value.totalPages) typeFilters.page = Math.max(typePageComputed.value.totalPages - 1, 0)
   }
 
   async function loadSoftwareCategories() { softwareCategories.value = await request('/api/admin/software-type-categories') }
@@ -182,7 +182,6 @@ export function useAdmin(auth, notify, confirm) {
   async function loadStandardParameters(targetId = selectedStandard.value?.id) {
     if (!targetId) { standardParameters.value = []; return }
     standardParameters.value = await fetchStandardParameters(targetId)
-    if (parameterFilters.page >= parameterPage.value.totalPages) parameterFilters.page = Math.max(parameterPage.value.totalPages - 1, 0)
   }
 
   async function loadSystemSettings() {
