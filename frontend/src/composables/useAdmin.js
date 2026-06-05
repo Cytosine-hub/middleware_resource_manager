@@ -5,6 +5,14 @@
 import { reactive, ref, computed } from 'vue'
 import { request } from '../api'
 
+async function sha256Hash(str) {
+  try {
+    const msgBuffer = new TextEncoder().encode(str)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
+    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
+  } catch { return str }
+}
+
 export function useAdmin(auth, notify, confirm) {
   // ── 管理后台状态 ──
   const adminSection = ref('files')
@@ -84,13 +92,20 @@ export function useAdmin(auth, notify, confirm) {
   const userForm = reactive({ username: '', displayName: '', password: '', role: '开发经理' })
 
   // ── 辅助函数 ──
+  function todayString() {
+    const now = new Date()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    return `${now.getFullYear()}-${month}-${day}`
+  }
   function emptyPage(size) { return { content: [], page: 0, size, totalElements: 0, totalPages: 0, first: true, last: true } }
-  function defaultReleaseForm() { return { id: null, category: '', softwareTypeId: '', version: '', platform: '', releasedAt: '', published: false, standardDocumentId: null, standardPackage: false, parameterStandardId: null, description: '', file: null, originalFileName: '' } }
-  function defaultImportForm() { return { sourceDirectory: '', category: '', softwareTypeId: '', platform: '', recursive: true, published: false, description: '' } }
-  function defaultTypeForm() { return { id: null, category: '', name: '', description: '', active: true } }
-  function defaultStandardForm() { return { id: null, category: '', softwareTypeId: '', softwareVersion: '', code: '', summary: '', documentType: 'STANDARD' } }
-  function defaultParameterForm() { return { id: null, code: '', name: '', value: '', category: '', description: '', active: true, deploymentStandard: false } }
+  function defaultReleaseForm() { return { id: null, category: '', softwareTypeId: '', middlewareName: '', version: '', platform: '', description: '', releasedAt: todayString(), published: false, file: null, originalFileName: '', standardDocumentId: null, standardPackage: false, parameterStandardId: null } }
+  function defaultImportForm() { return { sourceDirectory: '', category: '', softwareTypeId: '', middlewareName: '', platform: '', description: '', published: false, recursive: true } }
+  function defaultTypeForm() { return { id: null, category: '中间件', name: '', description: '', active: true } }
+  function defaultStandardForm() { return { id: null, category: '', softwareTypeId: '', softwareVersion: '', code: '', summary: '', content: '# 参数标准\n\n' } }
+  function defaultParameterForm() { return { id: null, standardDocumentId: null, parameterStandardId: null, code: '', name: '', value: '', category: '', description: '', active: true, deploymentStandard: false } }
   function applyPage(target, source) { Object.assign(target, source) }
+  function findSoftwareType(id) { return softwareTypes.value.find(t => String(t.id) === String(id)) }
 
   // ── 加载函数 ──
   async function loadAdmin() {
@@ -151,47 +166,108 @@ export function useAdmin(auth, notify, confirm) {
 
   // ── 资源 CRUD ──
   function startCreate() { editing.value = true; Object.assign(releaseForm, defaultReleaseForm()) }
-  function startEdit(release) { editing.value = true; Object.assign(releaseForm, { id: release.id, category: release.softwareTypeCategory || '', softwareTypeId: release.softwareTypeId || '', version: release.version || '', platform: release.platform || '', releasedAt: release.releasedAt || '', published: release.published, standardDocumentId: release.standardDocumentId || null, standardPackage: release.standardPackage || false, parameterStandardId: release.parameterStandardId || null, description: release.description || '', file: null, originalFileName: release.originalFileName || '' }) }
+  function startEdit(release) {
+    if (release.published) { notify('已发布资源不能编辑，请先下架后再编辑', 'error'); return }
+    const selectedType = findSoftwareType(release.softwareTypeId)
+    editing.value = true
+    Object.assign(releaseForm, {
+      id: release.id,
+      category: release.softwareTypeCategory || selectedType?.category || '',
+      softwareTypeId: release.softwareTypeId || '',
+      middlewareName: release.middlewareName,
+      version: release.version,
+      platform: release.platform || '',
+      description: release.description || '',
+      releasedAt: release.releasedAt || '',
+      published: release.published,
+      file: null,
+      originalFileName: release.originalFileName || '',
+      standardDocumentId: release.standardDocumentId || null,
+      standardPackage: release.standardPackage || false,
+      parameterStandardId: release.parameterStandardId || null
+    })
+  }
   function cancelEdit() { editing.value = false; Object.assign(releaseForm, defaultReleaseForm()) }
-  function handleReleaseFileChange(e) { releaseForm.file = e.target.files[0] || null }
+  function handleReleaseFileChange(e) { releaseForm.file = e.target.files?.[0] || null }
 
   async function saveRelease() {
+    const selectedType = findSoftwareType(releaseForm.softwareTypeId)
+    if (!selectedType) { notify('请选择软件类型', 'error'); return }
+    if (!releaseForm.id && !releaseForm.file) { notify('请上传安装包', 'error'); return }
+
+    const formData = new FormData()
+    releaseForm.middlewareName = selectedType.name
+    for (const key of ['middlewareName', 'version', 'platform', 'description', 'releasedAt', 'published', 'standardDocumentId']) {
+      formData.append(key, releaseForm[key] ?? '')
+    }
+    formData.append('softwareTypeId', releaseForm.softwareTypeId)
+    formData.append('standardPackage', releaseForm.standardPackage)
+    if (releaseForm.standardPackage && releaseForm.parameterStandardId) {
+      formData.append('parameterStandardId', releaseForm.parameterStandardId)
+    }
+    if (releaseForm.file) { formData.append('file', releaseForm.file) }
+
+    const url = releaseForm.id ? `/api/admin/releases/${releaseForm.id}` : '/api/admin/releases'
+    const method = releaseForm.id ? 'PUT' : 'POST'
     uploading.value = true; uploadProgress.value = 0
+
     try {
-      const fd = new FormData()
-      if (releaseForm.file) fd.append('file', releaseForm.file)
-      fd.append('softwareTypeId', releaseForm.softwareTypeId)
-      fd.append('version', releaseForm.version)
-      if (releaseForm.platform) fd.append('platform', releaseForm.platform)
-      if (releaseForm.releasedAt) fd.append('releasedAt', releaseForm.releasedAt)
-      fd.append('published', releaseForm.published)
-      if (releaseForm.standardDocumentId) fd.append('standardDocumentId', releaseForm.standardDocumentId)
-      fd.append('standardPackage', releaseForm.standardPackage)
-      if (releaseForm.parameterStandardId) fd.append('parameterStandardId', releaseForm.parameterStandardId)
-      if (releaseForm.description) fd.append('description', releaseForm.description)
-      const url = releaseForm.id ? `/api/admin/releases/${releaseForm.id}` : '/api/admin/releases'
-      const method = releaseForm.id ? 'PUT' : 'POST'
-      await request(url, { method, body: fd })
-      notify(releaseForm.id ? '已更新' : '已创建', 'success')
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) uploadProgress.value = Math.round(e.loaded / e.total * 100)
+        }
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText || 'null'))
+          } else {
+            let message = '保存失败'
+            try {
+              const payload = JSON.parse(xhr.responseText)
+              const fieldErrors = payload.fieldErrors ? Object.values(payload.fieldErrors).filter(Boolean) : []
+              message = fieldErrors.length ? fieldErrors.join('；') : (payload.message || message)
+            } catch (_e) { /* skip parse error */ }
+            reject(new Error(message))
+          }
+        }
+        xhr.onerror = () => reject(new Error('网络错误'))
+        xhr.open(method, url)
+        xhr.setRequestHeader('Authorization', 'Bearer ' + auth.token)
+        xhr.send(formData)
+      })
+      notify('资源已保存', 'success')
       cancelEdit(); await loadAdmin()
     } catch (e) { notify(e.message || '保存失败', 'error') }
-    finally { uploading.value = false }
+    finally { uploading.value = false; uploadProgress.value = 0 }
   }
 
   async function togglePublish(release) {
+    const actionText = release.published ? '下架' : '发布'
     try {
-      await request(`/api/admin/releases/${release.id}/publish`, { method: 'PUT', body: { published: !release.published } })
-      notify(release.published ? '已下架' : '已发布', 'success'); await loadAdmin()
-    } catch (e) { notify(e.message || '操作失败', 'error') }
+      await request(`/api/admin/releases/${release.id}/${release.published ? 'unpublish' : 'publish'}`, { method: 'POST' })
+      notify(`资源已${actionText}`, 'success'); await loadAdmin()
+    } catch (e) { notify(e.message || `资源${actionText}失败`, 'error') }
   }
 
-  function openDeleteReleaseDialog(r) { deleteTarget.value = r }
-  function closeDeleteReleaseDialog() { deleteTarget.value = null }
+  function openDeleteReleaseDialog(release) {
+    if (release.published) { notify('已发布资源不能删除，请先下架后再删除', 'error'); return }
+    deleteTarget.value = release
+  }
+  function closeDeleteReleaseDialog() { if (deletingRelease.value) return; deleteTarget.value = null }
   async function confirmDeleteRelease() {
-    if (!deleteTarget.value) return; deletingRelease.value = true
-    try { await request(`/api/admin/releases/${deleteTarget.value.id}`, { method: 'DELETE' }); notify('已删除', 'success'); closeDeleteReleaseDialog(); await loadAdmin() }
-    catch (e) { notify(e.message || '删除失败', 'error') }
+    const release = deleteTarget.value
+    if (!release) return
+    if (release.published) { notify('已发布资源不能删除，请先下架后再删除', 'error'); deleteTarget.value = null; return }
+    const shouldMoveToPreviousPage = adminPage.content.length <= 1 && adminFilters.page > 0
+    deletingRelease.value = true
+    try {
+      await request(`/api/admin/releases/${release.id}`, { method: 'DELETE' })
+      if (shouldMoveToPreviousPage) adminFilters.page -= 1
+      deleteTarget.value = null
+      notify('资源已删除', 'success')
+    } catch (e) { notify(e.message || '删除失败', 'error'); return }
     finally { deletingRelease.value = false }
+    try { await loadAdmin() } catch (e) { notify(e.message || '删除成功，但列表刷新失败', 'error') }
   }
 
   // ── 批量导入 ──
@@ -226,15 +302,30 @@ export function useAdmin(auth, notify, confirm) {
   }
 
   // ── 标准管理 ──
+  function standardApiBase() { return adminSection.value === 'standardPublish' ? '/api/admin/parameter-standards' : '/api/admin/standard-documents' }
+  function buildStandardTitle(selectedType) { return [selectedType?.category, selectedType?.name, standardForm.softwareVersion].filter(Boolean).join(' / ') }
   function openCreateStandardDialog(dt) { Object.assign(standardForm, defaultStandardForm()); if (dt) standardForm.documentType = dt; showStandardDialog.value = true }
   function closeStandardDialog() { showStandardDialog.value = false }
   async function saveStandard() {
-    if (!standardForm.softwareTypeId) { notify('请选择软件', 'error'); return }
+    const selectedType = findSoftwareType(standardForm.softwareTypeId)
+    if (!selectedType) { notify('请选择软件类型', 'error'); return }
+    const apiBase = standardApiBase()
+    const body = {
+      id: standardForm.id,
+      title: buildStandardTitle(selectedType),
+      softwareTypeId: selectedType.id,
+      category: selectedType.category,
+      software: selectedType.name,
+      softwareVersion: standardForm.softwareVersion,
+      code: standardForm.code,
+      content: standardForm.content || '# 参数标准\n\n'
+    }
+    if (adminSection.value !== 'standardPublish') { body.summary = standardForm.summary }
+    const actionText = standardForm.id ? '修改' : '新增'
     try {
-      const url = standardForm.id ? `/api/admin/parameter-standards/${standardForm.id}` : '/api/admin/parameter-standards'
-      await request(url, { method: standardForm.id ? 'PUT' : 'POST', body: standardForm })
-      notify('已保存', 'success'); closeStandardDialog(); await loadStandardDocuments()
-    } catch (e) { notify(e.message || '保存失败', 'error') }
+      await request(standardForm.id ? `${apiBase}/${standardForm.id}` : apiBase, { method: standardForm.id ? 'PUT' : 'POST', body })
+      notify(`标准已${actionText}`, 'success'); closeStandardDialog(); await loadStandardDocuments()
+    } catch (e) { notify(e.message || `标准${actionText}失败`, 'error') }
   }
 
   // ── 参数管理 ──
@@ -271,23 +362,32 @@ export function useAdmin(auth, notify, confirm) {
     applyPage(reviewListPage, data); allReviews.value = data?.content || []
   }
   async function openReviewDetail(record) {
-    selectedReview.value = record; selectedReviewDiff.value = ''; reviewComment.value = ''
-    try { selectedReviewDiff.value = await request(`/api/admin/reviews/${record.id}/diff`) } catch {}
+    try {
+      const detail = await request(`/api/admin/reviews/${record.id}`)
+      selectedReview.value = detail; selectedReviewDiff.value = detail.diff || '无差异信息'; reviewComment.value = ''
+    } catch (e) { notify(e.message || '加载审核详情失败', 'error') }
   }
   function closeReviewDetail() { selectedReview.value = null }
   async function reviewApprove(record) {
-    try { await request(`/api/admin/reviews/${record.id}/approve`, { method: 'PUT', body: { comment: reviewComment.value } }); notify('已通过', 'success'); closeReviewDetail(); await loadReviews() }
-    catch (e) { notify(e.message || '操作失败', 'error') }
+    try {
+      await request(`/api/admin/reviews/${record.id}/approve`, { method: 'POST', body: { comment: reviewComment.value || null } })
+      notify('审核已通过', 'success'); closeReviewDetail(); await loadReviews(); await loadStandardDocuments()
+    } catch (e) { notify(e.message || '审核通过失败', 'error') }
   }
   async function reviewReject(record) {
-    try { await request(`/api/admin/reviews/${record.id}/reject`, { method: 'PUT', body: { comment: reviewComment.value } }); notify('已驳回', 'success'); closeReviewDetail(); await loadReviews() }
-    catch (e) { notify(e.message || '操作失败', 'error') }
+    try {
+      await request(`/api/admin/reviews/${record.id}/reject`, { method: 'POST', body: { comment: reviewComment.value || null } })
+      notify('已驳回', 'success'); closeReviewDetail(); await loadReviews(); await loadStandardDocuments()
+    } catch (e) { notify(e.message || '驳回失败', 'error') }
   }
 
   // ── 修订历史 ──
   async function openRevisionHistory(doc, documentType) {
-    revisionDocTitle.value = doc.title || doc.name || ''
-    try { revisionList.value = await request(`/api/admin/revisions?documentId=${doc.id}&documentType=${documentType || 'STANDARD_DOCUMENT'}`) } catch { revisionList.value = [] }
+    revisionDocTitle.value = doc.title || doc.software || '文档'
+    try {
+      const list = await request(`/api/admin/revisions?documentId=${doc.id}&documentType=${encodeURIComponent(documentType || 'STANDARD_DOCUMENT')}`)
+      revisionList.value = Array.isArray(list) ? list : []
+    } catch (e) { revisionList.value = []; notify(e.message || '加载修订历史失败', 'error') }
     showRevisionModal.value = true
   }
   function closeRevisionModal() { showRevisionModal.value = false }
@@ -297,8 +397,11 @@ export function useAdmin(auth, notify, confirm) {
   function closeUserDialog() { showUserDialog.value = false }
   async function createUser() {
     if (!userForm.username.trim() || !userForm.password) { notify('账号和密码必填', 'error'); return }
-    try { await request('/api/admin/users', { method: 'POST', body: userForm }); notify('已创建', 'success'); closeUserDialog(); await loadUsers() }
-    catch (e) { notify(e.message || '创建失败', 'error') }
+    try {
+      const pwHash = auth.token ? await sha256Hash(userForm.password) : userForm.password
+      await request('/api/admin/users', { method: 'POST', body: { ...userForm, password: pwHash } })
+      notify('用户已创建', 'success'); closeUserDialog(); await loadUsers()
+    } catch (e) { notify(e.message || '创建失败', 'error') }
   }
   function openRoleDialog(user) { userFormTarget.value = user; userForm.role = user.role; showRoleDialog.value = true }
   function closeRoleDialog() { showRoleDialog.value = false }
@@ -313,7 +416,25 @@ export function useAdmin(auth, notify, confirm) {
     })
   }
 
-  function switchAdminSection(s) { adminSection.value = s }
+  function switchAdminSection(s) {
+    adminSection.value = s
+    showImport.value = false
+    editing.value = false
+    selectedStandard.value = null
+    if (s === 'types') {
+      loadSoftwareTypes(); loadSoftwareCategories()
+    } else if (s === 'standardPublish' || s === 'documentMaintenance') {
+      loadSoftwareTypes(); loadSoftwareCategories(); loadStandardDocuments(); loadAllParameterStandards()
+    } else if (s === 'users') {
+      loadUsers()
+    } else if (s === 'reviews') {
+      loadReviews()
+    } else if (s === 'settings') {
+      loadSystemSettings()
+    } else {
+      loadAdmin(); loadSoftwareTypes(); loadSoftwareCategories(); loadAllParameterStandards()
+    }
+  }
   function changeAdminPage(page) { adminFilters.page = page; loadAdmin() }
 
   return {
