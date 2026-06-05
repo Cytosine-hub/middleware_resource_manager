@@ -1,20 +1,20 @@
 <template>
   <div class="app-shell">
     <header :class="['topbar', route.name === 'home' ? 'portal-topbar' : '']">
-      <div :class="{ 'clickable-title': route.name?.startsWith('forum') }" @click="route.name?.startsWith('forum') && goForum()">
+      <div :class="{ 'clickable-title': route.name?.startsWith('forum') }" @click="route.name?.startsWith('forum') && navigate('forum')">
         <p class="eyebrow">Infrastructure Portal</p>
         <h1>{{ pageTitle }}</h1>
       </div>
       <div class="topbar-right">
         <nav v-if="route.name !== 'home'" class="nav-tabs" aria-label="Primary">
-          <button :class="{ active: false }" @click="goHome()">门户首页</button>
-          <button v-if="auth.token" :class="{ active: route.name === 'standards' }" @click="goStandards()">标准发布</button>
-          <button v-if="auth.token" :class="{ active: route.name === 'public' }" @click="goPublic()">下载中心</button>
-          <button v-if="auth.token" :class="{ active: route.name?.startsWith('forum') }" @click="goForum()">论坛</button>
-          <button v-if="auth.token && siteConfig.knowledgeEnabled" :class="{ active: route.name === 'knowledge' }" @click="goKnowledge()">知识库</button>
-          <button v-if="auth.token" :class="{ active: route.name === 'wiki' }" @click="goWiki()">Wiki</button>
-          <button v-if="auth.token && siteConfig.diagnosticsEnabled" :class="{ active: route.name === 'diagnostics' }" @click="goDiagnostics()">智能排查</button>
-          <button v-if="canAccessAdmin" :class="{ active: route.name === 'admin' || route.name === 'documentEditor' }" @click="goAdmin()">管理后台</button>
+          <button :class="{ active: false }" @click="navigate('home')">门户首页</button>
+          <button v-if="auth.token" :class="{ active: route.name === 'standards' }" @click="navigate('standards')">标准发布</button>
+          <button v-if="auth.token" :class="{ active: route.name === 'public' }" @click="navigate('downloads')">下载中心</button>
+          <button v-if="auth.token" :class="{ active: route.name?.startsWith('forum') }" @click="navigate('forum')">论坛</button>
+          <button v-if="auth.token && siteConfig.knowledgeEnabled" :class="{ active: route.name === 'knowledge' }" @click="navigate('knowledge')">知识库</button>
+          <button v-if="auth.token" :class="{ active: route.name === 'wiki' }" @click="navigate('wiki')">Wiki</button>
+          <button v-if="auth.token && siteConfig.diagnosticsEnabled" :class="{ active: route.name === 'diagnostics' }" @click="navigate('diagnostics')">智能排查</button>
+          <button v-if="canAccessAdmin" :class="{ active: route.name === 'admin' || route.name === 'documentEditor' }" @click="navigate('admin')">管理后台</button>
         </nav>
         <div class="topbar-user">
           <template v-if="auth.token">
@@ -24,7 +24,7 @@
           </template>
           <template v-else>
             <span class="topbar-username guest">未登录</span>
-            <button class="topbar-logout" @click="goLogin()">登录</button>
+            <button class="topbar-logout" @click="navigate('admin')">登录</button>
           </template>
         </div>
       </div>
@@ -58,9 +58,9 @@
       <section v-else-if="route.name === 'forum'" class="workspace">
         <ForumPostList
           :auth="auth"
-          @open-post="goForumPost"
+          @open-post="(id) => navigate('forum/post/' + id)"
           @new-post="goForumNew"
-          @go-mine="goForumMine"
+          @go-mine="navigate('forum/mine')"
         />
       </section>
       <section v-else-if="route.name === 'forumDetail'" class="workspace">
@@ -69,9 +69,9 @@
           :post-id="route.postId"
           :markdown="markdown"
           :notify="notify"
-          @back="goForum"
-          @edit-post="goForumEdit"
-          @login="goLogin"
+          @back="navigate('forum')"
+          @edit-post="(id) => navigate('forum/edit/' + id)"
+          @login="navigate('admin')"
         />
       </section>
       <section v-else-if="route.name === 'forumEditor'" class="workspace">
@@ -80,17 +80,17 @@
           :post-id="route.postId"
           :markdown="markdown"
           :notify="notify"
-          @saved="onForumPostSaved"
-          @cancel="goForum"
+          @saved="navigate('forum')"
+          @cancel="navigate('forum')"
         />
       </section>
       <section v-else-if="route.name === 'forumMine'" class="workspace">
         <ForumPersonalCenter
           :auth="auth"
           :notify="notify"
-          @back="goForum"
-          @open-post="goForumPost"
-          @edit-post="goForumEdit"
+          @back="navigate('forum')"
+          @open-post="(id) => navigate('forum/post/' + id)"
+          @edit-post="(id) => navigate('forum/edit/' + id)"
         />
       </section>
 
@@ -1193,25 +1193,11 @@ async function logout(showMessage = true) {
   window.location.hash = '#/home'
 }
 
-// 导航函数（模板中引用）
-function goHome() { window.location.hash = '#/home' }
-function goPublic() { window.location.hash = '#/downloads' }
-function goStandards() { window.location.hash = '#/standards' }
-function goKnowledge() { window.location.hash = '#/knowledge' }
-function goWiki() { window.location.hash = '#/wiki' }
-function goDiagnostics() { window.location.hash = '#/diagnostics' }
-function goCommands() { window.location.hash = '#/commands' }
-function goAdmin() { window.location.hash = '#/admin' }
-function goLogin() { window.location.hash = '#/admin' }
-function goForum() { window.location.hash = '#/forum' }
-function goForumPost(id) { window.location.hash = `#/forum/post/${id}` }
+// 论坛发帖需检查登录状态
 function goForumNew() {
-  if (!auth.token) { goLogin(); return }
-  window.location.hash = '#/forum/new'
+  if (!auth.token) { navigate('admin'); return }
+  navigate('forum/new')
 }
-function goForumEdit(id) { window.location.hash = `#/forum/edit/${id}` }
-function goForumMine() { window.location.hash = '#/forum/mine' }
-function onForumPostSaved() { goForum() }
 
 function handleDownload(url, fileName) {
   if (!auth.token) {
