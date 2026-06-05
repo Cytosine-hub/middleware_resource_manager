@@ -53,139 +53,7 @@
 
       <DownloadsPage v-else-if="route.name === 'public'" />
 
-      <section v-else-if="route.name === 'standards'" class="workspace standards-page">
-        <div v-if="selectedPublicStandard" class="standards-detail-layout">
-          <aside class="standards-tree">
-            <div class="tree-header">
-              <h3>标准文档</h3>
-              <button class="ghost" @click="closePublicStandardDetail()">返回列表</button>
-            </div>
-            <div class="category-tabs">
-              <button
-                v-for="cat in publicDocCategories"
-                :key="cat"
-                :class="['category-tab', { active: publicDocCategory === cat }]"
-                @click="publicDocCategory = cat"
-              >{{ cat }}</button>
-            </div>
-            <div class="tree-docs">
-              <button
-                v-for="doc in filteredPublicDocuments"
-                :key="publicDocKey(doc)"
-                :class="['tree-doc-link', { active: selectedPublicStandardKey === publicDocKey(doc) }]"
-                @click="openPublicStandardDetail(doc.id, doc.documentType)"
-              >
-                {{ displayTitle(doc) }}
-              </button>
-            </div>
-          </aside>
-          <article class="standards-detail-content">
-            <div class="standard-detail-head">
-              <div>
-                <h2>{{ displayTitle(selectedPublicStandard) }}</h2>
-                <p class="muted">
-                  {{ selectedPublicStandard.category || '-' }} / {{ selectedPublicStandard.software || '-' }}
-                  · 软件版本：{{ selectedPublicStandard.softwareVersion || '-' }}
-                  · 版本：{{ selectedPublicStandard.version || '-' }}
-                </p>
-              </div>
-              <span class="status ok">已发布</span>
-            </div>
-            <div v-if="selectedPublicStandard.documentType !== 'MANUAL' && selectedPublicStandard.documentType !== 'ARTICLE' && relatedDocsForStandard.length > 0" class="doc-nav-list">
-              <a
-                v-for="doc in relatedDocsForStandard"
-                :key="publicDocKey(doc)"
-                class="doc-nav-link"
-                href="#"
-                @click.prevent="openPublicStandardDetail(doc.id, doc.documentType)"
-              >
-                <span class="doc-nav-title">{{ displayTitle(doc) }}</span>
-                <span class="doc-nav-meta muted">{{ documentTypeLabel(doc.documentType) }} · v{{ doc.version || '-' }}</span>
-              </a>
-            </div>
-
-            <div v-if="selectedPublicStandard.documentType !== 'MANUAL' && selectedPublicStandard.documentType !== 'ARTICLE' && relatedDocsForStandard.length === 0 && publicStandardParams.length === 0 && !standardsLoading" class="muted" style="padding:16px 0">暂无相关手册和参数标准！</div>
-
-            <div v-if="standardsLoading" class="loading-panel"><div class="spinner"></div><p>加载中...</p></div>
-            <div v-else-if="selectedPublicStandard.documentType === 'MANUAL' || selectedPublicStandard.documentType === 'ARTICLE'" class="markdown-preview public-document" v-html="publicStandardHtml"></div>
-
-            <div v-if="publicStandardParams.length > 0" class="public-params-section">
-              <div class="public-params-header">
-                <h3>参数列表</h3>
-                <input v-model.trim="publicParamSearch" placeholder="搜索参数..." class="public-params-search" @input="publicParamPage.page = 0" />
-              </div>
-              <div class="public-params-count muted">共 {{ filteredPublicParams.length }} 项参数</div>
-              <div class="public-params-table">
-                <div class="public-param-thead">
-                  <span class="col-name">参数名称</span>
-                  <span class="col-value">参数值</span>
-                  <span class="col-desc">说明</span>
-                </div>
-                <article v-for="param in pagedPublicParams" :key="param.id" class="public-param-item">
-                  <div class="public-param-row">
-                    <span class="public-param-name">{{ param.name }}</span>
-                    <span class="public-param-value">{{ param.value }}</span>
-                    <span class="public-param-desc-cell">
-                      {{ param.description || '-' }}
-                      <span v-if="param.deploymentStandard" class="status ok" style="font-size:11px;padding:1px 6px;margin-left:6px">部署标准</span>
-                    </span>
-                  </div>
-                </article>
-              </div>
-              <Pagination :page="publicParamPage" @change="(p) => publicParamPage.page = p" />
-            </div>
-          </article>
-          <aside class="post-toc-panel" v-if="standardTocItems.length">
-            <h4 class="toc-title">文档大纲</h4>
-            <button
-              v-for="item in standardTocItems"
-              :key="item.id"
-              :class="['toc-link', { active: activeStdTocId === item.id }]"
-              :style="{ '--toc-level': item.level - 1 }"
-              @click="scrollToStdHeading(item.id)"
-            >{{ item.text }}</button>
-          </aside>
-        </div>
-
-        <template v-else>
-          <div class="standards-grid">
-            <section v-for="group in publicStandardGroups" :key="group.category" class="standard-category-section">
-              <div class="standard-category-head">
-                <div>
-                  <p class="eyebrow">Category</p>
-                  <h2>{{ group.category }}</h2>
-                </div>
-                <span>{{ group.standards.length }} 项标准</span>
-              </div>
-              <div class="standard-list">
-                <article v-for="standard in group.standards" :key="standard.id" class="standard-row">
-                  <div class="standard-row-main">
-                    <button type="button" class="standard-title-link" @click="openPublicStandardDetail(standard.id, 'ps')">
-                      {{ standard.software || '-' }} / {{ displayTitle(standard) }}
-                      <span v-if="standard.status === 'MODIFYING'" class="status warn" style="font-size:12px;font-weight:400;margin-left:8px">修改中</span>
-                    </button>
-                    <div class="manual-list">
-                      <button
-                        v-for="doc in standard.relatedDocuments"
-                        :key="doc.id"
-                        type="button"
-                        class="ghost related-document-link"
-                        @click="openPublicDocumentDetail(doc.id)"
-                      >
-                        {{ doc.title }}
-                      </button>
-                      <span v-if="!standard.relatedDocuments?.length" class="muted">暂无已发布关联手册</span>
-                    </div>
-                  </div>
-                  <span>{{ standard.softwareVersion || '-' }}</span>
-                  <span>{{ formatDate(standard.publishedAt || standard.updatedAt) }}</span>
-                </article>
-              </div>
-            </section>
-            <p v-if="publicStandards.length === 0" class="empty-state">暂无已发布标准。</p>
-          </div>
-        </template>
-      </section>
+      <StandardsPage v-else-if="route.name === 'standards'" />
 
       <section v-else-if="route.name === 'forum'" class="workspace">
         <ForumPostList
@@ -1001,6 +869,7 @@ import WikiPanel from './components/WikiPanel.vue'
 import DiagnosticsPanel from './components/DiagnosticsPanel.vue'
 import HomePage from './pages/HomePage.vue'
 import DownloadsPage from './pages/DownloadsPage.vue'
+import StandardsPage from './pages/StandardsPage.vue'
 import Toast from './components/ui/Toast.vue'
 import ConfirmDialog from './components/ui/ConfirmDialog.vue'
 import FormModal from './components/ui/FormModal.vue'
