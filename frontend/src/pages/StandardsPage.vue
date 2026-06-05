@@ -255,7 +255,7 @@ async function openStandardDetail(id) {
 async function openDocDetail(id) {
   loading.value = true
   try {
-    selectedStandard.value = await request(`/api/public/standard-documents/${id}`, { token: null })
+    selectedStandard.value = await request(`/api/public/standards/${id}`, { token: null })
     params.value = await request(`/api/public/standard-parameters?standardDocumentId=${id}`, { token: null }) || []
     await nextTick()
     initScrollSpy()
