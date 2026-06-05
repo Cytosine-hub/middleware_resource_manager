@@ -143,6 +143,16 @@ public class StandardParameterService {
                 ps.setUpdatedAt(LocalDateTime.now());
                 parameterStandardMapper.update(ps);
             }
+            // Clear renderedContent of all StandardDocuments referencing this ParameterStandard
+            java.util.List<com.middleware.manager.domain.StandardDocument> relatedDocs =
+                    standardDocumentMapper.findByRelatedStandardDocumentId(parameterStandardId);
+            for (com.middleware.manager.domain.StandardDocument doc : relatedDocs) {
+                if (doc.getRenderedContent() != null) {
+                    doc.setRenderedContent(null);
+                    doc.setUpdatedAt(LocalDateTime.now());
+                    standardDocumentMapper.update(doc);
+                }
+            }
         }
     }
 

@@ -22,6 +22,9 @@ public interface StandardDocumentMapper {
             @Param("relatedStandardDocumentId") Long relatedStandardDocumentId,
             @Param("status") String status);
 
+    List<StandardDocument> findByRelatedStandardDocumentId(
+            @Param("relatedStandardDocumentId") Long relatedStandardDocumentId);
+
     List<StandardDocument> findByStatusOrderByCategoryAscPublishedAtDesc(@Param("status") String status);
 
     List<StandardDocument> findByStatusInOrderByUpdatedAtDesc(@Param("statuses") List<String> statuses);

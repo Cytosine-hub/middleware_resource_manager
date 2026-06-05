@@ -226,8 +226,8 @@ public class StandardDocumentService {
             return document.getRenderedContent();
         }
         String rendered = document.getContent();
-        Long parameterStandardId = resolveParameterStandardId(document);
-        for (StandardParameter parameter : parameterService.listActiveByStandardDocumentId(parameterStandardId)) {
+        List<StandardParameter> parameters = resolveParameters(document);
+        for (StandardParameter parameter : parameters) {
             rendered = rendered.replace("{{" + parameter.getCode() + "}}", parameter.getValue());
         }
         document.setRenderedContent(rendered);
@@ -237,13 +237,22 @@ public class StandardDocumentService {
     @Transactional
     public void refreshRenderedContent(StandardDocument document) {
         String rendered = document.getContent();
-        Long parameterStandardId = resolveParameterStandardId(document);
-        for (StandardParameter parameter : parameterService.listActiveByStandardDocumentId(parameterStandardId)) {
+        List<StandardParameter> parameters = resolveParameters(document);
+        for (StandardParameter parameter : parameters) {
             rendered = rendered.replace("{{" + parameter.getCode() + "}}", parameter.getValue());
         }
         document.setRenderedContent(rendered);
         document.setUpdatedAt(LocalDateTime.now());
         standardDocumentMapper.update(document);
+    }
+
+    private List<StandardParameter> resolveParameters(StandardDocument document) {
+        if ("STANDARD".equals(document.getDocumentType())) {
+            return parameterService.listActiveByStandardDocumentId(document.getId());
+        }
+        Long parameterStandardId = document.getRelatedStandardDocumentId();
+        if (parameterStandardId == null) return java.util.Collections.emptyList();
+        return parameterService.listActiveByParameterStandardId(parameterStandardId);
     }
 
     @Transactional

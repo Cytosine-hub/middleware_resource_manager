@@ -143,7 +143,7 @@ public class ForumController {
     }
 
     private Map<String, Object> toDetail(ForumPost p) {
-        Map<String, Object> m = toSummary(p);
+        Map<String, Object> m = toSummary(p, Collections.emptyMap());
         m.remove("summary"); m.put("content", p.getContent());
         m.put("authorUsername", p.getAuthorUsername());
         m.put("updatedAt", p.getUpdatedAt());
