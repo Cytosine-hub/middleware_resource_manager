@@ -28,7 +28,9 @@
         </div>
       </div>
 
-      <slot />
+      <div class="admin-body">
+        <slot />
+      </div>
     </section>
   </div>
 </template>
@@ -79,8 +81,9 @@ const currentLabel = computed(() => allSections.find(s => s.key === props.sectio
 .admin-header .eyebrow { color: var(--color-text-tertiary); font-size: var(--text-xs); text-transform: uppercase; margin: 0; }
 .admin-header h2 { margin: var(--space-xs) 0 0; font-size: var(--text-2xl); }
 .admin-actions { display: flex; gap: var(--space-sm); }
-.admin-content > :deep(div) { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.admin-content > :deep(div) > .list-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.admin-content > :deep(div) > .list-panel > .table-wrap { flex: 1; overflow-y: auto; min-height: 0; }
-.admin-content > :deep(div) > .list-panel > nav { flex-shrink: 0; justify-content: flex-end; padding-top: 12px; }
+.admin-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.admin-body > :deep(div) { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.admin-body > :deep(div) > .list-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.admin-body > :deep(div) > .list-panel > .table-wrap { flex: 1; overflow-y: auto; min-height: 0; }
+.admin-body > :deep(div) > .list-panel > nav { flex-shrink: 0; justify-content: flex-end; padding-top: 12px; }
 </style>
