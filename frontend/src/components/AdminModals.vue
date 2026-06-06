@@ -23,7 +23,6 @@
         </select>
       </label>
       <div class="file-row">
-        <label class="checkline"><input v-model="admin.releaseForm.standardPackage" type="checkbox" />标准包</label>
         <label class="file-field">安装包
           <span class="file-control">
             <input type="file" @change="admin.handleReleaseFileChange" />
@@ -31,6 +30,7 @@
             <span class="file-name">{{ admin.releaseForm.file?.name || admin.releaseForm.originalFileName || '未选择文件' }}</span>
           </span>
         </label>
+        <label class="checkline"><input v-model="admin.releaseForm.standardPackage" type="checkbox" />标准包</label>
       </div>
       <label class="wide">说明<textarea v-model.trim="admin.releaseForm.description" maxlength="2000" /></label>
     </div>
