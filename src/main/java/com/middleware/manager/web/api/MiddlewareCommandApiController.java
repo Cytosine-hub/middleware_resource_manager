@@ -1,18 +1,66 @@
 package com.middleware.manager.web.api;
 
 import com.middleware.manager.domain.MiddlewareCommand;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.domain.SoftwareType;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.repository.SoftwareTypeMapper;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.security.PermissionService;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.service.MiddlewareCommandService;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import org.springframework.http.HttpStatus;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import org.springframework.http.ResponseEntity;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import org.springframework.security.core.Authentication;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import org.springframework.web.bind.annotation.*;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import org.springframework.web.server.ResponseStatusException;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 
 import java.util.List;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import java.util.Map;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 
 @RestController
 @RequestMapping("/api/middleware-commands")
@@ -54,11 +102,11 @@ public class MiddlewareCommandApiController {
         String categories = (String) body.get("categories");
         int sortOrder = body.get("sortOrder") != null ? ((Number) body.get("sortOrder")).intValue() : 0;
         if (softwareTypeId == null || commandFormat == null || commandFormat.isBlank()) {
-            throw new IllegalArgumentException("类型和命令格式不能为空");
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "类型和命令格式不能为空");
         }
         SoftwareType type = softwareTypeMapper.findById(softwareTypeId);
         if (type == null) {
-            throw new IllegalArgumentException("类型不存在: " + softwareTypeId);
+            throw new NotFoundException(ErrorCode.SOFTWARE_TYPE_NOT_FOUND, ErrorMessages.SOFTWARE_TYPE_NOT_FOUND);
         }
         checkCategoryAccess(auth, type.getCategory());
         MiddlewareCommand cmd = service.create(softwareTypeId, commandFormat, briefDesc, detailDesc, categories, sortOrder);

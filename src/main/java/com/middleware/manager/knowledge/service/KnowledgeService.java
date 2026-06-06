@@ -172,7 +172,7 @@ public class KnowledgeService {
         for (DocumentLoader loader : documentLoaders) {
             if (loader.supports(fileName)) return loader;
         }
-        throw new IllegalArgumentException("No document loader found for file: " + fileName);
+        throw new com.middleware.manager.exception.BusinessException(com.middleware.manager.constant.ErrorCode.PARAM_INVALID, "不支持的文档格式");
     }
 
     private ImportResult persistChunks(List<TextSplitter.TextChunk> chunks,

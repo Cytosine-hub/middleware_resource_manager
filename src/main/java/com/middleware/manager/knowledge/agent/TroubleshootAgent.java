@@ -1,5 +1,10 @@
 package com.middleware.manager.knowledge.agent;
 
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
+import com.middleware.manager.constant.ErrorMessages;
+
 import com.google.gson.Gson;
 import com.middleware.manager.knowledge.service.KnowledgeService;
 import com.middleware.manager.knowledge.service.KnowledgeService.SearchResult;
@@ -98,7 +103,7 @@ public class TroubleshootAgent {
         // Update session title from first message
         ChatSession session = chatSessionMapper.findById(sessionId);
         if (session == null) {
-            throw new IllegalArgumentException("Session not found: " + sessionId);
+            throw new com.middleware.manager.exception.NotFoundException(ErrorCode.NOT_FOUND, "会话不存在");
         }
         if ("新会话".equals(session.getTitle())) {
             String title = userMessage.length() > 50 ? userMessage.substring(0, 50) + "..." : userMessage;

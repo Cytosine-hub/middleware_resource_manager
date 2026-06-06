@@ -1,5 +1,8 @@
 package com.middleware.manager.util;
 
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
 import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
@@ -21,11 +24,11 @@ public final class TextUtil {
     }
 
     /**
-     * 校验非空并去空白，否则抛出 IllegalArgumentException。
+     * 校验非空并去空白，否则抛出 BusinessException。
      */
     public static String requireText(String value, String message) {
         if (!StringUtils.hasText(value)) {
-            throw new IllegalArgumentException(message);
+            throw new BusinessException(ErrorCode.PARAM_INVALID, message);
         }
         return value.trim();
     }
@@ -41,7 +44,7 @@ public final class TextUtil {
             for (byte b : hash) hex.append(String.format("%02x", b));
             return hex.toString();
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
+            throw new BusinessException(ErrorCode.UNKNOWN_ERROR, ErrorMessages.SHA256_UNAVAILABLE);
         }
     }
 }

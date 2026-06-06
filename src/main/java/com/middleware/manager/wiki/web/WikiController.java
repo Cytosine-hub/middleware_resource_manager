@@ -1,5 +1,10 @@
 package com.middleware.manager.wiki.web;
 
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
+import com.middleware.manager.constant.ErrorMessages;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.middleware.manager.domain.AdminAccount;
@@ -502,7 +507,7 @@ public class WikiController {
         for (DocumentLoader loader : documentLoaders) {
             if (loader.supports(fileName)) return loader;
         }
-        throw new IllegalArgumentException("No document loader found for file: " + fileName);
+        throw new com.middleware.manager.exception.BusinessException(ErrorCode.PARAM_INVALID, "不支持的文档格式");
     }
 
     private String resolveAuditAction(String status) {

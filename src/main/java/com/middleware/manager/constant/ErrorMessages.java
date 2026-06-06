@@ -72,6 +72,10 @@ public final class ErrorMessages {
     // 中间件命令相关
     public static final String COMMAND_NOT_FOUND = "命令不存在";
 
+    // 图片相关
+    public static final String IMAGE_FILE_REQUIRED = "请选择图片文件";
+    public static final String IMAGE_TYPE_NOT_SUPPORTED = "仅支持图片文件上传";
+
     // 基础设施
     public static final String SHA256_UNAVAILABLE = "SHA-256 算法不可用";
 }

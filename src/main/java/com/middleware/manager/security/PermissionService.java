@@ -1,6 +1,9 @@
 package com.middleware.manager.security;
 
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
 import com.middleware.manager.domain.RoleEntity;
+import com.middleware.manager.exception.ForbiddenException;
 import com.middleware.manager.service.RoleService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -45,7 +48,7 @@ public class PermissionService {
     public String requireManagedCategory(Authentication authentication) {
         String category = getManagedCategory(authentication);
         if (category == null) {
-            throw new IllegalArgumentException("当前角色无管理分类权限");
+            throw new ForbiddenException(ErrorCode.FORBIDDEN, ErrorMessages.FORBIDDEN);
         }
         return category;
     }

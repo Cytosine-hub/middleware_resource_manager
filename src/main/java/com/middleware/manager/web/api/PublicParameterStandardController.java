@@ -1,19 +1,71 @@
 package com.middleware.manager.web.api;
 
 import com.middleware.manager.domain.ParameterStandard;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.domain.StandardDocument;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.service.ParameterStandardService;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.service.StandardDocumentService;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.web.api.dto.ParameterStandardResponse;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.web.api.dto.StandardDocumentResponse;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import org.springframework.web.bind.annotation.GetMapping;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import org.springframework.web.bind.annotation.PathVariable;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import org.springframework.web.bind.annotation.RequestMapping;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import org.springframework.web.bind.annotation.RequestParam;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import org.springframework.web.bind.annotation.RestController;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 
 import java.util.List;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import java.util.stream.Collectors;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 
 @RestController
 @RequestMapping("/api/public/parameter-standards")
@@ -43,7 +95,7 @@ public class PublicParameterStandardController {
     public ParameterStandardResponse detail(@PathVariable Long id) {
         ParameterStandard standard = service.get(id);
         if (!"PUBLISHED".equals(standard.getStatus()) && !"MODIFYING".equals(standard.getStatus())) {
-            throw new IllegalArgumentException("参数标准不存在或未发布");
+            throw new NotFoundException(ErrorCode.PARAMETER_STANDARD_NOT_FOUND, ErrorMessages.PARAMETER_STANDARD_NOT_FOUND);
         }
         if ("MODIFYING".equals(standard.getStatus()) && standard.getPreviousContent() != null) {
             standard.setContent(standard.getPreviousContent());
