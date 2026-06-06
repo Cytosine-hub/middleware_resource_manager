@@ -13,7 +13,7 @@
         </select>
       </div>
       <div class="tree-content">
-        <div v-for="std in standards" :key="std.id" class="tree-group">
+        <div v-for="std in treeData" :key="std.id" class="tree-group">
           <div :class="['tree-item', 'tree-parent', { active: selectedStandard?.id === std.id }]" @click="$emit('openDetail', std)">
             <span class="tree-toggle" @click.stop="toggleExpand(std.id)">{{ expanded[std.id] ? '▼' : '▶' }}</span>
             <span class="tree-label">{{ std.software || '-' }} / {{ std.softwareVersion || '-' }}</span>
@@ -28,7 +28,7 @@
             </div>
           </div>
         </div>
-        <p v-if="standards.length === 0" class="tree-empty">暂无标准</p>
+        <p v-if="treeData.length === 0" class="tree-empty">暂无标准</p>
       </div>
     </aside>
 
@@ -72,17 +72,28 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { reactive, computed } from 'vue'
 import { statusLabel } from '../../utils'
 
-defineProps({
-  standards: { type: Array, default: () => [] },
+const props = defineProps({
+  parameterStandards: { type: Array, default: () => [] },
+  standardDocuments: { type: Array, default: () => [] },
   categories: { type: Array, default: () => [] },
   filters: { type: Object, required: true },
   selectedStandard: { type: Object, default: null },
   parameters: { type: Array, default: () => [] }
 })
 defineEmits(['filterCategoryChange', 'openDetail', 'backToList', 'downloadTemplate', 'importParams', 'createParam', 'copyParam', 'editParam'])
+
+const treeData = computed(() => {
+  const category = props.filters.category
+  return props.parameterStandards
+    .filter(s => !category || s.category === category)
+    .map(std => ({
+      ...std,
+      relatedDocuments: props.standardDocuments.filter(d => d.relatedStandardDocumentId === std.id)
+    }))
+})
 
 /** @type {Record<string, boolean>} */
 const expanded = reactive({})
