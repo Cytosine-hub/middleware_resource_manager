@@ -1,27 +1,34 @@
 ---
 name: restart
-description: 重启前后端应用和依赖服务（Milvus、MySQL）
+description: 重启前后端应用，依赖服务（Docker、Milvus）仅在未运行时启动
 ---
 
 # 重启应用
 
-按顺序启动所有服务。
+智能重启：依赖服务已运行则跳过，只重启前后端。
 
 ## 步骤
 
-### 1. 启动 Docker 依赖
+### 1. 检查并启动 Docker 依赖（按需）
 
 ```bash
 # 检查 Colima 是否运行，未运行则启动
 colima status 2>&1 | grep -q "running" || colima start
 
-# 启动 Milvus 向量数据库
-docker start milvus_etcd milvus_standalone 2>/dev/null || true
+# 检查 Milvus 容器是否已运行，未运行则启动
+docker ps --format '{{.Names}}' | grep -q "milvus_standalone" || {
+  echo "Milvus 未运行，正在启动..."
+  docker start milvus_etcd milvus_standalone 2>/dev/null || true
+  sleep 5
+}
+echo "Milvus 状态:"
+docker ps --filter "name=milvus" --format "table {{.Names}}\t{{.Status}}"
 ```
 
-### 2. 杀掉旧进程
+### 2. 杀掉旧的前后端进程
 
 ```bash
+# 只杀前后端进程，不影响 Docker/Milvus
 ps aux | grep "java.*middleware\|mvn.*spring\|vite" | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null
 sleep 2
 ```
@@ -58,7 +65,7 @@ curl -s -o /dev/null -w "Backend: %{http_code}\n" http://localhost:8080/api/wiki
 curl -s -o /dev/null -w "Frontend: %{http_code}\n" http://localhost:5173
 
 # Milvus
-docker ps | grep milvus
+docker ps --filter "name=milvus" --format "{{.Names}}: {{.Status}}"
 ```
 
 ## 日志位置
