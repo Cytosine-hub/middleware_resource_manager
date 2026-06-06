@@ -1,23 +1,38 @@
 package com.middleware.manager.service;
 
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
 import com.middleware.manager.domain.ParameterStandard;
 import com.middleware.manager.domain.ReviewRecord;
 import com.middleware.manager.domain.StandardDocument;
 import com.middleware.manager.domain.StandardParameter;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.repository.ParameterStandardMapper;
 import com.middleware.manager.repository.ReviewRecordMapper;
 import com.middleware.manager.repository.StandardDocumentMapper;
 import com.middleware.manager.web.api.dto.StandardDocumentRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 @Service
+@Slf4j
 public class StandardDocumentService {
+    private static final String STATUS_DRAFT = "DRAFT";
+    private static final String STATUS_PUBLISHED = "PUBLISHED";
+    private static final String STATUS_MODIFYING = "MODIFYING";
+    private static final String STATUS_PENDING = "PENDING";
+    private static final String DOC_TYPE_STANDARD = "STANDARD";
+    private static final String DOC_TYPE_MANUAL = "MANUAL";
+    private static final String DOC_TYPE_ARTICLE = "ARTICLE";
+
     private final StandardDocumentMapper standardDocumentMapper;
     private final ReviewRecordMapper reviewRecordMapper;
     private final StandardParameterService parameterService;
@@ -41,18 +56,18 @@ public class StandardDocumentService {
     }
 
     public List<StandardDocument> listPublishedStandards() {
-        return standardDocumentMapper.findByDocumentTypeAndStatusOrderByPublishedAtDescUpdatedAtDesc("STANDARD", "PUBLISHED");
+        return standardDocumentMapper.findByDocumentTypeAndStatusOrderByPublishedAtDescUpdatedAtDesc(DOC_TYPE_STANDARD, STATUS_PUBLISHED);
     }
 
     public List<StandardDocument> listAllPublished() {
-        return standardDocumentMapper.findByStatusOrderByCategoryAscPublishedAtDesc("PUBLISHED");
+        return standardDocumentMapper.findByStatusOrderByCategoryAscPublishedAtDesc(STATUS_PUBLISHED);
     }
 
     public List<StandardDocument> listAllPublic() {
         List<StandardDocument> docs = standardDocumentMapper.findByStatusInOrderByUpdatedAtDesc(
-                java.util.Arrays.asList("PUBLISHED", "MODIFYING"));
+                Arrays.asList(STATUS_PUBLISHED, STATUS_MODIFYING));
         for (StandardDocument doc : docs) {
-            if ("MODIFYING".equals(doc.getStatus()) && doc.getPreviousContent() != null) {
+            if (STATUS_MODIFYING.equals(doc.getStatus()) && doc.getPreviousContent() != null) {
                 doc.setContent(doc.getPreviousContent());
                 doc.setRenderedContent(null);
             }
@@ -61,21 +76,21 @@ public class StandardDocumentService {
     }
 
     public List<StandardDocument> listPublishedRelatedDocuments(Long standardDocumentId) {
-        return standardDocumentMapper.findByRelatedStandardDocumentIdAndStatusOrderByPublishedAtDescUpdatedAtDesc(standardDocumentId, "PUBLISHED");
+        return standardDocumentMapper.findByRelatedStandardDocumentIdAndStatusOrderByPublishedAtDescUpdatedAtDesc(standardDocumentId, STATUS_PUBLISHED);
     }
 
     public StandardDocument get(Long id) {
         StandardDocument document = standardDocumentMapper.findById(id);
         if (document == null) {
-            throw new IllegalArgumentException("文档不存在");
+            throw new NotFoundException(ErrorCode.DOCUMENT_NOT_FOUND, ErrorMessages.DOCUMENT_NOT_FOUND);
         }
         return document;
     }
 
     public StandardDocument getPublished(Long id) {
         StandardDocument document = get(id);
-        if (!"PUBLISHED".equals(document.getStatus())) {
-            throw new IllegalArgumentException("文档不存在或未发布");
+        if (!STATUS_PUBLISHED.equals(document.getStatus())) {
+            throw new NotFoundException(ErrorCode.DOCUMENT_NOT_FOUND, ErrorMessages.DOCUMENT_NOT_FOUND);
         }
         return document;
     }
@@ -96,12 +111,13 @@ public class StandardDocumentService {
     public StandardDocument create(StandardDocumentRequest request) {
         StandardDocument document = new StandardDocument();
         apply(document, request);
-        document.setStatus("DRAFT");
+        document.setStatus(STATUS_DRAFT);
         document.setVersion(VersionManager.firstDraftVersion());
         document.setCreatedAt(LocalDateTime.now());
         document.setUpdatedAt(LocalDateTime.now());
         standardDocumentMapper.insert(document);
         refreshRenderedContent(document);
+        log.info("标准文档已创建 id={}", document.getId());
         return document;
     }
 
@@ -109,14 +125,14 @@ public class StandardDocumentService {
     public StandardDocument update(Long id, StandardDocumentRequest request) {
         StandardDocument document = get(id);
         if (document.getPendingReviewRecordId() != null) {
-            throw new IllegalStateException("文档正在审核中，不可编辑");
+            throw new BusinessException(ErrorCode.DOCUMENT_STATUS_CONFLICT, "文档正在审核中，不可编辑");
         }
         String status = document.getStatus();
-        if (!"DRAFT".equals(status) && !"MODIFYING".equals(status)) {
-            throw new IllegalStateException("当前状态不可编辑");
+        if (!STATUS_DRAFT.equals(status) && !STATUS_MODIFYING.equals(status)) {
+            throw new BusinessException(ErrorCode.DOCUMENT_STATUS_CONFLICT, ErrorMessages.DOCUMENT_STATUS_CONFLICT);
         }
         apply(document, request);
-        if ("DRAFT".equals(status)) {
+        if (STATUS_DRAFT.equals(status)) {
             document.setVersion(VersionManager.nextDraftVersion(document.getVersion()));
         } else {
             document.setVersion(VersionManager.nextModifyingVersion(document.getVersion()));
@@ -124,6 +140,7 @@ public class StandardDocumentService {
         document.setUpdatedAt(LocalDateTime.now());
         standardDocumentMapper.update(document);
         refreshRenderedContent(document);
+        log.info("标准文档已更新 id={}", id);
         return document;
     }
 
@@ -131,14 +148,13 @@ public class StandardDocumentService {
     public ReviewRecord submitForReview(Long id, String submitter, String submitterDisplayName) {
         StandardDocument document = get(id);
         if (document.getPendingReviewRecordId() != null) {
-            throw new IllegalStateException("文档已有待审核记录");
+            throw new BusinessException(ErrorCode.DOCUMENT_STATUS_CONFLICT, "文档已有待审核记录");
         }
         String status = document.getStatus();
-        if (!"DRAFT".equals(status) && !"MODIFYING".equals(status)) {
-            throw new IllegalStateException("只有草稿或修改中的文档可以提交审核");
+        if (!STATUS_DRAFT.equals(status) && !STATUS_MODIFYING.equals(status)) {
+            throw new BusinessException(ErrorCode.DOCUMENT_STATUS_CONFLICT, "只有草稿或修改中的文档可以提交审核");
         }
 
-        // 创建审核记录
         ReviewRecord record = new ReviewRecord();
         record.setDocumentId(document.getId());
         record.setDocumentTitle(document.getTitle());
@@ -148,18 +164,17 @@ public class StandardDocumentService {
         record.setDocumentVersion(document.getVersion());
         record.setSubmitterUsername(submitter);
         record.setSubmitterDisplayName(submitterDisplayName);
-        record.setStatus("PENDING");
+        record.setStatus(STATUS_PENDING);
         record.setSubmittedAt(LocalDateTime.now());
         record.setPreviousContent(document.getPreviousContent());
         record.setCurrentContent(document.getContent());
         reviewRecordMapper.insert(record);
 
-        // 文档关联审核记录
         document.setPendingReviewRecordId(record.getId());
         document.setSubmittedAt(LocalDateTime.now());
         document.setUpdatedAt(LocalDateTime.now());
         standardDocumentMapper.update(document);
-
+        log.info("标准文档已提交审核 id={}, reviewId={}", id, record.getId());
         return record;
     }
 
@@ -167,13 +182,13 @@ public class StandardDocumentService {
     public StandardDocument startModify(Long id) {
         StandardDocument document = get(id);
         if (document.getPendingReviewRecordId() != null) {
-            throw new IllegalStateException("文档正在审核中，不可操作");
+            throw new BusinessException(ErrorCode.DOCUMENT_STATUS_CONFLICT, "文档正在审核中，不可操作");
         }
-        if (!"PUBLISHED".equals(document.getStatus())) {
-            throw new IllegalStateException("只有已发布的文档可以开始修改");
+        if (!STATUS_PUBLISHED.equals(document.getStatus())) {
+            throw new BusinessException(ErrorCode.DOCUMENT_STATUS_CONFLICT, "只有已发布的文档可以开始修改");
         }
         document.setPreviousContent(document.getContent());
-        document.setStatus("MODIFYING");
+        document.setStatus(STATUS_MODIFYING);
         document.setVersion(VersionManager.toModifyingVersion(document.getVersion()));
         document.setSubmittedAt(null);
         document.setReviewedAt(null);
@@ -181,6 +196,7 @@ public class StandardDocumentService {
         document.setReviewComment(null);
         document.setUpdatedAt(LocalDateTime.now());
         standardDocumentMapper.update(document);
+        log.info("标准文档开始修改 id={}", id);
         return document;
     }
 
@@ -188,12 +204,12 @@ public class StandardDocumentService {
     public StandardDocument cancelModify(Long id) {
         StandardDocument document = get(id);
         if (document.getPendingReviewRecordId() != null) {
-            throw new IllegalStateException("文档正在审核中，不可操作");
+            throw new BusinessException(ErrorCode.DOCUMENT_STATUS_CONFLICT, "文档正在审核中，不可操作");
         }
-        if (!"MODIFYING".equals(document.getStatus())) {
-            throw new IllegalStateException("只有修改中的文档可以取消修改");
+        if (!STATUS_MODIFYING.equals(document.getStatus())) {
+            throw new BusinessException(ErrorCode.DOCUMENT_STATUS_CONFLICT, "只有修改中的文档可以取消修改");
         }
-        document.setStatus("PUBLISHED");
+        document.setStatus(STATUS_PUBLISHED);
         document.setVersion(restorePublishedVersion(document.getVersion()));
         if (document.getPreviousContent() != null) {
             document.setContent(document.getPreviousContent());
@@ -206,6 +222,7 @@ public class StandardDocumentService {
         document.setUpdatedAt(LocalDateTime.now());
         standardDocumentMapper.update(document);
         refreshRenderedContent(document);
+        log.info("标准文档已取消修改 id={}", id);
         return document;
     }
 
@@ -213,12 +230,13 @@ public class StandardDocumentService {
     public void delete(Long id) {
         StandardDocument document = get(id);
         if (document.getPendingReviewRecordId() != null) {
-            throw new IllegalStateException("文档正在审核中，不可删除");
+            throw new BusinessException(ErrorCode.DOCUMENT_STATUS_CONFLICT, "文档正在审核中，不可删除");
         }
-        if ("PUBLISHED".equals(document.getStatus())) {
-            throw new IllegalStateException("已发布的文档不能删除，请先开始修改后再删除");
+        if (STATUS_PUBLISHED.equals(document.getStatus())) {
+            throw new BusinessException(ErrorCode.DOCUMENT_PUBLISHED, ErrorMessages.DOCUMENT_PUBLISHED);
         }
         standardDocumentMapper.deleteById(id);
+        log.info("标准文档已删除 id={}", id);
     }
 
     public String render(StandardDocument document) {
@@ -247,11 +265,11 @@ public class StandardDocumentService {
     }
 
     private List<StandardParameter> resolveParameters(StandardDocument document) {
-        if ("STANDARD".equals(document.getDocumentType())) {
+        if (DOC_TYPE_STANDARD.equals(document.getDocumentType())) {
             return parameterService.listActiveByStandardDocumentId(document.getId());
         }
         Long parameterStandardId = document.getRelatedStandardDocumentId();
-        if (parameterStandardId == null) return java.util.Collections.emptyList();
+        if (parameterStandardId == null) return Collections.emptyList();
         return parameterService.listActiveByParameterStandardId(parameterStandardId);
     }
 
@@ -267,7 +285,7 @@ public class StandardDocumentService {
         document.setDocumentType(documentType);
         document.setSummary(trimToNull(request.getSummary()));
 
-        if ("STANDARD".equals(documentType)) {
+        if (DOC_TYPE_STANDARD.equals(documentType)) {
             com.middleware.manager.domain.SoftwareType softwareType = resolveSoftwareType(request.getSoftwareTypeId());
             document.setRelatedStandardDocumentId(null);
             document.setSoftwareTypeId(softwareType.getId());
@@ -278,11 +296,11 @@ public class StandardDocumentService {
         } else {
             Long relatedId = request.getRelatedStandardDocumentId();
             if (relatedId == null) {
-                throw new IllegalArgumentException("文档必须关联标准");
+                throw new BusinessException(ErrorCode.PARAM_INVALID, "文档必须关联标准");
             }
             ParameterStandard ps = parameterStandardMapper.findById(relatedId);
             if (ps == null) {
-                throw new IllegalArgumentException("关联的参数标准不存在");
+                throw new NotFoundException(ErrorCode.PARAMETER_STANDARD_NOT_FOUND, "关联的参数标准不存在");
             }
             document.setRelatedStandardDocumentId(relatedId);
             document.setSoftwareTypeId(ps.getSoftwareTypeId());
@@ -296,30 +314,23 @@ public class StandardDocumentService {
     }
 
     private String normalizeDocumentType(String documentType) {
-        String value = StringUtils.hasText(documentType) ? documentType.trim().toUpperCase() : "MANUAL";
-        if (!"MANUAL".equals(value) && !"ARTICLE".equals(value)) {
-            throw new IllegalArgumentException("文档类型必须是 MANUAL 或 ARTICLE");
+        String value = StringUtils.hasText(documentType) ? documentType.trim().toUpperCase() : DOC_TYPE_MANUAL;
+        if (!DOC_TYPE_MANUAL.equals(value) && !DOC_TYPE_ARTICLE.equals(value)) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "文档类型必须是 MANUAL 或 ARTICLE");
         }
         return value;
     }
 
     private com.middleware.manager.domain.SoftwareType resolveSoftwareType(Long softwareTypeId) {
         if (softwareTypeId == null) {
-            throw new IllegalArgumentException("标准必须选择软件类型");
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "标准必须选择软件类型");
         }
         return softwareTypeService.get(softwareTypeId);
     }
 
-    private Long resolveParameterStandardId(StandardDocument document) {
-        if ("STANDARD".equals(document.getDocumentType())) {
-            return document.getId();
-        }
-        return document.getRelatedStandardDocumentId();
-    }
-
     private String requireText(String value, String message) {
         if (!StringUtils.hasText(value)) {
-            throw new IllegalArgumentException(message);
+            throw new BusinessException(ErrorCode.PARAM_INVALID, message);
         }
         return value.trim();
     }
@@ -330,7 +341,7 @@ public class StandardDocumentService {
         int dotIdx = modifyingVersion.indexOf('.');
         if (dotIdx < 0) return VersionManager.firstPublishVersion();
         String yzPart = modifyingVersion.substring(dotIdx + 1);
-        if (yzPart.length() <= 1) return modifyingVersion; // 已经是 X.Y 格式
+        if (yzPart.length() <= 1) return modifyingVersion;
         return modifyingVersion.substring(0, dotIdx + 1) + yzPart.substring(0, yzPart.length() - 1);
     }
 
