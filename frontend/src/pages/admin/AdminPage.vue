@@ -70,9 +70,14 @@ const visibleSections = computed(() => allSections.filter(s => !s.sysAdmin || pr
 .admin-body :deep(.section-toolbar) {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: var(--space-lg); flex-shrink: 0; gap: var(--space-md);
+  flex-wrap: nowrap; white-space: nowrap;
 }
 .admin-body :deep(.section-toolbar .filters) {
-  display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap;
+  display: flex; align-items: center; gap: var(--space-sm); flex: 1; min-width: 0;
+}
+.admin-body :deep(.section-toolbar .filters input),
+.admin-body :deep(.section-toolbar .filters select) {
+  flex-shrink: 1; min-width: 0; width: auto;
 }
 .admin-body :deep(.section-toolbar .actions) {
   display: flex; align-items: center; gap: var(--space-sm); flex-shrink: 0;
