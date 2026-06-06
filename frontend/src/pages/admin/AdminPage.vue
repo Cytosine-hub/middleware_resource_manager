@@ -52,6 +52,7 @@ const visibleSections = computed(() => allSections.filter(s => !s.sysAdmin || pr
 .admin-sidebar {
   width: 220px; background: var(--color-bg-secondary); border-right: 1px solid var(--color-border);
   padding: var(--space-xl); display: flex; flex-direction: column; flex-shrink: 0;
+  overflow-y: auto;
 }
 .sidebar-title { margin-bottom: var(--space-xl); }
 .sidebar-title .eyebrow { color: var(--color-text-tertiary); font-size: var(--text-xs); text-transform: uppercase; margin: 0; }
