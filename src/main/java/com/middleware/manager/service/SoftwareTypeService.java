@@ -1,11 +1,16 @@
 package com.middleware.manager.service;
 
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
 import com.middleware.manager.domain.SoftwareCategory;
 import com.middleware.manager.domain.SoftwareType;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.repository.ReleaseAssetMapper;
 import com.middleware.manager.repository.SoftwareCategoryMapper;
 import com.middleware.manager.repository.SoftwareTypeMapper;
 import com.middleware.manager.web.api.dto.SoftwareTypeRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Service;
@@ -20,6 +25,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class SoftwareTypeService implements ApplicationRunner {
     private final SoftwareTypeMapper softwareTypeMapper;
     private final SoftwareCategoryMapper softwareCategoryMapper;
@@ -80,7 +86,7 @@ public class SoftwareTypeService implements ApplicationRunner {
     public SoftwareType get(Long id) {
         SoftwareType type = softwareTypeMapper.findById(id);
         if (type == null) {
-            throw new IllegalArgumentException("软件类型不存在");
+            throw new NotFoundException(ErrorCode.SOFTWARE_TYPE_NOT_FOUND, ErrorMessages.SOFTWARE_TYPE_NOT_FOUND);
         }
         return type;
     }
@@ -90,7 +96,7 @@ public class SoftwareTypeService implements ApplicationRunner {
         String category = normalizeCategory(request.getCategory());
         String name = normalizeName(request.getName());
         if (softwareTypeMapper.existsByCategoryIgnoreCaseAndNameIgnoreCase(category, name)) {
-            throw new IllegalArgumentException("同分类下的软件类型已存在");
+            throw new BusinessException(ErrorCode.SOFTWARE_TYPE_DUPLICATE, ErrorMessages.SOFTWARE_TYPE_DUPLICATE);
         }
 
         SoftwareType type = new SoftwareType();
@@ -102,6 +108,7 @@ public class SoftwareTypeService implements ApplicationRunner {
         type.setCreatedAt(LocalDateTime.now());
         type.setUpdatedAt(LocalDateTime.now());
         softwareTypeMapper.insert(type);
+        log.info("软件类型已创建 id={}", type.getId());
         return type;
     }
 
@@ -112,7 +119,7 @@ public class SoftwareTypeService implements ApplicationRunner {
         String name = normalizeName(request.getName());
         SoftwareType existing = softwareTypeMapper.findByCategoryIgnoreCaseAndNameIgnoreCase(category, name);
         if (existing != null && !existing.getId().equals(id)) {
-            throw new IllegalArgumentException("同分类下的软件类型已存在");
+            throw new BusinessException(ErrorCode.SOFTWARE_TYPE_DUPLICATE, ErrorMessages.SOFTWARE_TYPE_DUPLICATE);
         }
 
         type.setCategory(category);
@@ -122,6 +129,7 @@ public class SoftwareTypeService implements ApplicationRunner {
         type.setActive(request.isActive());
         type.setUpdatedAt(LocalDateTime.now());
         softwareTypeMapper.update(type);
+        log.info("软件类型已更新 id={}", id);
         return type;
     }
 
@@ -129,9 +137,10 @@ public class SoftwareTypeService implements ApplicationRunner {
     public void delete(Long id) {
         get(id);
         if (releaseAssetMapper.existsBySoftwareTypeId(id)) {
-            throw new IllegalStateException("该类型已被资源引用，不能删除，可改为停用");
+            throw new BusinessException(ErrorCode.SOFTWARE_TYPE_IN_USE, ErrorMessages.SOFTWARE_TYPE_IN_USE);
         }
         softwareTypeMapper.deleteById(id);
+        log.info("软件类型已删除 id={}", id);
     }
 
     private void seed(String category, String name) {
@@ -174,14 +183,14 @@ public class SoftwareTypeService implements ApplicationRunner {
     private String normalizeCategory(String category) {
         String value = StringUtils.hasText(category) ? category.trim() : "";
         if (!StringUtils.hasText(value)) {
-            throw new IllegalArgumentException("类型分类不能为空");
+            throw new BusinessException(ErrorCode.PARAM_INVALID, ErrorMessages.PARAM_INVALID);
         }
         return value;
     }
 
     private String normalizeName(String name) {
         if (!StringUtils.hasText(name)) {
-            throw new IllegalArgumentException("软件类型名称不能为空");
+            throw new BusinessException(ErrorCode.PARAM_INVALID, ErrorMessages.PARAM_INVALID);
         }
         return name.trim();
     }
