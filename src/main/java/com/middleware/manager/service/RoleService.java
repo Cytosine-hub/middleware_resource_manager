@@ -1,7 +1,12 @@
 package com.middleware.manager.service;
 
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
 import com.middleware.manager.domain.RoleEntity;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.repository.RoleMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
@@ -13,7 +18,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
+@Slf4j
 public class RoleService implements ApplicationRunner {
+    private static final String ROLE_SYS_ADMIN = "ROLE_SYS_ADMIN";
+
     private final RoleMapper mapper;
 
     // Cache loaded roles for fast lookup
@@ -94,33 +102,36 @@ public class RoleService implements ApplicationRunner {
         r.setCreatedAt(LocalDateTime.now());
         mapper.insert(r);
         refreshCache();
+        log.info("角色已创建 authority={}", authority);
         return r;
     }
 
     public RoleEntity updateRole(Long id, String displayName, String authority, String managedCategory, boolean categoryAdmin) {
         RoleEntity r = mapper.findById(id);
-        if (r == null) throw new IllegalArgumentException("角色不存在");
+        if (r == null) throw new NotFoundException(ErrorCode.ROLE_NOT_FOUND, ErrorMessages.ROLE_NOT_FOUND);
         r.setDisplayName(displayName);
         r.setAuthority(authority);
         r.setManagedCategory(managedCategory);
         r.setCategoryAdmin(categoryAdmin);
         mapper.update(r);
         refreshCache();
+        log.info("角色已更新 id={}", id);
         return r;
     }
 
     public void deleteRole(Long id) {
         RoleEntity r = mapper.findById(id);
-        if (r == null) throw new IllegalArgumentException("角色不存在");
-        if (r.isSystemRole()) throw new IllegalArgumentException("不能删除系统内置角色");
+        if (r == null) throw new NotFoundException(ErrorCode.ROLE_NOT_FOUND, ErrorMessages.ROLE_NOT_FOUND);
+        if (r.isSystemRole()) throw new BusinessException(ErrorCode.FORBIDDEN, ErrorMessages.ROLE_CANNOT_DELETE_SYSTEM);
         mapper.deleteById(id);
         refreshCache();
+        log.info("角色已删除 id={}", id);
     }
 
     // ── Permission helpers ──
 
     public boolean isAdmin(RoleEntity role) {
-        return role != null && "ROLE_SYS_ADMIN".equals(role.getAuthority());
+        return role != null && ROLE_SYS_ADMIN.equals(role.getAuthority());
     }
 
     public boolean isCategoryAdmin(RoleEntity role) {

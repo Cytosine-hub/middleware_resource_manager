@@ -30,6 +30,7 @@ public final class ErrorMessages {
     public static final String PASSWORD_INVALID = "密码错误";
     public static final String PASSWORD_TOO_SHORT = "密码至少6位";
     public static final String ROLE_NOT_FOUND = "未知角色";
+    public static final String ROLE_CANNOT_DELETE_SYSTEM = "不能删除系统内置角色";
     public static final String LAST_ADMIN_CANNOT_DELETE = "不能删除最后一个系统管理员";
 
     // 文档相关
