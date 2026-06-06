@@ -6,16 +6,19 @@ import java.util.Map;
 public class ApiError {
     private LocalDateTime timestamp = LocalDateTime.now();
     private int status;
+    private String code;
     private String message;
     private Map<String, String> fieldErrors;
 
-    public ApiError(int status, String message) {
+    public ApiError(int status, String code, String message) {
         this.status = status;
+        this.code = code;
         this.message = message;
     }
 
-    public ApiError(int status, String message, Map<String, String> fieldErrors) {
+    public ApiError(int status, String code, String message, Map<String, String> fieldErrors) {
         this.status = status;
+        this.code = code;
         this.message = message;
         this.fieldErrors = fieldErrors;
     }
@@ -34,6 +37,14 @@ public class ApiError {
 
     public void setStatus(int status) {
         this.status = status;
+    }
+
+    public String getCode() {
+        return code;
+    }
+
+    public void setCode(String code) {
+        this.code = code;
     }
 
     public String getMessage() {

@@ -1,5 +1,10 @@
 package com.middleware.manager.web.api;
 
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.ForbiddenException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.web.api.dto.ApiError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +22,7 @@ import java.util.Map;
 
 @RestControllerAdvice(basePackages = "com.middleware.manager.web.api")
 public class ApiExceptionHandler {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ApiExceptionHandler.class);
+    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
     @ExceptionHandler({MethodArgumentNotValidException.class, BindException.class})
     public ResponseEntity<ApiError> handleValidation(Exception ex) {
@@ -31,26 +36,41 @@ public class ApiExceptionHandler {
                 errors.put(error.getField(), error.getDefaultMessage());
             }
         }
-        LOGGER.warn("api validation failed fields={}", errors);
-        return ResponseEntity.badRequest().body(new ApiError(400, "Validation failed", errors));
+        log.warn("参数校验失败 fields={}", errors);
+        return ResponseEntity.badRequest().body(new ApiError(400, ErrorCode.PARAM_INVALID, ErrorMessages.PARAM_INVALID, errors));
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleBadRequest(IllegalArgumentException ex) {
-        LOGGER.warn("api bad request: {}", ex.getMessage());
-        return ResponseEntity.badRequest().body(new ApiError(400, ex.getMessage()));
+    @ExceptionHandler(NotFoundException.class)
+    public ResponseEntity<ApiError> handleNotFound(NotFoundException ex) {
+        log.warn("资源未找到: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiError(404, ex.getCode(), ex.getMessage()));
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ApiError> handleConflict(IllegalStateException ex) {
-        LOGGER.warn("api conflict: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(409, ex.getMessage()));
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ApiError> handleForbidden(ForbiddenException ex) {
+        log.warn("权限不足: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiError(403, ex.getCode(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiError> handleBusiness(BusinessException ex) {
+        log.warn("业务异常 code={} message={}", ex.getCode(), ex.getMessage());
+        return ResponseEntity.badRequest().body(new ApiError(400, ex.getCode(), ex.getMessage()));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiError> handleUploadTooLarge(MaxUploadSizeExceededException ex) {
-        LOGGER.warn("api upload too large: {}", ex.getMessage());
+        log.warn("文件过大: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                .body(new ApiError(413, "Uploaded file is too large"));
+                .body(new ApiError(413, ErrorCode.FILE_TOO_LARGE, ErrorMessages.FILE_TOO_LARGE));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiError> handleException(Exception ex) {
+        log.error("系统异常", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiError(500, ErrorCode.UNKNOWN_ERROR, ErrorMessages.UNKNOWN_ERROR));
     }
 }
