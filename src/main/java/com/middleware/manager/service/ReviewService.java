@@ -1,15 +1,20 @@
 package com.middleware.manager.service;
 
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
 import com.middleware.manager.domain.DocumentRevision;
 import com.middleware.manager.domain.ParameterStandard;
 import com.middleware.manager.domain.ReviewRecord;
 import com.middleware.manager.domain.StandardDocument;
 import com.middleware.manager.domain.StandardParameter;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.repository.DocumentRevisionMapper;
 import com.middleware.manager.repository.ReviewRecordMapper;
 import com.middleware.manager.repository.StandardParameterMapper;
 import com.middleware.manager.security.PermissionService;
 import com.middleware.manager.web.api.dto.ReviewResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +25,15 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class ReviewService {
+    private static final String STATUS_PENDING = "PENDING";
+    private static final String STATUS_APPROVED = "APPROVED";
+    private static final String STATUS_REJECTED = "REJECTED";
+    private static final String STATUS_PUBLISHED = "PUBLISHED";
+    private static final String DOC_TYPE_PARAMETER_STANDARD = "PARAMETER_STANDARD";
+    private static final int MAX_DIFF_PREVIEW_LENGTH = 2000;
+
     private final ReviewRecordMapper mapper;
     private final StandardDocumentService documentService;
     private final ParameterStandardService parameterStandardService;
@@ -68,10 +81,10 @@ public class ReviewService {
     @Transactional
     public ReviewResponse approve(Long id, String reviewer, String comment) {
         ReviewRecord record = getRecord(id);
-        if (!"PENDING".equals(record.getStatus())) {
-            throw new IllegalStateException("该审核记录不是待审核状态");
+        if (!STATUS_PENDING.equals(record.getStatus())) {
+            throw new BusinessException(ErrorCode.REVIEW_STATUS_CONFLICT, ErrorMessages.REVIEW_STATUS_CONFLICT);
         }
-        record.setStatus("APPROVED");
+        record.setStatus(STATUS_APPROVED);
         record.setReviewerUsername(reviewer);
         record.setReviewedAt(LocalDateTime.now());
         record.setReviewComment(comment);
@@ -79,10 +92,10 @@ public class ReviewService {
         String publishedVersion;
         String content;
         String renderedContent;
-        if ("PARAMETER_STANDARD".equals(record.getDocumentType())) {
+        if (DOC_TYPE_PARAMETER_STANDARD.equals(record.getDocumentType())) {
             ParameterStandard ps = parameterStandardService.get(record.getDocumentId());
             ps.setPendingReviewRecordId(null);
-            ps.setStatus("PUBLISHED");
+            ps.setStatus(STATUS_PUBLISHED);
             ps.setPublishedAt(LocalDateTime.now());
             if (ps.getPreviousContent() == null) {
                 ps.setVersion(VersionManager.firstPublishVersion());
@@ -109,7 +122,7 @@ public class ReviewService {
             publishedVersion = doc.getVersion();
             content = doc.getContent();
             renderedContent = doc.getRenderedContent();
-            doc.setStatus("PUBLISHED");
+            doc.setStatus(STATUS_PUBLISHED);
             doc.setPublishedAt(LocalDateTime.now());
             doc.setPreviousContent(record.getCurrentContent());
             doc.setReviewedAt(LocalDateTime.now());
@@ -134,21 +147,22 @@ public class ReviewService {
         revisionMapper.insert(revision);
 
         mapper.update(record);
+        log.info("审核通过 reviewId={}, reviewer={}", id, reviewer);
         return ReviewResponse.from(record);
     }
 
     @Transactional
     public ReviewResponse reject(Long id, String reviewer, String comment) {
         ReviewRecord record = getRecord(id);
-        if (!"PENDING".equals(record.getStatus())) {
-            throw new IllegalStateException("该审核记录不是待审核状态");
+        if (!STATUS_PENDING.equals(record.getStatus())) {
+            throw new BusinessException(ErrorCode.REVIEW_STATUS_CONFLICT, ErrorMessages.REVIEW_STATUS_CONFLICT);
         }
-        record.setStatus("REJECTED");
+        record.setStatus(STATUS_REJECTED);
         record.setReviewerUsername(reviewer);
         record.setReviewedAt(LocalDateTime.now());
         record.setReviewComment(comment);
 
-        if ("PARAMETER_STANDARD".equals(record.getDocumentType())) {
+        if (DOC_TYPE_PARAMETER_STANDARD.equals(record.getDocumentType())) {
             ParameterStandard ps = parameterStandardService.get(record.getDocumentId());
             ps.setPendingReviewRecordId(null);
             ps.setVersion(VersionManager.nextModifyingVersion(ps.getVersion()));
@@ -164,6 +178,7 @@ public class ReviewService {
         }
 
         mapper.update(record);
+        log.info("审核驳回 reviewId={}, reviewer={}", id, reviewer);
         return ReviewResponse.from(record);
     }
 
@@ -171,7 +186,7 @@ public class ReviewService {
         String current = record.getCurrentContent();
         String previous = record.getPreviousContent();
         if (previous == null) {
-            return "（首次提交，无历史版本对比）\n\n" + truncate(current, 2000);
+            return "（首次提交，无历史版本对比）\n\n" + truncate(current, MAX_DIFF_PREVIEW_LENGTH);
         }
         return computeLineDiff(previous, current);
     }
@@ -179,7 +194,7 @@ public class ReviewService {
     private ReviewRecord getRecord(Long id) {
         ReviewRecord record = mapper.findById(id);
         if (record == null) {
-            throw new IllegalArgumentException("审核记录不存在");
+            throw new NotFoundException(ErrorCode.REVIEW_NOT_FOUND, ErrorMessages.REVIEW_NOT_FOUND);
         }
         return record;
     }
