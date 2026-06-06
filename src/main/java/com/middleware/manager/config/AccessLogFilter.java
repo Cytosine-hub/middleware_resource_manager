@@ -1,7 +1,6 @@
 package com.middleware.manager.config;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -16,15 +15,20 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 @Component
+@Slf4j
 public class AccessLogFilter extends OncePerRequestFilter {
-    private static final Logger LOGGER = LoggerFactory.getLogger(AccessLogFilter.class);
+    private static final int SERVER_ERROR_THRESHOLD = 500;
+    private static final int CLIENT_ERROR_THRESHOLD = 400;
+    private static final String STATIC_CSS_PATH = "/css/";
+    private static final String STATIC_ASSETS_PATH = "/assets/";
+    private static final String FAVICON_PATH = "/favicon.ico";
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return path.startsWith("/css/")
-                || path.startsWith("/assets/")
-                || path.equals("/favicon.ico");
+        return path.startsWith(STATIC_CSS_PATH)
+                || path.startsWith(STATIC_ASSETS_PATH)
+                || path.equals(FAVICON_PATH);
     }
 
     @Override
@@ -47,12 +51,12 @@ public class AccessLogFilter extends OncePerRequestFilter {
                     currentUser()
             };
 
-            if (status >= 500) {
-                LOGGER.error(message, args);
-            } else if (status >= 400) {
-                LOGGER.warn(message, args);
+            if (status >= SERVER_ERROR_THRESHOLD) {
+                log.error(message, args);
+            } else if (status >= CLIENT_ERROR_THRESHOLD) {
+                log.warn(message, args);
             } else {
-                LOGGER.info(message, args);
+                log.info(message, args);
             }
         }
     }
