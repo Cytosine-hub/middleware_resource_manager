@@ -13,8 +13,7 @@ import com.middleware.manager.repository.ParameterStandardMapper;
 import com.middleware.manager.repository.ReviewRecordMapper;
 import com.middleware.manager.repository.StandardParameterMapper;
 import com.middleware.manager.web.api.dto.ParameterStandardRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -26,6 +25,13 @@ import java.util.List;
 @Service
 @Slf4j
 public class ParameterStandardService {
+    private static final String STATUS_DRAFT = "DRAFT";
+    private static final String STATUS_PUBLISHED = "PUBLISHED";
+    private static final String STATUS_MODIFYING = "MODIFYING";
+    private static final String STATUS_PENDING = "PENDING";
+    private static final String DOC_TYPE_PARAMETER_STANDARD = "PARAMETER_STANDARD";
+    private static final String TITLE_SEPARATOR = " / ";
+
     private final ParameterStandardMapper parameterStandardMapper;
     private final StandardParameterMapper standardParameterMapper;
     private final ReviewRecordMapper reviewRecordMapper;
@@ -49,15 +55,15 @@ public class ParameterStandardService {
 
     public PageInfo<ParameterStandard> listPublished(int page, int size) {
         PageHelper.startPage(page + 1, size);
-        List<ParameterStandard> list = parameterStandardMapper.findByStatusOrderByCreatedAtDesc("PUBLISHED");
+        List<ParameterStandard> list = parameterStandardMapper.findByStatusOrderByCreatedAtDesc(STATUS_PUBLISHED);
         return new PageInfo<>(list);
     }
 
     public List<ParameterStandard> listPublicStandards() {
         List<ParameterStandard> standards = parameterStandardMapper.findByStatusInOrderByPublishedAtDesc(
-                Arrays.asList("PUBLISHED", "MODIFYING"));
+                Arrays.asList(STATUS_PUBLISHED, STATUS_MODIFYING));
         for (ParameterStandard ps : standards) {
-            if ("MODIFYING".equals(ps.getStatus()) && ps.getPreviousContent() != null) {
+            if (STATUS_MODIFYING.equals(ps.getStatus()) && ps.getPreviousContent() != null) {
                 ps.setContent(ps.getPreviousContent());
                 ps.setRenderedContent(null);
             }
@@ -68,7 +74,7 @@ public class ParameterStandardService {
     public ParameterStandard get(Long id) {
         ParameterStandard standard = parameterStandardMapper.findById(id);
         if (standard == null) {
-            throw new IllegalArgumentException("参数标准不存在");
+            throw new NotFoundException(ErrorCode.PARAMETER_STANDARD_NOT_FOUND, ErrorMessages.PARAMETER_STANDARD_NOT_FOUND);
         }
         return standard;
     }
@@ -77,23 +83,24 @@ public class ParameterStandardService {
     public ParameterStandard create(ParameterStandardRequest request) {
         ParameterStandard standard = new ParameterStandard();
         apply(standard, request);
-        standard.setStatus("DRAFT");
+        standard.setStatus(STATUS_DRAFT);
         standard.setVersion(VersionManager.firstDraftVersion());
         standard.setCreatedAt(LocalDateTime.now());
         standard.setUpdatedAt(LocalDateTime.now());
         parameterStandardMapper.insert(standard);
         refreshRenderedContent(standard);
+        log.info("参数标准已创建 id={}", standard.getId());
         return standard;
     }
 
     @Transactional
     public ParameterStandard update(Long id, ParameterStandardRequest request) {
         ParameterStandard standard = get(id);
-        if (!"DRAFT".equals(standard.getStatus()) && !"MODIFYING".equals(standard.getStatus())) {
-            throw new IllegalStateException("当前状态不可编辑");
+        if (!STATUS_DRAFT.equals(standard.getStatus()) && !STATUS_MODIFYING.equals(standard.getStatus())) {
+            throw new BusinessException(ErrorCode.PARAMETER_STANDARD_STATUS_CONFLICT, ErrorMessages.PARAMETER_STANDARD_STATUS_CONFLICT);
         }
         apply(standard, request);
-        if ("DRAFT".equals(standard.getStatus())) {
+        if (STATUS_DRAFT.equals(standard.getStatus())) {
             standard.setVersion(VersionManager.nextDraftVersion(standard.getVersion()));
         } else {
             standard.setVersion(VersionManager.nextModifyingVersion(standard.getVersion()));
@@ -101,40 +108,43 @@ public class ParameterStandardService {
         standard.setUpdatedAt(LocalDateTime.now());
         parameterStandardMapper.update(standard);
         refreshRenderedContent(standard);
+        log.info("参数标准已更新 id={}", id);
         return standard;
     }
 
     @Transactional
     public void delete(Long id) {
         ParameterStandard standard = get(id);
-        if ("PUBLISHED".equals(standard.getStatus())) {
-            throw new IllegalStateException("已发布的参数标准不能删除");
+        if (STATUS_PUBLISHED.equals(standard.getStatus())) {
+            throw new BusinessException(ErrorCode.PARAMETER_STANDARD_PUBLISHED, ErrorMessages.PARAMETER_STANDARD_PUBLISHED);
         }
         parameterStandardMapper.deleteById(id);
+        log.info("参数标准已删除 id={}", id);
     }
 
     @Transactional
     public ParameterStandard startModify(Long id) {
         ParameterStandard standard = get(id);
-        if (!"PUBLISHED".equals(standard.getStatus())) {
-            throw new IllegalStateException("只有已发布的参数标准才能开始修改");
+        if (!STATUS_PUBLISHED.equals(standard.getStatus())) {
+            throw new BusinessException(ErrorCode.PARAMETER_STANDARD_STATUS_CONFLICT, "只有已发布的参数标准才能开始修改");
         }
         standard.setPreviousContent(standard.getContent());
         standard.setPreviousRenderedContent(buildReviewContent(standard));
-        standard.setStatus("MODIFYING");
+        standard.setStatus(STATUS_MODIFYING);
         standard.setVersion(VersionManager.toModifyingVersion(standard.getVersion()));
         standard.setUpdatedAt(LocalDateTime.now());
         parameterStandardMapper.update(standard);
+        log.info("参数标准开始修改 id={}", id);
         return standard;
     }
 
     @Transactional
     public ParameterStandard cancelModify(Long id) {
         ParameterStandard standard = get(id);
-        if (!"MODIFYING".equals(standard.getStatus())) {
-            throw new IllegalStateException("当前状态不可取消修改");
+        if (!STATUS_MODIFYING.equals(standard.getStatus())) {
+            throw new BusinessException(ErrorCode.PARAMETER_STANDARD_STATUS_CONFLICT, "当前状态不可取消修改");
         }
-        standard.setStatus("PUBLISHED");
+        standard.setStatus(STATUS_PUBLISHED);
         standard.setVersion(restorePublishedVersion(standard.getVersion()));
         if (standard.getPreviousContent() != null) {
             standard.setContent(standard.getPreviousContent());
@@ -144,51 +154,53 @@ public class ParameterStandardService {
         standard.setUpdatedAt(LocalDateTime.now());
         parameterStandardMapper.update(standard);
         refreshRenderedContent(standard);
+        log.info("参数标准已取消修改 id={}", id);
         return standard;
     }
 
     @Transactional
     public ParameterStandard publish(Long id) {
         ParameterStandard standard = get(id);
-        if (!"DRAFT".equals(standard.getStatus()) && !"MODIFYING".equals(standard.getStatus())) {
-            throw new IllegalStateException("当前状态不可发布");
+        if (!STATUS_DRAFT.equals(standard.getStatus()) && !STATUS_MODIFYING.equals(standard.getStatus())) {
+            throw new BusinessException(ErrorCode.PARAMETER_STANDARD_STATUS_CONFLICT, "当前状态不可发布");
         }
-        if ("DRAFT".equals(standard.getStatus())) {
+        if (STATUS_DRAFT.equals(standard.getStatus())) {
             standard.setVersion(VersionManager.firstPublishVersion());
         } else {
             standard.setVersion(restorePublishedVersion(standard.getVersion()));
         }
-        standard.setStatus("PUBLISHED");
+        standard.setStatus(STATUS_PUBLISHED);
         standard.setPublishedAt(LocalDateTime.now());
         standard.setPreviousContent(null);
         standard.setPreviousRenderedContent(null);
         standard.setUpdatedAt(LocalDateTime.now());
         parameterStandardMapper.update(standard);
+        log.info("参数标准已发布 id={}, version={}", id, standard.getVersion());
         return standard;
     }
 
     @Transactional
     public ParameterStandard submitForReview(Long id, String submitterUsername, String submitterDisplayName) {
         ParameterStandard standard = get(id);
-        if (!"DRAFT".equals(standard.getStatus()) && !"MODIFYING".equals(standard.getStatus())) {
-            throw new IllegalStateException("当前状态不可提交审核");
+        if (!STATUS_DRAFT.equals(standard.getStatus()) && !STATUS_MODIFYING.equals(standard.getStatus())) {
+            throw new BusinessException(ErrorCode.PARAMETER_STANDARD_STATUS_CONFLICT, "当前状态不可提交审核");
         }
         if (standard.getPendingReviewRecordId() != null) {
-            throw new IllegalStateException("该标准已在审核中");
+            throw new BusinessException(ErrorCode.PARAMETER_STANDARD_UNDER_REVIEW, ErrorMessages.PARAMETER_STANDARD_UNDER_REVIEW);
         }
 
         ReviewRecord record = new ReviewRecord();
         record.setDocumentId(standard.getId());
         record.setDocumentTitle(standard.getTitle());
-        record.setDocumentType("PARAMETER_STANDARD");
+        record.setDocumentType(DOC_TYPE_PARAMETER_STANDARD);
         record.setCategory(standard.getCategory());
         record.setSoftware(standard.getSoftware());
         record.setDocumentVersion(standard.getVersion());
         record.setSubmitterUsername(submitterUsername);
         record.setSubmitterDisplayName(submitterDisplayName);
-        record.setStatus("PENDING");
+        record.setStatus(STATUS_PENDING);
         record.setCurrentContent(buildReviewContent(standard));
-        if ("MODIFYING".equals(standard.getStatus()) && standard.getPreviousRenderedContent() != null) {
+        if (STATUS_MODIFYING.equals(standard.getStatus()) && standard.getPreviousRenderedContent() != null) {
             record.setPreviousContent(standard.getPreviousRenderedContent());
         }
         record.setSubmittedAt(LocalDateTime.now());
@@ -197,6 +209,7 @@ public class ParameterStandardService {
         standard.setPendingReviewRecordId(record.getId());
         standard.setUpdatedAt(LocalDateTime.now());
         parameterStandardMapper.update(standard);
+        log.info("参数标准已提交审核 id={}, reviewId={}", id, record.getId());
         return standard;
     }
 
@@ -227,7 +240,7 @@ public class ParameterStandardService {
     private String buildReviewContent(ParameterStandard standard) {
         StringBuilder sb = new StringBuilder();
         sb.append(render(standard));
-        java.util.List<StandardParameter> params = standardParameterMapper
+        List<StandardParameter> params = standardParameterMapper
                 .findByParameterStandardIdAndActiveTrueOrderByCategoryAscCodeAsc(standard.getId());
         if (!params.isEmpty()) {
             sb.append("\n\n---\n## 标准参数\n\n");
@@ -265,14 +278,14 @@ public class ParameterStandardService {
         standard.setTitle(java.util.stream.Stream.of(
                 standard.getCategory(), standard.getSoftware(), standard.getSoftwareVersion())
                 .filter(java.util.Objects::nonNull)
-                .collect(java.util.stream.Collectors.joining(" / ")));
+                .collect(java.util.stream.Collectors.joining(TITLE_SEPARATOR)));
         standard.setCode(trimToNull(request.getCode()));
         standard.setContent(requireText(request.getContent(), "标准内容不能为空"));
     }
 
     private String requireText(String value, String message) {
         if (!StringUtils.hasText(value)) {
-            throw new IllegalArgumentException(message);
+            throw new BusinessException(ErrorCode.PARAM_INVALID, message);
         }
         return value.trim();
     }
