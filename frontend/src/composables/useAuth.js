@@ -37,6 +37,7 @@ export function useAuth() {
     const basicToken = btoa(username + ':' + pwHash)
     const data = await request('/api/auth/login', {
       method: 'POST',
+      token: null,
       headers: { Authorization: 'Basic ' + basicToken }
     })
     saveAuth(username, data.token, data, data.expiresAt)
