@@ -2,8 +2,6 @@ package com.middleware.manager.knowledge.embedding;
 
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -12,11 +10,11 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import lombok.extern.slf4j.Slf4j;
 
 @Component
+@Slf4j
 public class EmbeddingService {
-
-    private static final Logger log = LoggerFactory.getLogger(EmbeddingService.class);
     private final EmbeddingModel embeddingModel;
 
     @Value("${app.embedding.max-chars:1500}")

@@ -1,16 +1,15 @@
 package com.middleware.manager.service;
 
 import com.middleware.manager.repository.UserTokenMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class TokenService {
-    private static final Logger log = LoggerFactory.getLogger(TokenService.class);
     private static final long TOKEN_EXPIRY_HOURS = 2;
 
     private final UserTokenMapper tokenMapper;

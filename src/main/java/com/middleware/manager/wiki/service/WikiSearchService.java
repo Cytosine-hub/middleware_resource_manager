@@ -6,8 +6,6 @@ import com.middleware.manager.wiki.entity.WikiLink;
 import com.middleware.manager.wiki.entity.WikiPage;
 import com.middleware.manager.wiki.repository.WikiLinkMapper;
 import com.middleware.manager.wiki.repository.WikiPageMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -17,11 +15,11 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class WikiSearchService {
-
-    private static final Logger log = LoggerFactory.getLogger(WikiSearchService.class);
     private static final float VECTOR_SCORE_THRESHOLD = 0.5f;
 
     private final WikiPageMapper pageMapper;

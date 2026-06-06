@@ -16,8 +16,6 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -27,11 +25,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class TroubleshootAgent {
-
-    private static final Logger log = LoggerFactory.getLogger(TroubleshootAgent.class);
 
     private static final String SYSTEM_PROMPT =
             "你是一个中间件故障排查专家。用户会描述遇到的问题，你需要：\n" +

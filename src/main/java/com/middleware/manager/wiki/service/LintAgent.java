@@ -4,8 +4,6 @@ import com.middleware.manager.wiki.entity.LintResult;
 import com.middleware.manager.wiki.entity.WikiPage;
 import com.middleware.manager.wiki.repository.LintResultMapper;
 import com.middleware.manager.wiki.repository.WikiPageMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,11 +11,11 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class LintAgent {
-
-    private static final Logger log = LoggerFactory.getLogger(LintAgent.class);
     /** @see LinkResolver#WIKILINK_PATTERN */
     private static final Pattern WIKILINK_PATTERN = LinkResolver.WIKILINK_PATTERN;
 

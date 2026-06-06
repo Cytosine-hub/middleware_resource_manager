@@ -7,17 +7,15 @@ import com.middleware.manager.wiki.repository.WikiPageMapper;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.SimpleWeightedGraph;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class WikiGraphService {
-
-    private static final Logger log = LoggerFactory.getLogger(WikiGraphService.class);
 
     private final WikiPageMapper pageMapper;
     private final WikiLinkMapper linkMapper;

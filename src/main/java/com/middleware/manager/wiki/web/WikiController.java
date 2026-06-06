@@ -36,8 +36,6 @@ import com.middleware.manager.wiki.service.WikiGraphService;
 import com.middleware.manager.wiki.service.WikiImportService;
 import com.middleware.manager.wiki.service.WikiPermissionService;
 import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -49,12 +47,12 @@ import java.io.InputStream;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.*;
+import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequestMapping("/api/wiki")
+@Slf4j
 public class WikiController {
-
-    private static final Logger log = LoggerFactory.getLogger(WikiController.class);
 
     private final WikiPageMapper pageMapper;
     private final WikiLinkMapper linkMapper;

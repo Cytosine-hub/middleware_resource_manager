@@ -2,8 +2,6 @@ package com.middleware.manager.agent.export;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -12,11 +10,11 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class ExcelExportService {
-
-    private static final Logger log = LoggerFactory.getLogger(ExcelExportService.class);
 
     public byte[] exportZabbixData(List<Map<String, Object>> data, String title) throws IOException {
         try (Workbook workbook = new XSSFWorkbook()) {

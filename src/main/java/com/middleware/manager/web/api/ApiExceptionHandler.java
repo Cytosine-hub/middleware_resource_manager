@@ -6,8 +6,6 @@ import com.middleware.manager.exception.BusinessException;
 import com.middleware.manager.exception.ForbiddenException;
 import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.web.api.dto.ApiError;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindException;
@@ -19,10 +17,11 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 @RestControllerAdvice(basePackages = "com.middleware.manager.web.api")
+@Slf4j
 public class ApiExceptionHandler {
-    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
     @ExceptionHandler({MethodArgumentNotValidException.class, BindException.class})
     public ResponseEntity<ApiError> handleValidation(Exception ex) {

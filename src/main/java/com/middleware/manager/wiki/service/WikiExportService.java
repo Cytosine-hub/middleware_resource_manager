@@ -8,8 +8,6 @@ import com.middleware.manager.wiki.entity.WikiLink;
 import com.middleware.manager.wiki.entity.WikiPage;
 import com.middleware.manager.wiki.repository.WikiLinkMapper;
 import com.middleware.manager.wiki.repository.WikiPageMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -23,11 +21,11 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class WikiExportService {
-
-    private static final Logger log = LoggerFactory.getLogger(WikiExportService.class);
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
     private final WikiPageMapper pageMapper;

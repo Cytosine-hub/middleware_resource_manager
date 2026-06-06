@@ -20,19 +20,17 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.*;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class IngestAgent {
-
-    private static final Logger log = LoggerFactory.getLogger(IngestAgent.class);
     private static final int MAX_RETRIES = 3;
 
     private final ChatModel chatModel;

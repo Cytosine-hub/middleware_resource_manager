@@ -3,8 +3,6 @@ package com.middleware.manager.agent.model;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -12,11 +10,11 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import lombok.extern.slf4j.Slf4j;
 
 @Component
+@Slf4j
 public class MimoChatModel implements ChatModel {
-
-    private static final Logger log = LoggerFactory.getLogger(MimoChatModel.class);
     private final String apiKey;
     private final String baseUrl;
     private final String model;

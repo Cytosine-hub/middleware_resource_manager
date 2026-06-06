@@ -3,19 +3,17 @@ package com.middleware.manager.wiki.service;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 池化 ChatModel 包装器，控制对 LLM API 的并发调用数
  */
+@Slf4j
 public class PooledChatModel implements ChatModel {
-
-    private static final Logger log = LoggerFactory.getLogger(PooledChatModel.class);
 
     private final ChatModel delegate;
     private final Semaphore semaphore;

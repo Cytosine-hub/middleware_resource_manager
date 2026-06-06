@@ -5,8 +5,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import okhttp3.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -15,11 +13,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import lombok.extern.slf4j.Slf4j;
 
 @Component
+@Slf4j
 public class ZabbixClient {
-
-    private static final Logger log = LoggerFactory.getLogger(ZabbixClient.class);
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
     private final ZabbixConfig config;

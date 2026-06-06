@@ -5,8 +5,6 @@ import com.middleware.manager.wiki.entity.IngestTask;
 import com.middleware.manager.wiki.entity.WikiSource;
 import com.middleware.manager.wiki.repository.IngestTaskMapper;
 import com.middleware.manager.wiki.repository.WikiSourceMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -18,11 +16,11 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class IngestTaskService {
-
-    private static final Logger log = LoggerFactory.getLogger(IngestTaskService.class);
 
     private final IngestTaskMapper taskMapper;
     private final WikiSourceMapper sourceMapper;

@@ -6,8 +6,6 @@ import com.middleware.manager.security.PermissionService;
 import com.middleware.manager.wiki.entity.WikiPage;
 import com.middleware.manager.wiki.entity.WikiPagePermission;
 import com.middleware.manager.wiki.repository.WikiPagePermissionMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
@@ -17,11 +15,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class WikiPermissionService {
-
-    private static final Logger log = LoggerFactory.getLogger(WikiPermissionService.class);
 
     private final WikiPagePermissionMapper permissionMapper;
     private final PermissionService permissionService;

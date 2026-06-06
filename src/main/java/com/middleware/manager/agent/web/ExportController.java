@@ -2,8 +2,6 @@ package com.middleware.manager.agent.web;
 
 import com.middleware.manager.agent.export.ExcelExportService;
 import com.middleware.manager.agent.zabbix.ZabbixClient;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -16,12 +14,12 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 @RestController("opsExportController")
 @RequestMapping("/api/ops-agent/export")
+@Slf4j
 public class ExportController {
-
-    private static final Logger log = LoggerFactory.getLogger(ExportController.class);
 
     private final ZabbixClient zabbixClient;
     private final ExcelExportService excelExportService;

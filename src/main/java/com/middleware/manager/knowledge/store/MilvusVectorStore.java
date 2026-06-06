@@ -19,8 +19,6 @@ import io.milvus.param.index.CreateIndexParam;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.middleware.manager.knowledge.config.AiConfig;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -32,12 +30,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 @Component
 @ConditionalOnProperty(name = "app.vector.type", havingValue = "milvus")
+@Slf4j
 public class MilvusVectorStore implements VectorStore {
-
-    private static final Logger log = LoggerFactory.getLogger(MilvusVectorStore.class);
     private static final int VECTOR_DIM = 1024;
     private static final String ID_FIELD = "id";
     private static final String VECTOR_FIELD = "vector";

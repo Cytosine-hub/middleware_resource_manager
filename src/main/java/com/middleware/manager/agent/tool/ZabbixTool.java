@@ -1,18 +1,16 @@
 package com.middleware.manager.agent.tool;
 
 import com.middleware.manager.agent.zabbix.ZabbixClient;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 @Component
+@Slf4j
 public class ZabbixTool implements Tool {
-
-    private static final Logger log = LoggerFactory.getLogger(ZabbixTool.class);
 
     private final ZabbixClient zabbixClient;
 

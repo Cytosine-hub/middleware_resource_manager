@@ -3,8 +3,6 @@ package com.middleware.manager.knowledge.store;
 import com.middleware.manager.knowledge.embedding.EmbeddingService;
 import com.middleware.manager.knowledge.entity.KnowledgeChunk;
 import com.middleware.manager.knowledge.repository.KnowledgeChunkMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
@@ -13,6 +11,7 @@ import org.springframework.stereotype.Component;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 启动时自动重建向量库。
@@ -21,9 +20,8 @@ import java.util.Map;
  */
 @Component
 @Order(10)
+@Slf4j
 public class VectorStoreRebuildRunner implements ApplicationRunner {
-
-    private static final Logger log = LoggerFactory.getLogger(VectorStoreRebuildRunner.class);
 
     private final KnowledgeChunkMapper chunkMapper;
     private final EmbeddingService embeddingService;

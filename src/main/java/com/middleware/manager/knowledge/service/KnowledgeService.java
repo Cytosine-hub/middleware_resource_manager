@@ -9,8 +9,6 @@ import com.middleware.manager.knowledge.repository.KnowledgeChunkMapper;
 import com.middleware.manager.knowledge.splitter.TextSplitter;
 import com.middleware.manager.knowledge.store.VectorStore;
 import com.middleware.manager.service.StorageService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -19,11 +17,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.*;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class KnowledgeService {
-
-    private static final Logger log = LoggerFactory.getLogger(KnowledgeService.class);
 
     private final TextSplitter textSplitter;
     private final EmbeddingService embeddingService;

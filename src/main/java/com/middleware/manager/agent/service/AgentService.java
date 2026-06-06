@@ -5,18 +5,16 @@ import com.middleware.manager.agent.model.ChatModel.Message;
 import com.middleware.manager.agent.skill.Skill;
 import com.middleware.manager.agent.skill.SkillLoader;
 import com.middleware.manager.agent.tool.Tool;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class AgentService {
-
-    private static final Logger log = LoggerFactory.getLogger(AgentService.class);
     private static final String SYSTEM_PROMPT = """
             你是一个线上问题排查专家 Agent。你的职责是：
             1. 根据用户描述的问题或告警信息，分析可能的根因
