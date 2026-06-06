@@ -2,20 +2,29 @@ package com.middleware.manager.service;
 
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
 import com.middleware.manager.domain.*;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.ForbiddenException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.repository.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class ForumService {
-    private static final Logger log = LoggerFactory.getLogger(ForumService.class);
+    private static final String STATUS_PUBLISHED = "PUBLISHED";
+    private static final int MAX_PAGE_SIZE = 50;
+    private static final int INITIAL_TAG_COUNT = 0;
+
     private final ForumPostMapper postMapper;
     private final ForumTagMapper tagMapper;
     private final ForumCommentMapper commentMapper;
@@ -30,7 +39,7 @@ public class ForumService {
     }
 
     public PageInfo<ForumPost> listPosts(String keyword, String tag, int page, int size) {
-        int s = Math.min(Math.max(size, 1), 50);
+        int s = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         PageHelper.startPage(page + 1, s);
         List<ForumPost> posts;
         if (StringUtils.hasText(keyword) || StringUtils.hasText(tag)) {
@@ -38,13 +47,13 @@ public class ForumService {
             String tg = StringUtils.hasText(tag) ? tag.trim() : null;
             posts = postMapper.search(kw, tg);
         } else {
-            posts = postMapper.findByStatusOrderByCreatedAtDesc("PUBLISHED");
+            posts = postMapper.findByStatusOrderByCreatedAtDesc(STATUS_PUBLISHED);
         }
         return new PageInfo<>(posts);
     }
 
     public PageInfo<ForumPost> listPostsByAuthor(String authorUsername, int page, int size) {
-        int s = Math.min(Math.max(size, 1), 50);
+        int s = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         PageHelper.startPage(page + 1, s);
         List<ForumPost> posts = postMapper.findByAuthorUsernameOrderByCreatedAtDesc(authorUsername);
         return new PageInfo<>(posts);
@@ -53,7 +62,7 @@ public class ForumService {
     public ForumPost getPost(Long id) {
         ForumPost post = postMapper.findById(id);
         if (post == null) {
-            throw new IllegalArgumentException("文章不存在");
+            throw new NotFoundException(ErrorCode.NOT_FOUND, "文章不存在");
         }
         return post;
     }
@@ -66,49 +75,49 @@ public class ForumService {
         post.setContent(content);
         post.setAuthorUsername(authorUsername);
         post.setAuthorDisplayName(authorDisplayName);
-        post.setStatus("PUBLISHED");
+        post.setStatus(STATUS_PUBLISHED);
         post.setCreatedAt(LocalDateTime.now());
         post.setUpdatedAt(LocalDateTime.now());
         postMapper.insert(post);
-        // Handle tags after insert so we have the post id
         if (tagNames != null && !tagNames.isEmpty()) {
             Set<ForumTag> tags = resolveTags(tagNames);
             for (ForumTag tag : tags) {
                 insertPostTag(post.getId(), tag.getId());
             }
         }
+        log.info("文章已创建 id={}", post.getId());
         return post;
     }
 
     @Transactional
     public ForumPost updatePost(Long id, String title, String content, List<String> tagNames, String username) {
         ForumPost post = getPost(id);
-        if (!post.getAuthorUsername().equals(username))
-            throw new IllegalArgumentException("只能编辑自己的文章");
+        if (!post.getAuthorUsername().equals(username)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN, "只能编辑自己的文章");
+        }
         post.setTitle(title);
         post.setContent(content);
         post.setUpdatedAt(LocalDateTime.now());
         updateTags(post.getId(), tagNames);
         postMapper.update(post);
+        log.info("文章已更新 id={}", id);
         return post;
     }
 
     @Transactional
     public void deletePost(Long id, String username) {
         ForumPost post = getPost(id);
-        if (!post.getAuthorUsername().equals(username))
-            throw new IllegalArgumentException("只能删除自己的文章");
-        // Decrement tag post counts
+        if (!post.getAuthorUsername().equals(username)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN, "只能删除自己的文章");
+        }
         List<ForumTag> postTags = findTagsByPostId(id);
         for (ForumTag tag : postTags) {
             tagMapper.decrementPostCount(tag.getId());
         }
-        // Delete post-tag associations
         deletePostTagsByPostId(id);
-        // Delete comments
         commentMapper.deleteByPostId(id);
-        // Delete post
         postMapper.deleteById(id);
+        log.info("文章已删除 id={}", id);
     }
 
     @Transactional
@@ -133,7 +142,6 @@ public class ForumService {
             postMapper.incrementLikeCount(postId);
             result.put("liked", true);
         }
-        // Re-fetch to get accurate count
         ForumPost updated = postMapper.findById(postId);
         result.put("likeCount", updated.getLikeCount());
         return result;
@@ -143,7 +151,6 @@ public class ForumService {
         return postLikeMapper.existsByPostIdAndUsername(postId, username);
     }
 
-    // Comments
     public List<ForumComment> getComments(Long postId) {
         return commentMapper.findByPostIdOrderByCreatedAtAsc(postId);
     }
@@ -159,6 +166,7 @@ public class ForumService {
         comment.setCreatedAt(LocalDateTime.now());
         commentMapper.insert(comment);
         postMapper.updateCommentCount(postId);
+        log.info("评论已添加 postId={}", postId);
         return comment;
     }
 
@@ -167,7 +175,7 @@ public class ForumService {
         getPost(postId);
         ForumComment parent = commentMapper.findById(parentId);
         if (parent == null) {
-            throw new IllegalArgumentException("父评论不存在");
+            throw new NotFoundException(ErrorCode.NOT_FOUND, "父评论不存在");
         }
         ForumComment reply = new ForumComment();
         reply.setPostId(postId);
@@ -177,6 +185,7 @@ public class ForumService {
         reply.setAuthorDisplayName(authorDisplayName);
         reply.setCreatedAt(LocalDateTime.now());
         commentMapper.insert(reply);
+        log.info("回复已添加 postId={}, parentId={}", postId, parentId);
         return reply;
     }
 
@@ -184,7 +193,7 @@ public class ForumService {
     public Map<String, Object> toggleCommentLike(Long commentId) {
         ForumComment comment = commentMapper.findById(commentId);
         if (comment == null) {
-            throw new IllegalArgumentException("评论不存在");
+            throw new NotFoundException(ErrorCode.NOT_FOUND, "评论不存在");
         }
         commentMapper.incrementLikeCount(commentId);
         Map<String, Object> result = new LinkedHashMap<>();
@@ -192,7 +201,6 @@ public class ForumService {
         return result;
     }
 
-    // Tags
     public List<ForumTag> getAllTags() {
         return tagMapper.findAllByOrderByPostCountDesc();
     }
@@ -208,19 +216,17 @@ public class ForumService {
 
     private void updateTags(Long postId, List<String> newNames) {
         Set<String> newSet = newNames != null ?
-                newNames.stream().map(String::trim).filter(s -> !s.isEmpty()).collect(java.util.stream.Collectors.toSet()) :
+                newNames.stream().map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet()) :
                 new HashSet<>();
         List<ForumTag> currentTags = findTagsByPostId(postId);
-        Set<String> oldSet = currentTags.stream().map(ForumTag::getName).collect(java.util.stream.Collectors.toSet());
+        Set<String> oldSet = currentTags.stream().map(ForumTag::getName).collect(Collectors.toSet());
 
-        // Remove tags no longer in the list
         for (ForumTag tag : currentTags) {
             if (!newSet.contains(tag.getName())) {
                 deletePostTag(postId, tag.getId());
                 tagMapper.decrementPostCount(tag.getId());
             }
         }
-        // Add new tags
         for (String name : newSet) {
             if (!oldSet.contains(name)) {
                 ForumTag tag = getOrCreateTag(name);
@@ -235,7 +241,7 @@ public class ForumService {
         if (tag == null) {
             tag = new ForumTag();
             tag.setName(trimmed);
-            tag.setPostCount(0);
+            tag.setPostCount(INITIAL_TAG_COUNT);
             tagMapper.insert(tag);
         }
         tag.setPostCount(tag.getPostCount() + 1);
