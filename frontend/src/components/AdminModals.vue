@@ -29,9 +29,9 @@
           <span class="file-name">{{ admin.releaseForm.file?.name || admin.releaseForm.originalFileName || '未选择文件' }}</span>
         </span>
       </label>
-      <label class="wide">说明<textarea v-model.trim="admin.releaseForm.description" maxlength="2000" /></label>
       <label class="checkline"><input v-model="admin.releaseForm.published" type="checkbox" />发布</label>
       <label class="checkline"><input v-model="admin.releaseForm.standardPackage" type="checkbox" />标准包</label>
+      <label class="wide">说明<textarea v-model.trim="admin.releaseForm.description" maxlength="2000" /></label>
     </div>
     <div v-if="admin.uploading.value" class="upload-progress-bar">
       <div class="progress-track">
