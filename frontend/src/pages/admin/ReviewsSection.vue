@@ -1,7 +1,7 @@
 <template>
   <section class="utility-panel type-panel">
-    <div class="list-panel type-list-panel">
-      <div class="filters document-filters">
+    <div class="section-toolbar">
+      <div class="filters">
         <select :value="filterStatus" @change="$emit('filterChange', $event.target.value)">
           <option value="">全部状态</option>
           <option value="PENDING">待审核</option>
@@ -9,20 +9,42 @@
           <option value="REJECTED">已驳回</option>
         </select>
       </div>
-      <div class="type-list">
-        <article v-for="record in reviews" :key="record.id" class="parameter-item document-item">
-          <div>
-            <strong>{{ record.documentType === 'PARAMETER_STANDARD' ? [record.category, record.software].filter(Boolean).join(' / ') : record.documentTitle }}</strong>
-            <p>
-              <span :class="['status', statusClass(record.status)]">{{ record.statusLabel }}</span>
-              V{{ record.documentVersion || '-' }} · {{ record.category || '-' }} / {{ record.software || '-' }}
-            </p>
-            <p>提交人：{{ record.submitterDisplayName || record.submitterUsername }} · {{ formatTime(record.submittedAt) }}</p>
-          </div>
-          <button class="ghost" @click="$emit('viewDetail', record)">查看</button>
-          <button v-if="record.status === 'PENDING' && canReview(record)" class="ghost" @click="$emit('viewDetail', record)">审核</button>
-        </article>
-        <p v-if="reviews.length === 0" class="empty-state">暂无审核记录。</p>
+      <div class="actions"></div>
+    </div>
+    <div class="list-panel">
+      <div class="table-wrap">
+        <table class="resource-table">
+          <thead>
+            <tr>
+              <th>文档名称</th>
+              <th>类型</th>
+              <th>版本</th>
+              <th>分类 / 软件</th>
+              <th>状态</th>
+              <th>提交人</th>
+              <th>提交时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="record in reviews" :key="record.id">
+              <td>{{ record.documentType === 'PARAMETER_STANDARD' ? [record.category, record.software].filter(Boolean).join(' / ') : record.documentTitle }}</td>
+              <td>{{ record.documentType === 'PARAMETER_STANDARD' ? '参数标准' : '标准文档' }}</td>
+              <td>V{{ record.documentVersion || '-' }}</td>
+              <td>{{ record.category || '-' }} / {{ record.software || '-' }}</td>
+              <td><span :class="['status', statusClass(record.status)]">{{ record.statusLabel }}</span></td>
+              <td>{{ record.submitterDisplayName || record.submitterUsername }}</td>
+              <td>{{ formatTime(record.submittedAt) }}</td>
+              <td class="row-actions">
+                <button class="ghost" @click="$emit('viewDetail', record)">查看</button>
+                <button v-if="record.status === 'PENDING' && canReview(record)" class="ghost" @click="$emit('viewDetail', record)">审核</button>
+              </td>
+            </tr>
+            <tr v-if="reviews.length === 0">
+              <td colspan="8" class="empty-state">暂无审核记录</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
       <Pagination :page="pageInfo" @change="(p) => $emit('changePage', p)" />
     </div>

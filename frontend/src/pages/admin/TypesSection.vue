@@ -13,17 +13,34 @@
         <slot name="actions" />
       </div>
     </div>
-    <div class="list-panel type-list-panel">
-      <div class="type-list">
-        <article v-for="type in types" :key="type.id" class="type-item">
-          <div>
-            <strong>{{ type.category }} / {{ type.name }}</strong>
-            <p>{{ type.description || '暂无说明' }}</p>
-          </div>
-          <span :class="['status', type.active ? 'ok' : 'off']">{{ type.active ? '启用' : '停用' }}</span>
-          <button class="ghost" @click="$emit('editType', type)">编辑</button>
-          <button class="danger" @click="$emit('deleteType', type)">删除</button>
-        </article>
+    <div class="list-panel">
+      <div class="table-wrap">
+        <table class="resource-table">
+          <thead>
+            <tr>
+              <th>分类</th>
+              <th>软件名称</th>
+              <th>说明</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="type in types" :key="type.id">
+              <td>{{ type.category }}</td>
+              <td>{{ type.name }}</td>
+              <td>{{ type.description || '-' }}</td>
+              <td><span :class="['status', type.active ? 'ok' : 'off']">{{ type.active ? '启用' : '停用' }}</span></td>
+              <td class="row-actions">
+                <button class="ghost" @click="$emit('editType', type)">编辑</button>
+                <button class="danger" @click="$emit('deleteType', type)">删除</button>
+              </td>
+            </tr>
+            <tr v-if="types.length === 0">
+              <td colspan="5" class="empty-state">暂无软件类型</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
       <Pagination :page="pageInfo" @change="(p) => $emit('changePage', p)" />
     </div>

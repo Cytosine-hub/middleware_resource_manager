@@ -21,27 +21,44 @@
         <slot name="actions" />
       </div>
     </div>
-    <div class="list-panel type-list-panel">
-      <div class="type-list">
-        <article v-for="doc in documents" :key="doc.id" class="parameter-item document-item">
-          <div>
-            <strong>{{ displayTitle(doc) }}</strong>
-            <p>
-              <span :class="['status', doc._statusClass || statusClass(doc.status)]">{{ doc.statusLabel || statusLabel(doc.status) }}</span>
-              V{{ doc.version || '-' }} · {{ doc.documentType === 'ARTICLE' ? '文章' : doc.documentType === 'MANUAL' ? '手册' : '参数标准' }}
-              <span v-if="doc.reviewComment" class="review-hint" :title="doc.reviewComment">（审核意见）</span>
-            </p>
-            <p>关联标准：{{ getStandardLabel(doc.relatedStandardDocumentId) }}</p>
-          </div>
-          <button class="ghost" @click="$emit('preview', doc)">预览</button>
-          <button v-if="doc.canEdit" class="ghost" @click="$emit('edit', doc)">编辑</button>
-          <button v-if="doc.availableActions?.includes('submit-review')" class="ghost" @click="$emit('submitReview', doc)">提交审核</button>
-          <button v-if="doc.availableActions?.includes('start-modify')" class="ghost" @click="$emit('startModify', doc)">开始修改</button>
-          <button v-if="doc.availableActions?.includes('cancel-modify')" class="ghost" @click="$emit('cancelModify', doc)">取消修改</button>
-          <button v-if="doc.status === 'PUBLISHED'" class="ghost" @click="$emit('revisionHistory', doc)">修订历史</button>
-          <button v-if="doc.availableActions?.includes('delete')" class="ghost danger" @click="$emit('delete', doc)">删除</button>
-        </article>
-        <p v-if="documents.length === 0" class="empty-state">暂无文档，点击"新增文档"创建手册或文章。</p>
+    <div class="list-panel">
+      <div class="table-wrap">
+        <table class="resource-table">
+          <thead>
+            <tr>
+              <th>标题</th>
+              <th>类型</th>
+              <th>版本</th>
+              <th>状态</th>
+              <th>关联标准</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="doc in documents" :key="doc.id">
+              <td>{{ displayTitle(doc) }}</td>
+              <td>{{ doc.documentType === 'ARTICLE' ? '文章' : '手册' }}</td>
+              <td>V{{ doc.version || '-' }}</td>
+              <td>
+                <span :class="['status', statusClass(doc.status)]">{{ statusLabel(doc.status) }}</span>
+                <span v-if="doc.reviewComment" class="review-hint" :title="doc.reviewComment">（审核意见）</span>
+              </td>
+              <td>{{ getStandardLabel(doc.relatedStandardDocumentId) }}</td>
+              <td class="row-actions">
+                <button class="ghost" @click="$emit('preview', doc)">预览</button>
+                <button v-if="doc.canEdit" class="ghost" @click="$emit('edit', doc)">编辑</button>
+                <button v-if="doc.availableActions?.includes('submit-review')" class="ghost" @click="$emit('submitReview', doc)">提交审核</button>
+                <button v-if="doc.availableActions?.includes('start-modify')" class="ghost" @click="$emit('startModify', doc)">开始修改</button>
+                <button v-if="doc.availableActions?.includes('cancel-modify')" class="ghost" @click="$emit('cancelModify', doc)">取消修改</button>
+                <button v-if="doc.status === 'PUBLISHED'" class="ghost" @click="$emit('revisionHistory', doc)">修订历史</button>
+                <button v-if="doc.availableActions?.includes('delete')" class="ghost danger" @click="$emit('delete', doc)">删除</button>
+              </td>
+            </tr>
+            <tr v-if="documents.length === 0">
+              <td colspan="6" class="empty-state">暂无文档，点击"新增文档"创建手册或文章。</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
       <Pagination :page="pageInfo" @change="(p) => $emit('changePage', p)" />
     </div>
