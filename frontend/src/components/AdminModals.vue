@@ -16,14 +16,12 @@
       <label>版本号<input v-model.trim="admin.releaseForm.version" required maxlength="60" /></label>
       <label>平台<input v-model.trim="admin.releaseForm.platform" maxlength="60" /></label>
       <label>发布日期<input v-model="admin.releaseForm.releasedAt" type="date" /></label>
-      <label class="checkline"><input v-model="admin.releaseForm.published" type="checkbox" />发布</label>
-      <label>关联标准
+      <label v-if="!admin.releaseForm.standardPackage">关联标准
         <select v-model="admin.releaseForm.standardDocumentId" :disabled="!admin.releaseForm.category || !admin.releaseForm.softwareTypeId">
           <option :value="null">不关联</option>
           <option v-for="doc in admin.releaseStandardOptions.value" :key="doc.id" :value="doc.id">{{ admin.getStandardLabel(doc.id) }}</option>
         </select>
       </label>
-      <label class="checkline"><input v-model="admin.releaseForm.standardPackage" type="checkbox" />标准包</label>
       <label v-if="admin.releaseForm.standardPackage">关联参数标准
         <select v-model="admin.releaseForm.parameterStandardId" :disabled="!admin.releaseForm.category || !admin.releaseForm.softwareTypeId">
           <option :value="null">请选择参数标准</option>
@@ -38,6 +36,8 @@
         </span>
       </label>
       <label class="wide">说明<textarea v-model.trim="admin.releaseForm.description" maxlength="2000" /></label>
+      <label class="checkline"><input v-model="admin.releaseForm.published" type="checkbox" />发布</label>
+      <label class="checkline"><input v-model="admin.releaseForm.standardPackage" type="checkbox" />标准包</label>
     </div>
     <div v-if="admin.uploading.value" class="upload-progress-bar">
       <div class="progress-track">

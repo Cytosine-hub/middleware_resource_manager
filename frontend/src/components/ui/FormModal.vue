@@ -29,7 +29,7 @@ defineEmits(['update:modelValue', 'submit'])
 
 <style scoped>
 .form-modal-inner {
-  display: flex; flex-direction: column; max-height: 70vh;
+  display: flex; flex-direction: column; max-height: 80vh;
 }
 .form-modal-body {
   flex: 1; overflow-y: auto; min-height: 0;
