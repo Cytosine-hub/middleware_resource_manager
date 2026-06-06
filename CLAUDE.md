@@ -2,6 +2,53 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 开发规范（必须遵守）
+
+完整规范见 `docs/development-standards.md`，以下是核心规则：
+
+### 后端核心规则
+
+1. **异常处理** — 禁止将堆栈信息、技术细节返回前端
+   - 使用 `BusinessException(ErrorCode)` 抛业务异常
+   - 全局异常处理器只返回中文描述 + 错误码
+   - 堆栈只在后端日志中记录 `log.error("msg", ex)`
+
+2. **常量管理** — 禁止魔法值
+   - 错误码定义在 `constant/ErrorCode.java`
+   - 错误消息定义在 `constant/ErrorMessages.java`（中文）
+   - 状态常量定义在 `constant/StatusConstants.java`
+
+3. **日志规范**
+   - 使用 `@Slf4j` 注解，变量名 `log`
+   - 参数化日志：`log.info("msg key={}", value)`
+   - 禁止字符串拼接：`log.info("msg" + var)` ❌
+   - 敏感信息禁止记录（密码、Token 明文）
+
+4. **代码规范**
+   - 实体：`@Data @NoArgsConstructor @AllArgsConstructor`
+   - Service：构造器注入，写操作加 `@Transactional`
+   - Controller：`@RestController`，返回 Response DTO
+   - 异常：抛 `BusinessException`，不抛原生 `IllegalArgumentException`
+
+### 前端核心规则
+
+1. **样式** — 使用设计令牌，禁止硬编码颜色
+   - `components/ui/` 组件必须用 `var(--color-*)` 等变量
+   - 设计令牌定义在 `styles/tokens.css`
+
+2. **组件规范**
+   - 使用 `<script setup>` + `defineProps` + `defineEmits`
+   - 通信：Props 向下，Events 向上，禁止 `$refs`/`$parent`
+   - 命名：UI 组件 `Base*`，业务组件 PascalCase，管理模块 `*Section`
+
+3. **API 错误处理**
+   - `catch (error)` 中使用 `notify(error.message, 'error')`
+   - 禁止显示堆栈或 `error.toString()`
+
+4. **组合式函数**
+   - 模块级单例状态
+   - 导出函数返回 `{ state, methods }`
+
 ## Build & Run
 
 ```bash
