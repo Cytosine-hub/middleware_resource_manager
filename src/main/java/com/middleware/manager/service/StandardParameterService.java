@@ -1,10 +1,15 @@
 package com.middleware.manager.service;
 
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
 import com.middleware.manager.domain.StandardParameter;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.repository.ParameterStandardMapper;
 import com.middleware.manager.repository.StandardDocumentMapper;
 import com.middleware.manager.repository.StandardParameterMapper;
 import com.middleware.manager.web.api.dto.StandardParameterRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -14,6 +19,7 @@ import java.util.Collections;
 import java.util.List;
 
 @Service
+@Slf4j
 public class StandardParameterService {
     private final StandardParameterMapper standardParameterMapper;
     private final StandardDocumentMapper standardDocumentMapper;
@@ -56,7 +62,7 @@ public class StandardParameterService {
     public StandardParameter get(Long id) {
         StandardParameter parameter = standardParameterMapper.findById(id);
         if (parameter == null) {
-            throw new IllegalArgumentException("标准参数不存在");
+            throw new NotFoundException(ErrorCode.STANDARD_PARAMETER_NOT_FOUND, ErrorMessages.STANDARD_PARAMETER_NOT_FOUND);
         }
         return parameter;
     }
@@ -70,11 +76,11 @@ public class StandardParameterService {
         String code = normalizeCode(request.getCode());
         if (standardDocumentId != null) {
             if (standardParameterMapper.existsByStandardDocumentIdAndCodeIgnoreCase(standardDocumentId, code)) {
-                throw new IllegalArgumentException("该标准下参数编码已存在");
+                throw new BusinessException(ErrorCode.PARAMETER_CODE_DUPLICATE, ErrorMessages.PARAMETER_CODE_DUPLICATE);
             }
         } else {
             if (standardParameterMapper.existsByParameterStandardIdAndCodeIgnoreCase(parameterStandardId, code)) {
-                throw new IllegalArgumentException("该标准下参数编码已存在");
+                throw new BusinessException(ErrorCode.PARAMETER_CODE_DUPLICATE, ErrorMessages.PARAMETER_CODE_DUPLICATE);
             }
         }
 
@@ -84,6 +90,7 @@ public class StandardParameterService {
         parameter.setUpdatedAt(LocalDateTime.now());
         standardParameterMapper.insert(parameter);
         clearRenderedContent(standardDocumentId, parameterStandardId);
+        log.info("标准参数已创建 id={}", parameter.getId());
         return parameter;
     }
 
@@ -102,12 +109,12 @@ public class StandardParameterService {
         if (standardDocumentId != null) {
             StandardParameter existing = standardParameterMapper.findByStandardDocumentIdAndCodeIgnoreCase(standardDocumentId, code);
             if (existing != null && !existing.getId().equals(id)) {
-                throw new IllegalArgumentException("该标准下参数编码已存在");
+                throw new BusinessException(ErrorCode.PARAMETER_CODE_DUPLICATE, ErrorMessages.PARAMETER_CODE_DUPLICATE);
             }
         } else {
             StandardParameter existing = standardParameterMapper.findByParameterStandardIdAndCodeIgnoreCase(parameterStandardId, code);
             if (existing != null && !existing.getId().equals(id)) {
-                throw new IllegalArgumentException("该标准下参数编码已存在");
+                throw new BusinessException(ErrorCode.PARAMETER_CODE_DUPLICATE, ErrorMessages.PARAMETER_CODE_DUPLICATE);
             }
         }
 
@@ -115,6 +122,7 @@ public class StandardParameterService {
         parameter.setUpdatedAt(LocalDateTime.now());
         standardParameterMapper.update(parameter);
         clearRenderedContent(standardDocumentId, parameterStandardId);
+        log.info("标准参数已更新 id={}", id);
         return parameter;
     }
 
@@ -125,6 +133,7 @@ public class StandardParameterService {
         Long parameterStandardId = parameter.getParameterStandardId();
         standardParameterMapper.deleteById(id);
         clearRenderedContent(standardDocumentId, parameterStandardId);
+        log.info("标准参数已删除 id={}", id);
     }
 
     private void clearRenderedContent(Long standardDocumentId, Long parameterStandardId) {
@@ -144,7 +153,7 @@ public class StandardParameterService {
                 parameterStandardMapper.update(ps);
             }
             // Clear renderedContent of all StandardDocuments referencing this ParameterStandard
-            java.util.List<com.middleware.manager.domain.StandardDocument> relatedDocs =
+            List<com.middleware.manager.domain.StandardDocument> relatedDocs =
                     standardDocumentMapper.findByRelatedStandardDocumentId(parameterStandardId);
             for (com.middleware.manager.domain.StandardDocument doc : relatedDocs) {
                 if (doc.getRenderedContent() != null) {
@@ -161,8 +170,8 @@ public class StandardParameterService {
         parameter.setStandardDocumentId(standardDocumentId);
         parameter.setParameterStandardId(parameterStandardId);
         parameter.setCode(code);
-        parameter.setName(requireText(request.getName(), "标准参数名称不能为空"));
-        parameter.setValue(requireText(request.getValue(), "标准参数值不能为空"));
+        parameter.setName(requireText(request.getName(), ErrorMessages.PARAMETER_NAME_REQUIRED));
+        parameter.setValue(requireText(request.getValue(), ErrorMessages.PARAMETER_VALUE_REQUIRED));
         parameter.setCategory(trimToNull(request.getCategory()));
         parameter.setDescription(trimToNull(request.getDescription()));
         parameter.setActive(request.isActive());
@@ -171,26 +180,26 @@ public class StandardParameterService {
 
     private void resolveBinding(Long standardDocumentId, Long parameterStandardId) {
         if (standardDocumentId == null && parameterStandardId == null) {
-            throw new IllegalArgumentException("参数必须绑定标准");
+            throw new BusinessException(ErrorCode.PARAMETER_BINDING_INVALID, ErrorMessages.PARAMETER_BINDING_INVALID);
         }
         if (standardDocumentId != null && parameterStandardId != null) {
-            throw new IllegalArgumentException("参数只能绑定一种标准类型");
+            throw new BusinessException(ErrorCode.PARAMETER_BINDING_INVALID, ErrorMessages.PARAMETER_BINDING_ONLY_ONE);
         }
         if (standardDocumentId != null && standardDocumentMapper.findById(standardDocumentId) == null) {
-            throw new IllegalArgumentException("绑定的标准不存在");
+            throw new NotFoundException(ErrorCode.DOCUMENT_NOT_FOUND, ErrorMessages.PARAMETER_BINDING_DOCUMENT_NOT_FOUND);
         }
         if (parameterStandardId != null && parameterStandardMapper.findById(parameterStandardId) == null) {
-            throw new IllegalArgumentException("绑定的参数标准不存在");
+            throw new NotFoundException(ErrorCode.PARAMETER_STANDARD_NOT_FOUND, ErrorMessages.PARAMETER_BINDING_STANDARD_NOT_FOUND);
         }
     }
 
     private String normalizeCode(String code) {
-        return requireText(code, "标准参数编码不能为空").trim().toUpperCase();
+        return requireText(code, ErrorMessages.PARAMETER_CODE_REQUIRED).trim().toUpperCase();
     }
 
     private String requireText(String value, String message) {
         if (!StringUtils.hasText(value)) {
-            throw new IllegalArgumentException(message);
+            throw new BusinessException(ErrorCode.PARAM_INVALID, message);
         }
         return value.trim();
     }

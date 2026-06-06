@@ -48,6 +48,12 @@ public final class ErrorMessages {
     public static final String STANDARD_PARAMETER_NOT_FOUND = "标准参数不存在";
     public static final String PARAMETER_CODE_DUPLICATE = "该标准下参数编码已存在";
     public static final String PARAMETER_BINDING_INVALID = "参数必须绑定标准";
+    public static final String PARAMETER_BINDING_ONLY_ONE = "参数只能绑定一种标准类型";
+    public static final String PARAMETER_BINDING_DOCUMENT_NOT_FOUND = "绑定的标准不存在";
+    public static final String PARAMETER_BINDING_STANDARD_NOT_FOUND = "绑定的参数标准不存在";
+    public static final String PARAMETER_NAME_REQUIRED = "标准参数名称不能为空";
+    public static final String PARAMETER_VALUE_REQUIRED = "标准参数值不能为空";
+    public static final String PARAMETER_CODE_REQUIRED = "标准参数编码不能为空";
 
     // 审核相关
     public static final String REVIEW_NOT_FOUND = "审核记录不存在";
