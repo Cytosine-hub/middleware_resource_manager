@@ -17,15 +17,9 @@
       <label>平台<input v-model.trim="admin.releaseForm.platform" maxlength="60" /></label>
       <label>发布日期<input v-model="admin.releaseForm.releasedAt" type="date" /></label>
       <label>关联标准
-        <select v-model="admin.releaseForm.standardDocumentId" :disabled="!admin.releaseForm.category || !admin.releaseForm.softwareTypeId">
-          <option :value="null">不关联</option>
-          <option v-for="doc in admin.releaseStandardOptions.value" :key="doc.id" :value="doc.id">{{ admin.getStandardLabel(doc.id) }}</option>
-        </select>
-      </label>
-      <label v-if="admin.releaseForm.standardPackage">关联参数标准
         <select v-model="admin.releaseForm.parameterStandardId" :disabled="!admin.releaseForm.category || !admin.releaseForm.softwareTypeId">
-          <option :value="null">请选择参数标准</option>
-          <option v-for="ps in admin.releaseParameterStandardOptions.value" :key="ps.id" :value="ps.id">{{ ps.title }}</option>
+          <option :value="null">不关联</option>
+          <option v-for="ps in admin.releaseParameterStandardOptions.value" :key="ps.id" :value="ps.id">{{ admin.getStandardLabel(ps.id) }}</option>
         </select>
       </label>
       <label class="file-field">安装包

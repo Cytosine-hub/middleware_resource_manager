@@ -412,7 +412,7 @@ async function logout(showMessage = true) {
   showPassword.value = false
   adminSection.value = 'files'
   Object.assign(adminFilters, { keyword: '', platform: '', published: '', page: 0, size: 10 })
-  Object.assign(releaseForm, { id: null, category: '', softwareTypeId: '', middlewareName: '', version: '', platform: '', description: '', releasedAt: '', published: false, file: null, originalFileName: '', standardDocumentId: null, standardPackage: false, parameterStandardId: null })
+  Object.assign(releaseForm, { id: null, category: '', softwareTypeId: '', middlewareName: '', version: '', platform: '', description: '', releasedAt: '', published: false, file: null, originalFileName: '', standardPackage: false, parameterStandardId: null })
   Object.assign(typeForm, { id: null, category: '中间件', name: '', description: '', active: true })
   Object.assign(standardForm, { id: null, category: '', softwareTypeId: '', softwareVersion: '', code: '', summary: '', content: '# 参数标准\n\n' })
   Object.assign(userForm, { username: '', displayName: '', password: '', role: '开发经理' })

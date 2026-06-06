@@ -169,9 +169,11 @@ public class ReleaseService {
         ReleaseAsset entity = new ReleaseAsset();
         applyForm(entity, form);
 
+        // 关联标准（parameterStandardId 始终保存，不论是否标准包）
+        entity.setParameterStandardId(form.getParameterStandardId());
+
         boolean isStdPkg = form.isStandardPackage() && form.getParameterStandardId() != null;
         entity.setStandardPackage(isStdPkg);
-        entity.setParameterStandardId(isStdPkg ? form.getParameterStandardId() : null);
 
         if (isStdPkg) {
             // 标准包：先保存元数据，再异步处理
@@ -222,6 +224,9 @@ public class ReleaseService {
         }
 
         applyForm(entity, form);
+
+        // 关联标准（parameterStandardId 始终保存，不论是否标准包）
+        entity.setParameterStandardId(form.getParameterStandardId());
 
         if (form.getFile() != null && !form.getFile().isEmpty()) {
             StorageService.StoredFile storedFile = storageService.store(form.getFile(), entity.getMiddlewareName());
