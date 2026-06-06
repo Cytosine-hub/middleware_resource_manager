@@ -22,15 +22,16 @@
           <option v-for="ps in admin.releaseParameterStandardOptions.value" :key="ps.id" :value="ps.id">{{ admin.getStandardLabel(ps.id) }}</option>
         </select>
       </label>
-      <label class="file-field">安装包
-        <span class="file-control">
-          <input type="file" @change="admin.handleReleaseFileChange" />
-          <span class="file-button">选择文件</span>
-          <span class="file-name">{{ admin.releaseForm.file?.name || admin.releaseForm.originalFileName || '未选择文件' }}</span>
-        </span>
-      </label>
-      <label class="checkline"><input v-model="admin.releaseForm.published" type="checkbox" />发布</label>
-      <label class="checkline"><input v-model="admin.releaseForm.standardPackage" type="checkbox" />标准包</label>
+      <div class="file-row">
+        <label class="checkline"><input v-model="admin.releaseForm.standardPackage" type="checkbox" />标准包</label>
+        <label class="file-field">安装包
+          <span class="file-control">
+            <input type="file" @change="admin.handleReleaseFileChange" />
+            <span class="file-button">选择文件</span>
+            <span class="file-name">{{ admin.releaseForm.file?.name || admin.releaseForm.originalFileName || '未选择文件' }}</span>
+          </span>
+        </label>
+      </div>
       <label class="wide">说明<textarea v-model.trim="admin.releaseForm.description" maxlength="2000" /></label>
     </div>
     <div v-if="admin.uploading.value" class="upload-progress-bar">
@@ -265,3 +266,15 @@ const props = defineProps({
 
 const diffLines = computed(() => (props.selectedReviewDiff || '').split('\n'))
 </script>
+
+<style scoped>
+.file-row {
+  display: flex; align-items: center; gap: var(--space-md);
+}
+.file-row .checkline {
+  flex-shrink: 0; margin: 0;
+}
+.file-row .file-field {
+  flex: 1; min-width: 0;
+}
+</style>
