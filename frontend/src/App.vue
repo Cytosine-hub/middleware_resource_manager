@@ -1,6 +1,6 @@
 <template>
   <div class="app-shell">
-    <header :class="['topbar', route.name === 'home' ? 'portal-topbar' : '']">
+    <header v-if="auth.token || route.name !== 'admin'" :class="['topbar', route.name === 'home' ? 'portal-topbar' : '']">
       <div :class="{ 'clickable-title': route.name?.startsWith('forum') }" @click="route.name?.startsWith('forum') && navigate('forum')">
         <p class="eyebrow">Infrastructure Portal</p>
         <h1>{{ pageTitle }}</h1>
