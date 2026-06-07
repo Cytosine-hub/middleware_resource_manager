@@ -177,6 +177,7 @@ public class IngestTaskService {
                 // 长文档，串行分段编译（串行保证每段能看到前面段的结果，合并逻辑正确）
                 List<String> chunks = splitContent(content);
                 int totalCreated = 0, totalUpdated = 0;
+                boolean partialFailure = false;
 
                 for (int i = 0; i < chunks.size(); i++) {
                     int basePct = 10 + (i * 80 / totalChunks);
@@ -193,6 +194,7 @@ public class IngestTaskService {
 
                     if ("FAILED".equals(chunkResult.getStatus())) {
                         log.warn("Chunk {} failed, continuing with next chunk", i + 1);
+                        partialFailure = true;
                     } else {
                         totalCreated += chunkResult.getPagesCreated();
                         totalUpdated += chunkResult.getPagesUpdated();
@@ -205,6 +207,9 @@ public class IngestTaskService {
 
                 taskMapper.updateProgress(taskId, 95, "正在解析交叉引用...", totalChunks);
                 taskMapper.updateResult(taskId, totalCreated, totalUpdated);
+                if (partialFailure) {
+                    taskMapper.updateStatus(taskId, "PARTIAL", "部分分段编译失败，请查看日志后重试");
+                }
             }
 
             // 标记 source 已编译
@@ -230,14 +235,60 @@ public class IngestTaskService {
      */
     private List<String> splitContent(String content) {
         List<String> chunks = new ArrayList<>();
-        int step = maxContentChars - chunkOverlap;
-        int start = 0;
-        while (start < content.length()) {
-            int end = Math.min(start + maxContentChars, content.length());
-            chunks.add(content.substring(start, end));
-            start += step;
+        List<String> blocks = splitSemanticBlocks(content);
+        StringBuilder current = new StringBuilder();
+        String previousTail = "";
+
+        for (String block : blocks) {
+            if (block.length() > maxContentChars) {
+                if (!current.isEmpty()) {
+                    chunks.add(current.toString());
+                    previousTail = tail(current.toString());
+                    current.setLength(0);
+                }
+                int step = Math.max(1, maxContentChars - chunkOverlap);
+                int start = 0;
+                while (start < block.length()) {
+                    int end = Math.min(start + maxContentChars, block.length());
+                    String piece = block.substring(start, end);
+                    chunks.add(previousTail + piece);
+                    previousTail = tail(piece);
+                    start += step;
+                }
+                continue;
+            }
+
+            if (current.length() + block.length() > maxContentChars) {
+                chunks.add(current.toString());
+                previousTail = tail(current.toString());
+                current.setLength(0);
+                current.append(previousTail);
+            }
+            current.append(block);
+        }
+
+        if (!current.isEmpty()) {
+            chunks.add(current.toString());
         }
         return chunks;
+    }
+
+    private List<String> splitSemanticBlocks(String content) {
+        List<String> blocks = new ArrayList<>();
+        String[] parts = content.split("(?m)(?=^#{1,6}\\s)|\\n\\s*\\n");
+        for (String part : parts) {
+            if (part == null || part.isBlank()) continue;
+            blocks.add(part.endsWith("\n\n") ? part : part + "\n\n");
+        }
+        if (blocks.isEmpty()) {
+            blocks.add(content);
+        }
+        return blocks;
+    }
+
+    private String tail(String text) {
+        if (chunkOverlap <= 0 || text.length() <= chunkOverlap) return "";
+        return text.substring(text.length() - chunkOverlap);
     }
 
     public IngestTask getTask(Long id) {

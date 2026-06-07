@@ -12,6 +12,7 @@ public interface LintResultMapper {
     List<LintResult> findBySeverity(@Param("severity") String severity);
     List<LintResult> findByPageId(@Param("pageId") Long pageId);
     int insert(LintResult result);
+    int upsert(LintResult result);
     int resolve(@Param("id") Long id, @Param("resolvedBy") Long resolvedBy);
     int deleteResolved();
     int countUnresolved();

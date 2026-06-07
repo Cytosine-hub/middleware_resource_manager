@@ -8,11 +8,13 @@ import com.middleware.manager.wiki.entity.WikiLink;
 import com.middleware.manager.wiki.entity.WikiPage;
 import com.middleware.manager.wiki.repository.WikiLinkMapper;
 import com.middleware.manager.wiki.repository.WikiPageMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.*;
 import java.math.BigDecimal;
+import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.zip.ZipEntry;
@@ -26,6 +28,9 @@ public class WikiImportService {
 
     private final WikiPageMapper pageMapper;
     private final WikiLinkMapper linkMapper;
+
+    @Value("${app.wiki.export.signature-secret:middleware-resource-manager}")
+    private String signatureSecret;
 
     public WikiImportService(WikiPageMapper pageMapper, WikiLinkMapper linkMapper) {
         this.pageMapper = pageMapper;
@@ -74,24 +79,26 @@ public class WikiImportService {
 
     @Transactional
     public ImportResult importFromZip(byte[] zipBytes) throws IOException {
+        return importFromZip(zipBytes, false);
+    }
+
+    @Transactional
+    public ImportResult importFromZip(byte[] zipBytes, boolean dryRun) throws IOException {
         ImportResult result = new ImportResult();
         Map<String, WikiPage> importedPages = new HashMap<>();
+        Map<String, String> entries = readEntries(zipBytes);
+        verifyManifest(entries);
 
-        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
-            ZipEntry entry;
-            while ((entry = zis.getNextEntry()) != null) {
-                String name = entry.getName();
-                String content = readEntry(zis);
-
-                if (name.equals("manifest.json")) {
-                    log.info("Import manifest: {}", content.substring(0, Math.min(200, content.length())));
-                } else if (name.startsWith("pages/") && name.endsWith(".md")) {
-                    WikiPage page = parsePageMarkdown(content);
-                    if (page != null) {
-                        importedPages.put(page.getTitle(), page);
-                    }
+        for (Map.Entry<String, String> entry : entries.entrySet()) {
+            String name = entry.getKey();
+            String content = entry.getValue();
+            if (name.equals("manifest.json")) {
+                log.info("Import manifest: {}", content.substring(0, Math.min(200, content.length())));
+            } else if (name.startsWith("pages/") && name.endsWith(".md")) {
+                WikiPage page = parsePageMarkdown(content);
+                if (page != null) {
+                    importedPages.put(page.getTitle(), page);
                 }
-                zis.closeEntry();
             }
         }
 
@@ -99,6 +106,12 @@ public class WikiImportService {
         for (WikiPage page : importedPages.values()) {
             WikiPage existing = pageMapper.findByTitleAndType(page.getTitle(), page.getPageType());
             if (existing != null) {
+                conflicts++;
+                if (dryRun) {
+                    result.getConflictDetails().add(new ConflictDetail(
+                            existing.getTitle(), existing.getPageType(), existing.getId(), null));
+                    continue;
+                }
                 existing.setStatus("CONTRADICTED");
                 String note = buildConflictNote(existing, page);
                 existing.setContradictionNote(note);
@@ -114,33 +127,74 @@ public class WikiImportService {
                         existing.getId(),
                         page.getId()
                 ));
-                conflicts++;
             } else {
+                created++;
+                if (dryRun) {
+                    continue;
+                }
                 page.setStatus("DRAFT");
                 pageMapper.insert(page);
-                created++;
             }
         }
 
         int linksCreated = 0;
-        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
-            ZipEntry entry;
-            while ((entry = zis.getNextEntry()) != null) {
-                if (entry.getName().equals("links.json")) {
-                    String linksJson = readEntry(zis);
-                    linksCreated = importLinks(linksJson, importedPages);
-                }
-                zis.closeEntry();
-            }
+        if (!dryRun && entries.containsKey("links.json")) {
+            linksCreated = importLinks(entries.get("links.json"), importedPages);
         }
 
         result.setPagesCreated(created);
         result.setLinksCreated(linksCreated);
         result.setConflicts(conflicts);
-        result.setStatus("SUCCESS");
+        result.setStatus(dryRun ? "DRY_RUN" : "SUCCESS");
 
-        log.info("Import completed: created={}, links={}, conflicts={}", created, linksCreated, conflicts);
+        log.info("Import completed: dryRun={}, created={}, links={}, conflicts={}", dryRun, created, linksCreated, conflicts);
         return result;
+    }
+
+    private Map<String, String> readEntries(byte[] zipBytes) throws IOException {
+        Map<String, String> entries = new LinkedHashMap<>();
+        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                entries.put(entry.getName(), readEntry(zis));
+                zis.closeEntry();
+            }
+        }
+        return entries;
+    }
+
+    private void verifyManifest(Map<String, String> entries) {
+        String manifestJson = entries.get("manifest.json");
+        if (manifestJson == null) {
+            throw new com.middleware.manager.exception.BusinessException(
+                    com.middleware.manager.constant.ErrorCode.PARAM_INVALID, "导入包缺少 manifest.json");
+        }
+        JsonObject manifest = gson.fromJson(manifestJson, JsonObject.class);
+        if (manifest == null || !manifest.has("file_hashes") || !manifest.has("signature")) {
+            throw new com.middleware.manager.exception.BusinessException(
+                    com.middleware.manager.constant.ErrorCode.PARAM_INVALID, "导入包缺少签名或文件哈希清单");
+        }
+        JsonObject hashes = manifest.getAsJsonObject("file_hashes");
+        for (Map.Entry<String, JsonElement> hashEntry : hashes.entrySet()) {
+            String name = hashEntry.getKey();
+            String content = entries.get(name);
+            if (content == null) {
+                throw new com.middleware.manager.exception.BusinessException(
+                        com.middleware.manager.constant.ErrorCode.PARAM_INVALID, "导入包缺少文件: " + name);
+            }
+            String actual = sha256(content);
+            String expected = hashEntry.getValue().getAsString();
+            if (!actual.equals(expected)) {
+                throw new com.middleware.manager.exception.BusinessException(
+                        com.middleware.manager.constant.ErrorCode.PARAM_INVALID, "导入包文件校验失败: " + name);
+            }
+        }
+        String expectedSignature = sha256(signatureSecret + gson.toJson(hashes));
+        String actualSignature = manifest.get("signature").getAsString();
+        if (!expectedSignature.equals(actualSignature)) {
+            throw new com.middleware.manager.exception.BusinessException(
+                    com.middleware.manager.constant.ErrorCode.PARAM_INVALID, "导入包签名校验失败");
+        }
     }
 
     private String buildConflictNote(WikiPage existing, WikiPage imported) {
@@ -259,5 +313,22 @@ public class WikiImportService {
             baos.write(buffer, 0, len);
         }
         return baos.toString(StandardCharsets.UTF_8);
+    }
+
+    private String sha256(String input) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) sb.append('0');
+                sb.append(hex);
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            throw new com.middleware.manager.exception.BusinessException(
+                    com.middleware.manager.constant.ErrorCode.UNKNOWN_ERROR, "导入包校验失败");
+        }
     }
 }

@@ -1471,124 +1471,183 @@ Lint 面板：
 └──────────────────────────────────────────────────────────────┘
 ```
 
-## 9. 实施计划
+## 9. 实施计划与生产加固路线图
 
-### 阶段一：数据模型 + Ingest 基础 ✅ 已完成
+### 9.1 当前实现成熟度
 
-**目标：** 跑通"文档 → LLM 编译 → Wiki 页面"主线
+当前实现已经接通 LLM Wiki 的主链路，但不应按"生产完成"理解。更准确的状态是：**MVP 已跑通，生产级闭环待加固**。
 
-- [x] 引入 JGraphT、Commonmark 依赖
-- [x] 新建 `wiki_pages`、`wiki_links`、`wiki_sources`、`wiki_ingest_log` 表
-- [x] 实现 `WikiPageRepository`、`WikiSourceRepository`（JdbcTemplate）+ WikiLinkRepository、WikiIngestLogRepository
-- [x] 实现 `IngestAgent` 两步编译流程（Step 1 分析 + Step 2 生成 + 合并决策）
-- [x] 实现 `LinkResolver`（解析 `[[页面名]]` 建立 wiki_links）
-- [x] 实现导出包生成（ZIP: manifest.json + pages/*.md + links.json）
-- [x] 实现导入程序（解析导出包写入内网数据库，冲突标记 CONTRADICTED）
-- [x] 编译 Prompt 模板设计（分析、生成、合并决策 3 个模板）
-- [x] 向量化写入（可选，IngestAgent 中条件执行，Milvus 可用时自动触发）
-- [x] REST API：`/api/wiki/*`（页面 CRUD、Ingest、导入导出、统计）
+| 模块 | 当前状态 | 成熟度 | 主要缺口 |
+|---|---|---:|---|
+| 数据模型 | 核心表已建，状态和权限表已覆盖 | 75% | 缺少 lint fingerprint、导入包签名清单、部分一致性约束 |
+| Ingest 编译 | 两步编译、合并决策、链接解析、异步任务已接通 | 70% | LLM 输出 schema 校验不足、事务边界弱、长文档按字符切分 |
+| Query 查询 | Wiki 优先、向量 + FULLTEXT 并行、图扩展已接通 | 60% | 未接入权限过滤，分数融合粗糙，fallback 策略偏机械 |
+| 知识图谱/社区 | 加权图和简化 Louvain 已实现 | 60% | 共现信号未落地，无缓存，无权限过滤，社区结果可能不稳定 |
+| Lint 审查 | 孤立、断链、过时、冲突状态检测已实现 | 45% | 不幂等，缺 GAP/语义矛盾/重复页面检测，审计不完整 |
+| 权限与审计 | 权限服务和部分审计写入已实现 | 50% | 读接口、搜索、图谱、Agent 未统一过滤，审计覆盖不全 |
+| 导入/导出 | ZIP 包生成和冲突标记已实现 | 45% | 无签名校验、无敏感扫描、无 sources/vectors、未做摆渡联调 |
+| 前端 Wiki | 浏览、编辑、审核、图谱、Lint 面板已接通 | 65% | 大量硬编码颜色，权限态、空态、错误态需要加固 |
+| Research/经验沉淀 | 设计明确 | 10% | 尚未实现标准闭环 |
 
-### 阶段二：Query 改造 ✅ 已完成
+### 9.2 优先级原则
 
-**目标：** 问答优先读 Wiki 页面，fallback 到原始 chunks
+先补合规和正确性，再补智能化能力：
 
-- [x] 实现 `WikiSearchService`（混合检索 Pipeline：向量 + FULLTEXT 并行 → 图扩展）
-- [x] 改造 `TroubleshootAgent`：Wiki 优先检索，结果不足时 fallback 到 chunk 搜索
-- [x] 混合检索：向量语义搜索 + MySQL FULLTEXT 并行执行，合并结果
-- [x] Wiki 页面向量化（title + summary 写入 Milvus，含 content/sourceTitle 元数据）
-- [x] 向量搜索失败时自动降级到纯 FULLTEXT
-- [x] 向量搜索增加重试逻辑（最多 2 次）
-- [x] 新增 `POST /api/wiki/pages/reindex` 重新向量化接口
-- [x] 回答中引用标注来源页面（`【Wiki：页面标题】` 格式）
-- [x] 引用返回结构化数据（wikiPageId + title），前端可点击跳转
-- [x] WikiPageMapper 新增 `findByIds` 批量查询
-- [x] IngestAgent 向量化时标记 `source: "wiki"` 元数据
-- [x] 新增 `app.wiki.search.*` 配置项（max-context-pages、max-content-chars、graph-hop-limit、vector-top-k、fulltext-top-k）
-- [x] SecurityContext 继承到异步线程（MODE_INHERITABLETHREADLOCAL）
-- [x] FULLTEXT 搜索限制 ACTIVE 状态页面
-- [ ] 可选：好答案回写为 SYNTHESIS 页面（后续阶段）
+1. **P0：防泄露、防重复、防脏数据** — 权限过滤、Lint 幂等、Ingest 校验事务。
+2. **P1：稳定回答和稳定图谱** — 检索融合、图谱缓存、导入导出可信链路。
+3. **P2：自动增长知识** — 经验沉淀、Research Agent、自动补空白。
 
-### 阶段三：知识图谱 + 前端 ✅ 已完成
+### 9.3 P0：合规与正确性加固（必须先做）
 
-**目标：** 可视化知识关联，Wiki 浏览体验
+#### 9.3.1 权限闭环
 
-- [x] WikiController 新增 `GET /api/wiki/graph` 知识图谱 API（nodes + edges from wiki_pages + wiki_links）
-- [x] WikiController 新增 `GET /api/wiki/pages/{id}/links` 页面关联 API
-- [x] 前端新增 `WikiPanel.vue` 组件（左侧树形导航 + 右侧 Markdown 渲染 + 知识图谱可视化）
-- [x] App.vue 新增 Wiki Tab（路由 `#/wiki`、导航按钮、组件集成）
-- [x] 知识图谱使用 force-graph 渲染，节点颜色按 pageType 区分，边按 linkType 区分
-- [x] `[[wikilink]]` 交叉引用可点击跳转到目标页面
-- [x] 页面详情显示关联页面列表（incoming/outgoing 方向）
-- [x] 实现 `WikiGraphService`（5 信号评分 + Louvain 社区检测）
-- [x] 前端树形目录导航（分类 → 软件 → 页面三层树）
-- [x] 前端页面编辑功能（Markdown 编辑器）
-- [x] 前端审核流程（提交审核、审核通过/拒绝）
-- [x] 前端冲突裁决（保留当前版本、使用导入版本、手动合并）
-- [x] 前端导入/导出 UI
-- [x] 前端上传文档 + 手动录入
-- [x] 前端来源文档查看
-- [x] 后端审计日志记录（WikiAuditLogMapper）
+目标：所有 Wiki 读路径都必须经过 `WikiPermissionService.canView()` 或等价 SQL 过滤。
 
-### 阶段四：Lint + 权限 + 审计 ✅ 已完成
+- [ ] `WikiSearchService.search()` 增加用户上下文参数，返回前过滤不可见页面。
+- [ ] `TroubleshootAgent` 调用 Wiki 搜索时传入当前认证用户，确保 LLM 上下文不含越权页面。
+- [ ] `GET /api/wiki/pages`、`GET /api/wiki/pages/{id}`、`GET /api/wiki/pages/search` 接入权限过滤。
+- [ ] `GET /api/wiki/graph` 只返回可见节点，边两端都可见时才返回。
+- [ ] `GET /api/wiki/pages/{id}/links` 过滤不可见关联页面。
+- [ ] `GET /api/wiki/sources`、导入导出接口按系统管理员/分类管理员权限限制。
+- [ ] 对访问被拒绝的页面写入 `ACCESS_DENIED` 审计日志。
 
-**目标：** 健康检查、权限管控、合规审计
+验收标准：
 
-- [x] 实现 `LintAgent`（孤立、断链、过时、矛盾检测）
-- [x] 实现 `wiki_lint_results`、`wiki_page_permissions`、`wiki_audit_log` 表
-- [x] 实现 `WikiPermissionService`（页面级权限覆盖：VISIBLE/RESTRICTED/HIDDEN）
-- [x] 审计日志记录（状态变更、导入导出操作）
-- [x] 前端 Lint 面板（严重度统计 + 问题列表 + 运行 Lint + 标记已解决）
-- [x] 前端审核流程界面（提交审核、审核通过/拒绝、冲突裁决）
-- [x] Lint API：`GET /api/wiki/lint/results`、`POST /api/wiki/lint/run`、`PUT /api/wiki/lint/results/{id}/resolve`
-- [x] 权限 API：`GET /api/wiki/pages/{id}/permission`、`PUT /api/wiki/pages/{id}/permission`
+- 非系统管理员无法通过列表、详情、搜索、图谱、Agent 回答看到无权分类或 HIDDEN 页面。
+- RESTRICTED 页面只对 target_roles 中的角色可见。
+- 权限过滤测试覆盖 controller、search service、Agent 三条路径。
 
-### 阶段五：经验沉淀 + Research（1-2 周）
+#### 9.3.2 Ingest 输出校验与事务边界
 
-**目标：** 排障经验自动沉淀，知识空白自动补充
+目标：LLM 输出只能作为候选数据，必须通过程序校验后才能写入正式表。
 
-- [ ] Agent 对话中"保存经验"走 Ingest 流程
-- [ ] 实现 `ResearchAgent`（知识空白 → 搜索 → 编译 → 审核）
-- [ ] 浏览器扩展（可选，采集运维文档网页）
+- [ ] 引入 `WikiPageDraftDto`、`WikiLinkDraftDto`，替代直接读取 `JsonObject` 写库。
+- [ ] 校验 `page_type`、`status`、`link_type` 必须属于数据库枚举。
+- [ ] 校验 title/content 非空，summary 长度不超过 500，source_refs 格式合法。
+- [ ] 保存页面和链接放在事务内，失败时回滚本次编译产生的数据。
+- [ ] 向量化改为后置任务，失败只标记 `VECTOR_PENDING` 或写日志，不影响页面入库。
+- [ ] 长文档切分从字符切分升级为按 Markdown 标题/段落切分，并保留 chunk 序号和来源范围。
+- [ ] 分段编译失败时任务状态改为 `PARTIAL`，不要在用户界面显示为完全成功。
 
-### 阶段六：增量编译 + 生产优化（1 周）
+验收标准：
 
-**目标：** 增量更新、性能优化、生产就绪
+- LLM 返回非法 JSON、非法 enum、空标题、过长摘要时不会写入脏数据。
+- 短文档编译失败不产生半截页面；长文档部分失败能明确展示失败分段。
 
-- [x] 审计日志查询界面（WikiAuditLogMapper 已实现）
-- [x] 异步编译任务系统（IngestTaskService + wiki_ingest_tasks 表）
-- [x] 长文档分段编译（自动拆分 + 串行处理保证合并正确性）
-- [x] LLM 并发控制（PooledChatModel 信号量池化 + 任务级 Semaphore）
-- [x] 编译进度追踪（前端进度弹窗 + 任务轮询）
-- [x] 批量上传支持（多文件选择 + 独立任务）
-- [x] LLM 上下文窗口可配置（WIKI_INGEST_MAX_CHARS）
-- [x] 软件分类自动匹配（注入 software_types 到 LLM 提示词）
-- [x] 批量设置分类（前端批量分类对话框）
-- [x] 全局异常处理（WikiExceptionHandler）
-- [x] 去除外键约束（应用层保证数据一致性）
-- [x] 文件上传大小限制（前端 10MB 校验）
-- [x] 来源文档删除（清理关联记录）
-- [x] 页面状态扩展（DRAFT/PENDING_REVIEW/ACTIVE/STALE/CONTRADICTED/REJECTED）
-- [x] Wiki 页面向量化（title + summary 写入 Milvus）
-- [x] 混合检索（向量 + FULLTEXT 并行，自动降级）
-- [x] 知识库检索集成 Wiki 向量（元数据含 content/sourceTitle）
-- [x] embedding 模型配置修正（bge-large）
-- [x] 重启 Skill（/restart 命令，含 Docker/Milvus/后端/前端）
-- [x] 登录测试 Skill（/test-login 命令）
-- [ ] 增量编译（SHA-256 哈希判断，避免重复编译）
-- [ ] 知识图谱缓存（避免每次请求重新计算）
-- [ ] 性能测试（千级 Wiki 页面）
-- [ ] 内外网导入/导出流程联调
+#### 9.3.3 Lint 幂等化
+
+目标：同一个问题重复运行 Lint 不重复插入。
+
+- [ ] `wiki_lint_results` 增加 `fingerprint` 字段，建议由 `lint_type + page_id + target + rule_version` 生成。
+- [ ] `LintAgent.runLint()` 从 insert 改为 upsert，已存在未解决问题只更新 `last_seen_at`。
+- [ ] 新增 `first_seen_at`、`last_seen_at`、`ignored_until`，支持临时忽略。
+- [ ] Lint 运行写入 `LINT_RUN` 审计，resolve/ignore 写入 `LINT_RESOLVE`。
+- [ ] 新增检查项：重复页面、非法 wikilink、页面过长、缺少 source_refs、ACTIVE 页面未审核。
+
+验收标准：
+
+- 同一批数据连续运行 3 次 Lint，未解决问题数量不增长。
+- resolve 后再次运行，如问题仍存在应重新打开或生成新 last_seen。
+
+### 9.4 P1：查询、图谱和摆渡链路加固
+
+#### 9.4.1 查询融合与回答约束
+
+目标：让 Query 既稳定又能召回相似表达。
+
+- [ ] 检索分数统一归一化：标题精确匹配、FULLTEXT、向量、图扩展分别给可解释分数。
+- [ ] 向量和 FULLTEXT 并行任务独立容错，一路失败不影响另一路结果。
+- [ ] 命中 1 个高置信 Wiki 页面时也进入 Wiki 回答，不强制 `wikiResults.size() >= 2`。
+- [ ] Query Prompt 改为默认只基于 Wiki/知识库上下文回答；模型通用知识只能在用户显式允许时补充。
+- [ ] 回答引用必须绑定结构化 `wikiPageId/title/section`，前端可跳转到页面或标题。
+- [ ] 对 STALE 页面在上下文和回答里显式提示。
+
+验收标准：
+
+- "Nginx 502"、"服务挂了怎么恢复"、"keepalive 配置" 三类查询分别覆盖精确、语义、配置项场景。
+- 无相关知识时明确说无覆盖，不编造内部制度或参数。
+
+#### 9.4.2 图谱与社区稳定性
+
+目标：图谱可解释、可缓存、可权限过滤。
+
+- [ ] 实现共现信号：从 `source_refs` 或 `wiki_sources` 建立同源页面弱边。
+- [ ] 同软件完全图设置上限，软件页面过多时只连接 overview、runbook、强引用页面。
+- [ ] 社区检测使用固定节点顺序或固定随机种子，保证结果可复现。
+- [ ] 增加图谱缓存，页面/链接/状态/权限变化时失效。
+- [ ] 图谱 API 支持 `category/software/status/maxNodes` 过滤。
+- [ ] 社区命名加入页面类型优先级：OVERVIEW > ENTITY > RUNBOOK > CONCEPT。
+
+验收标准：
+
+- 千级页面图谱接口响应时间可控，默认视图不超过前端可渲染节点上限。
+- 同一数据连续请求的社区编号和社区名称稳定。
+
+#### 9.4.3 导入导出可信链路
+
+目标：外网强模型编译包可以被内网可信导入。
+
+- [ ] `manifest.json` 增加文件清单：每个 page、links、sources、vectors 的 SHA-256。
+- [ ] 导出包增加签名字段，导入前校验签名和清单 hash。
+- [ ] 导出前做敏感信息扫描：密码、Token、私钥、身份证号、客户数据、内网 IP 段按策略处理。
+- [ ] 导出包补充 `sources.json` 和可选 `vectors.json`。
+- [ ] 导入时先 dry-run，输出新增、更新、冲突、拒绝、敏感命中统计。
+- [ ] 冲突裁决记录审计，保留导入包版本号、原页面版本、裁决人和裁决理由。
+
+验收标准：
+
+- 被篡改的 ZIP、缺文件的 ZIP、hash 不匹配的页面必须导入失败。
+- dry-run 不写库，正式导入可追溯到具体导入包版本。
+
+### 9.5 P2：自动沉淀与 Research
+
+#### 9.5.1 经验沉淀
+
+- [ ] Agent 回答增加"保存经验"入口，保存为 `EXPERIENCE` 类型 DRAFT 页面。
+- [ ] 保存内容必须包含问题现象、环境、排查步骤、根因、解决方案、验证方式、适用范围。
+- [ ] 用户反馈"有用/已解决"只能触发草稿建议，不自动 ACTIVE。
+- [ ] 经验页面进入现有审核流程，审核通过后参与检索和图谱。
+
+#### 9.5.2 Research Agent
+
+- [ ] Lint GAP 或高频无结果查询触发 Research 任务。
+- [ ] Research 只生成 DRAFT 页面，必须标注外部来源和可信度。
+- [ ] 外部资料进入内网前必须走导入包签名和敏感扫描流程。
+- [ ] Research 结果与现有页面冲突时走 CONTRADICTED 裁决。
+
+### 9.6 前端加固
+
+- [ ] `WikiPanel.vue` 颜色改为 `styles/tokens.css` 设计令牌，移除硬编码颜色。
+- [ ] 所有操作按钮按权限禁用或隐藏，不只依赖后端拒绝。
+- [ ] 图谱增加节点上限、加载中、空结果、权限过滤提示。
+- [ ] Lint 面板增加 fingerprint、first_seen、last_seen、ignore 操作展示。
+- [ ] 导入增加 dry-run 结果页和签名校验状态。
+- [ ] 编辑器保存后自动触发链接校验并展示断链预警。
+
+### 9.7 测试计划
+
+| 测试类型 | 必测场景 |
+|---|---|
+| 单元测试 | LLM JSON 校验、merge decision、wikilink 解析、lint fingerprint、权限判断 |
+| Controller 测试 | list/detail/search/graph/links 的权限过滤 |
+| 集成测试 | Ingest 成功/失败/部分失败、导入冲突、导出签名校验、向量失败降级 |
+| Agent 测试 | Wiki 高置信单命中、Wiki 不足 fallback、无知识不编造、引用结构化 |
+| 性能测试 | 1k/5k 页面下搜索、图谱构建、Lint 运行耗时 |
+| 前端验证 | Wiki 浏览、图谱、Lint、导入 dry-run、权限态、移动端布局 |
 
 ## 10. 风险与缓解
 
 | 风险 | 影响 | 缓解措施 |
 |---|---|---|
-| LLM 编译质量不稳定 | Wiki 页面可能遗漏关键信息 | 两步编译 + 程序校验 + 人工审核 |
-| 弱模型（GLM-4.7-fp8）查询效果差 | 回答质量下降 | 查询读的是编译好的页面，难度低；效果不佳时升级模型 |
-| 编译成本高 | 大量文档一次性编译消耗 token | 分批编译 + 增量更新 + 导出包复用 |
-| 交叉引用不准确 | `[[页面名]]` 指向错误页面 | LinkResolver 程序校验 + Lint 断链检测 |
-| 内外网数据同步复杂 | 导入导出流程繁琐 | 标准化导出包格式 + 自动化脚本 |
-| 银行合规审查 | 系统需要过等保/审计 | 审计日志 + 权限管控 + 审核流程 |
+| 权限过滤未贯穿读路径 | Wiki 页面可能通过搜索、图谱、Agent 上下文泄露 | P0 完成统一权限过滤，所有读接口按用户上下文裁剪 |
+| LLM 编译质量不稳定 | Wiki 页面遗漏、误判、非法枚举导致脏数据 | DTO/schema 校验 + 事务回滚 + 人工审核 + 编译日志 |
+| Lint 结果重复累积 | 管理员看到大量重复问题，维护成本升高 | fingerprint + upsert + first_seen/last_seen |
+| 查询融合粗糙 | 高质量页面排序不稳定，回答质量波动 | 分数归一化、精确匹配提权、向量/FULLTEXT 独立容错 |
+| 图谱全量重算 | 页面增长后接口变慢，前端卡顿 | 缓存 + 过滤参数 + 节点上限 + 变更失效 |
+| 导入包被篡改或含敏感信息 | 内外网摆渡存在合规风险 | manifest hash 清单 + 签名校验 + 敏感扫描 + dry-run |
+| 长文档字符切分破坏语义 | 页面重复、断章、冲突误判 | 按标题/段落切分 + chunk 来源范围 + PARTIAL 状态 |
+| 弱模型查询效果差 | 回答不完整或误读 Wiki | 查询读编译页面，必要时升级模型；无证据时禁止编造 |
+| Research 自动引入不可信知识 | 外部内容污染内部知识库 | Research 只产 DRAFT，来源可信度和人工审核必需 |
 
 ## 11. 参考资料
 

@@ -8,6 +8,7 @@ import com.middleware.manager.wiki.repository.WikiLinkMapper;
 import com.middleware.manager.wiki.repository.WikiPageMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -30,6 +31,9 @@ public class WikiSearchService {
 
     @Autowired(required = false)
     private EmbeddingService embeddingService;
+
+    @Autowired(required = false)
+    private WikiPermissionService wikiPermissionService;
 
     @Value("${app.wiki.search.max-context-pages:8}")
     private int maxContextPages;
@@ -72,6 +76,10 @@ public class WikiSearchService {
     }
 
     public List<WikiSearchResult> search(String query, int topK) {
+        return search(query, topK, null);
+    }
+
+    public List<WikiSearchResult> search(String query, int topK, Authentication authentication) {
         int activeCount = pageMapper.countByStatus("ACTIVE");
         if (activeCount == 0) {
             return Collections.emptyList();
@@ -91,8 +99,8 @@ public class WikiSearchService {
                     () -> pageMapper.fulltextSearch(query, fulltextTopK), searchExecutor);
 
             try {
-                vectorHits = vectorFuture.get();
-                fulltextHits = fulltextFuture.get();
+                vectorHits = safeGet(vectorFuture, "vector");
+                fulltextHits = safeGet(fulltextFuture, "fulltext");
             } catch (Exception e) {
                 log.warn("Parallel search failed: {}", e.getMessage());
             }
@@ -158,7 +166,7 @@ public class WikiSearchService {
         for (Map.Entry<Long, Float> entry : pageScores.entrySet()) {
             Long pageId = entry.getKey();
             WikiPage page = pageMap.get(pageId);
-            if (page != null && "ACTIVE".equals(page.getStatus()) && !added.contains(pageId)) {
+            if (isVisibleActive(page, authentication) && !added.contains(pageId)) {
                 WikiSearchResult sr = new WikiSearchResult();
                 sr.setPage(page);
                 sr.setScore(entry.getValue());
@@ -172,7 +180,7 @@ public class WikiSearchService {
         for (Long expandedId : expandedIds) {
             if (!added.contains(expandedId)) {
                 WikiPage page = pageMap.get(expandedId);
-                if (page != null && "ACTIVE".equals(page.getStatus())) {
+                if (isVisibleActive(page, authentication)) {
                     WikiSearchResult sr = new WikiSearchResult();
                     sr.setPage(page);
                     sr.setScore(0.5f);
@@ -192,7 +200,7 @@ public class WikiSearchService {
                     Long relatedId = link.getFromPageId().equals(sr.getPage().getId())
                             ? link.getToPageId() : link.getFromPageId();
                     WikiPage related = pageMap.get(relatedId);
-                    if (related != null) {
+                    if (isVisibleActive(related, authentication)) {
                         relatedTitles.add(related.getTitle());
                     }
                 }
@@ -207,6 +215,20 @@ public class WikiSearchService {
         }
 
         return results;
+    }
+
+    private List<WikiPage> safeGet(CompletableFuture<List<WikiPage>> future, String source) {
+        try {
+            return future.get();
+        } catch (Exception e) {
+            log.warn("{} search failed: {}", source, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    private boolean isVisibleActive(WikiPage page, Authentication authentication) {
+        if (page == null || !"ACTIVE".equals(page.getStatus())) return false;
+        return authentication == null || wikiPermissionService == null || wikiPermissionService.canView(authentication, page);
     }
 
     private List<WikiPage> vectorSearch(String query, int topK) {

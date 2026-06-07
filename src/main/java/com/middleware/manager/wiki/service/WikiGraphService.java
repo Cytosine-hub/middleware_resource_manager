@@ -7,6 +7,8 @@ import com.middleware.manager.wiki.repository.WikiPageMapper;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.SimpleWeightedGraph;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -19,6 +21,14 @@ public class WikiGraphService {
 
     private final WikiPageMapper pageMapper;
     private final WikiLinkMapper linkMapper;
+    private final WikiPermissionService permissionService;
+
+    @Value("${app.wiki.graph.max-nodes:1000}")
+    private int maxNodes;
+
+    private volatile Map<String, Object> cachedPublicGraph;
+    private volatile long cachedAtMillis;
+    private static final long CACHE_TTL_MILLIS = 30_000L;
 
     // 5-signal weights
     private static final double W_DIRECT_LINK = 3.0;
@@ -27,16 +37,37 @@ public class WikiGraphService {
     private static final double W_CO_OCCURRENCE = 1.5;
     private static final double W_TRANSITIVE_DEP = 2.5;
 
-    public WikiGraphService(WikiPageMapper pageMapper, WikiLinkMapper linkMapper) {
+    public WikiGraphService(WikiPageMapper pageMapper, WikiLinkMapper linkMapper,
+                            WikiPermissionService permissionService) {
         this.pageMapper = pageMapper;
         this.linkMapper = linkMapper;
+        this.permissionService = permissionService;
     }
 
     /**
      * 构建完整的知识图谱：5信号评分 + Louvain 社区检测
      */
     public Map<String, Object> buildGraph() {
+        long now = System.currentTimeMillis();
+        Map<String, Object> cached = cachedPublicGraph;
+        if (cached != null && now - cachedAtMillis < CACHE_TTL_MILLIS) {
+            return cached;
+        }
+        Map<String, Object> graph = buildGraph(null);
+        cachedPublicGraph = graph;
+        cachedAtMillis = now;
+        return graph;
+    }
+
+    public Map<String, Object> buildGraph(Authentication authentication) {
         List<WikiPage> pages = pageMapper.findAll();
+        if (authentication != null) {
+            pages = permissionService.filterVisiblePages(authentication, pages);
+        }
+        pages = pages.stream()
+                .filter(page -> "ACTIVE".equals(page.getStatus()) || "CONTRADICTED".equals(page.getStatus()))
+                .limit(Math.max(1, maxNodes))
+                .collect(Collectors.toList());
         List<WikiLink> links = linkMapper.findAll();
 
         if (pages.isEmpty()) {
@@ -54,6 +85,7 @@ public class WikiGraphService {
         Map<String, Set<Long>> softwareIndex = new HashMap<>();
         Map<String, Set<Long>> categoryIndex = new HashMap<>();
         Map<Long, Set<Long>> dependsOnChains = new HashMap<>();
+        Map<String, Set<Long>> sourceIndex = new HashMap<>();
 
         for (WikiPage p : pages) {
             directLinks.putIfAbsent(p.getId(), new HashSet<>());
@@ -63,9 +95,15 @@ public class WikiGraphService {
             if (p.getCategory() != null && !p.getCategory().isEmpty()) {
                 categoryIndex.computeIfAbsent(p.getCategory(), k -> new HashSet<>()).add(p.getId());
             }
+            if (p.getSourceRefs() != null && !p.getSourceRefs().isBlank()) {
+                sourceIndex.computeIfAbsent(p.getSourceRefs(), k -> new HashSet<>()).add(p.getId());
+            }
         }
 
         for (WikiLink link : links) {
+            if (!pageMap.containsKey(link.getFromPageId()) || !pageMap.containsKey(link.getToPageId())) {
+                continue;
+            }
             directLinks.computeIfAbsent(link.getFromPageId(), k -> new HashSet<>()).add(link.getToPageId());
             directLinks.computeIfAbsent(link.getToPageId(), k -> new HashSet<>()).add(link.getFromPageId());
             if ("DEPENDS_ON".equals(link.getLinkType())) {
@@ -91,9 +129,28 @@ public class WikiGraphService {
         // 信号2: 同一软件
         for (Set<Long> group : softwareIndex.values()) {
             List<Long> list = new ArrayList<>(group);
+            if (list.size() > 80) {
+                list = list.stream()
+                        .filter(id -> {
+                            String type = pageMap.get(id).getPageType();
+                            return "OVERVIEW".equals(type) || "RUNBOOK".equals(type) || "ENTITY".equals(type);
+                        })
+                        .limit(80)
+                        .collect(Collectors.toList());
+            }
             for (int i = 0; i < list.size(); i++) {
                 for (int j = i + 1; j < list.size(); j++) {
                     addEdgeWeight(graph, edgeWeights, list.get(i), list.get(j), W_SAME_SOFTWARE);
+                }
+            }
+        }
+
+        // 信号4: 同一来源文档弱关联
+        for (Set<Long> group : sourceIndex.values()) {
+            List<Long> list = new ArrayList<>(group);
+            for (int i = 0; i < list.size(); i++) {
+                for (int j = i + 1; j < list.size(); j++) {
+                    addEdgeWeight(graph, edgeWeights, list.get(i), list.get(j), W_CO_OCCURRENCE);
                 }
             }
         }
@@ -246,7 +303,7 @@ public class WikiGraphService {
 
             // 随机顺序遍历节点
             List<Long> shuffled = new ArrayList<>(nodes);
-            Collections.shuffle(shuffled);
+            Collections.sort(shuffled);
 
             for (long node : shuffled) {
                 int currentCommunity = nodeCommunity.get(node);

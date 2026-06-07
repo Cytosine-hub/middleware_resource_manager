@@ -6,11 +6,15 @@
         <id property="id" column="id"/>
         <result property="lintType" column="lint_type"/>
         <result property="pageId" column="page_id"/>
+        <result property="fingerprint" column="fingerprint"/>
         <result property="description" column="description"/>
         <result property="severity" column="severity"/>
         <result property="resolved" column="resolved"/>
         <result property="resolvedBy" column="resolved_by"/>
         <result property="resolvedAt" column="resolved_at"/>
+        <result property="firstSeenAt" column="first_seen_at"/>
+        <result property="lastSeenAt" column="last_seen_at"/>
+        <result property="ignoredUntil" column="ignored_until"/>
         <result property="createdAt" column="created_at"/>
     </resultMap>
 
@@ -19,7 +23,10 @@
     </select>
 
     <select id="findUnresolved" resultMap="lintResultMap">
-        SELECT * FROM wiki_lint_results WHERE resolved = FALSE ORDER BY severity DESC, created_at DESC
+        SELECT * FROM wiki_lint_results
+        WHERE resolved = FALSE
+          AND (ignored_until IS NULL OR ignored_until &lt; NOW())
+        ORDER BY severity DESC, last_seen_at DESC, created_at DESC
     </select>
 
     <select id="findBySeverity" resultMap="lintResultMap">
@@ -31,8 +38,21 @@
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wiki_lint_results (lint_type, page_id, description, severity, resolved)
-        VALUES (#{lintType}, #{pageId}, #{description}, #{severity}, #{resolved})
+        INSERT INTO wiki_lint_results (lint_type, page_id, fingerprint, description, severity, resolved, first_seen_at, last_seen_at, ignored_until)
+        VALUES (#{lintType}, #{pageId}, #{fingerprint}, #{description}, #{severity}, #{resolved}, #{firstSeenAt}, #{lastSeenAt}, #{ignoredUntil})
+    </insert>
+
+    <insert id="upsert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO wiki_lint_results (lint_type, page_id, fingerprint, description, severity, resolved, first_seen_at, last_seen_at, ignored_until)
+        VALUES (#{lintType}, #{pageId}, #{fingerprint}, #{description}, #{severity}, FALSE,
+                COALESCE(#{firstSeenAt}, NOW()), COALESCE(#{lastSeenAt}, NOW()), #{ignoredUntil})
+        ON DUPLICATE KEY UPDATE
+            description = VALUES(description),
+            severity = VALUES(severity),
+            resolved = FALSE,
+            resolved_by = NULL,
+            resolved_at = NULL,
+            last_seen_at = NOW()
     </insert>
 
     <update id="resolve">
@@ -45,7 +65,9 @@
     </delete>
 
     <select id="countUnresolved" resultType="int">
-        SELECT COUNT(*) FROM wiki_lint_results WHERE resolved = FALSE
+        SELECT COUNT(*) FROM wiki_lint_results
+        WHERE resolved = FALSE
+          AND (ignored_until IS NULL OR ignored_until &lt; NOW())
     </select>
 
 </mapper>

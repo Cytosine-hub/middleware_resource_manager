@@ -121,29 +121,47 @@ public class WikiController {
     @GetMapping("/pages")
     public List<WikiPage> listPages(@RequestParam(required = false) String category,
                                     @RequestParam(required = false) String software,
-                                    @RequestParam(required = false) String status) {
-        if (category != null) return pageMapper.findByCategory(category);
-        if (software != null) return pageMapper.findBySoftware(software);
-        if (status != null) return pageMapper.findByStatus(status);
-        return pageMapper.findAll();
+                                    @RequestParam(required = false) String status,
+                                    Authentication authentication) {
+        List<WikiPage> pages;
+        if (category != null) pages = pageMapper.findByCategory(category);
+        else if (software != null) pages = pageMapper.findBySoftware(software);
+        else if (status != null) pages = pageMapper.findByStatus(status);
+        else pages = pageMapper.findAll();
+        return filterVisible(authentication, pages);
+    }
+
+    public List<WikiPage> listPages(String category, String software, String status) {
+        return listPages(category, software, status, null);
     }
 
     @GetMapping("/pages/{id}")
-    public ResponseEntity<WikiPage> getPage(@PathVariable Long id) {
+    public ResponseEntity<WikiPage> getPage(@PathVariable Long id, Authentication authentication, HttpServletRequest request) {
         WikiPage page = pageMapper.findById(id);
-        return page != null ? ResponseEntity.ok(page) : ResponseEntity.notFound().build();
+        if (page == null) return ResponseEntity.notFound().build();
+        if (!canView(authentication, page)) {
+            recordAudit("ACCESS_DENIED", "PAGE", id, authentication, request,
+                    "{\"reason\":\"wiki_page_view_denied\"}");
+            return ResponseEntity.status(403).build();
+        }
+        return ResponseEntity.ok(page);
+    }
+
+    public ResponseEntity<WikiPage> getPage(Long id) {
+        return getPage(id, null, null);
     }
 
     @GetMapping("/pages/search")
-    public List<WikiPage> searchPages(@RequestParam String q, @RequestParam(defaultValue = "10") int limit) {
+    public List<WikiPage> searchPages(@RequestParam String q, @RequestParam(defaultValue = "10") int limit,
+                                      Authentication authentication) {
         // 使用 WikiSearchService 的混合检索（向量 + FULLTEXT 并行）
-        List<WikiSearchService.WikiSearchResult> searchResults = wikiSearchService.search(q, limit);
+        List<WikiSearchService.WikiSearchResult> searchResults = wikiSearchService.search(q, limit, authentication);
         List<WikiPage> results = new ArrayList<>();
         for (WikiSearchService.WikiSearchResult sr : searchResults) {
             results.add(sr.getPage());
         }
         if (results.isEmpty()) {
-            results = pageMapper.findByTitleContaining(q, limit);
+            results = filterVisible(authentication, pageMapper.findByTitleContaining(q, limit));
         }
         return results;
     }
@@ -314,6 +332,11 @@ public class WikiController {
     public ResponseEntity<byte[]> exportWiki(@RequestParam(required = false) String category,
                                               Authentication authentication, HttpServletRequest request) {
         try {
+            if (!canAdministerWiki(authentication, category)) {
+                recordAudit("ACCESS_DENIED", "SYSTEM", null, authentication, request,
+                        "{\"reason\":\"wiki_export_denied\"}");
+                return ResponseEntity.status(403).build();
+            }
             byte[] zipBytes = (category != null) ? exportService.exportByCategory(category) : exportService.exportAll();
             Long actorId = resolveActorId(authentication);
             try {
@@ -333,13 +356,19 @@ public class WikiController {
 
     @PostMapping("/import")
     public ResponseEntity<WikiImportService.ImportResult> importWiki(@RequestParam("file") MultipartFile file,
+                                                                      @RequestParam(defaultValue = "false") boolean dryRun,
                                                                       Authentication authentication, HttpServletRequest request) {
         try {
-            WikiImportService.ImportResult result = importService.importFromZip(file.getBytes());
+            if (!wikiPermissionService.isAdmin(authentication)) {
+                recordAudit("ACCESS_DENIED", "SYSTEM", null, authentication, request,
+                        "{\"reason\":\"wiki_import_denied\"}");
+                return ResponseEntity.status(403).build();
+            }
+            WikiImportService.ImportResult result = importService.importFromZip(file.getBytes(), dryRun);
             Long actorId = resolveActorId(authentication);
             try {
-                String detail = String.format("{\"pagesCreated\":%d,\"pagesUpdated\":%d,\"conflicts\":%d,\"linksCreated\":%d}",
-                        result.getPagesCreated(), result.getPagesUpdated(), result.getConflicts(), result.getLinksCreated());
+                String detail = String.format("{\"dryRun\":%s,\"pagesCreated\":%d,\"pagesUpdated\":%d,\"conflicts\":%d,\"linksCreated\":%d}",
+                        dryRun, result.getPagesCreated(), result.getPagesUpdated(), result.getConflicts(), result.getLinksCreated());
                 auditLogMapper.insert("INGEST_IMPORT", "SYSTEM", null, actorId,
                         authentication != null ? authentication.getName() : "system",
                         request.getRemoteAddr(), detail);
@@ -352,12 +381,20 @@ public class WikiController {
     }
 
     @GetMapping("/graph")
-    public Map<String, Object> getWikiGraph() {
-        return graphService.buildGraph();
+    public Map<String, Object> getWikiGraph(Authentication authentication) {
+        return graphService.buildGraph(authentication);
     }
 
     @GetMapping("/pages/{id}/links")
-    public List<Map<String, Object>> getPageLinks(@PathVariable Long id) {
+    public List<Map<String, Object>> getPageLinks(@PathVariable Long id, Authentication authentication,
+                                                  HttpServletRequest request) {
+        WikiPage current = pageMapper.findById(id);
+        if (current == null) return Collections.emptyList();
+        if (!canView(authentication, current)) {
+            recordAudit("ACCESS_DENIED", "PAGE", id, authentication, request,
+                    "{\"reason\":\"wiki_page_links_denied\"}");
+            return Collections.emptyList();
+        }
         List<WikiLink> links = linkMapper.findAllByPageId(id);
         if (links.isEmpty()) return Collections.emptyList();
         // 批量获取关联页面，避免 N+1 查询
@@ -373,7 +410,7 @@ public class WikiController {
         for (WikiLink link : links) {
             Long relatedId = link.getFromPageId().equals(id) ? link.getToPageId() : link.getFromPageId();
             WikiPage related = pageMap.get(relatedId);
-            if (related != null) {
+            if (canView(authentication, related)) {
                 Map<String, Object> item = new HashMap<>();
                 item.put("linkId", link.getId());
                 item.put("linkType", link.getLinkType());
@@ -402,14 +439,27 @@ public class WikiController {
     }
 
     @GetMapping("/sources")
-    public List<WikiSource> listSources() {
-        return sourceMapper.findAll();
+    public List<WikiSource> listSources(Authentication authentication) {
+        List<WikiSource> sources = sourceMapper.findAll();
+        if (authentication == null || wikiPermissionService.isAdmin(authentication)) return sources;
+        String category = wikiPermissionService.getManagedCategory(authentication);
+        if (category == null) return Collections.emptyList();
+        return sources.stream()
+                .filter(source -> source.getCategory() == null || category.equals(source.getCategory()))
+                .toList();
     }
 
     @GetMapping("/sources/{id}")
-    public ResponseEntity<WikiSource> getSource(@PathVariable Long id) {
+    public ResponseEntity<WikiSource> getSource(@PathVariable Long id, Authentication authentication,
+                                                HttpServletRequest request) {
         WikiSource source = sourceMapper.findById(id);
-        return source != null ? ResponseEntity.ok(source) : ResponseEntity.notFound().build();
+        if (source == null) return ResponseEntity.notFound().build();
+        if (!canViewSource(authentication, source)) {
+            recordAudit("ACCESS_DENIED", "SOURCE", id, authentication, request,
+                    "{\"reason\":\"wiki_source_view_denied\"}");
+            return ResponseEntity.status(403).build();
+        }
+        return ResponseEntity.ok(source);
     }
 
     @DeleteMapping("/sources/{id}")
@@ -457,14 +507,21 @@ public class WikiController {
     }
 
     @PostMapping("/lint/run")
-    public List<LintResult> runLint() {
-        return lintAgent.runLint();
+    public List<LintResult> runLint(Authentication authentication, HttpServletRequest request) {
+        List<LintResult> results = lintAgent.runLint();
+        recordAudit("LINT_RUN", "SYSTEM", null, authentication, request,
+                "{\"total\":" + results.size() + "}");
+        return results;
     }
 
     @PutMapping("/lint/results/{id}/resolve")
     public ResponseEntity<Void> resolveLintResult(@PathVariable Long id, Authentication authentication) {
         Long actorId = resolveActorId(authentication);
         int updated = lintResultMapper.resolve(id, actorId);
+        if (updated > 0) {
+            recordAudit("LINT_RESOLVE", "SYSTEM", id, authentication, null,
+                    "{\"lintResultId\":" + id + "}");
+        }
         return updated > 0 ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
     }
 
@@ -525,6 +582,40 @@ public class WikiController {
             return account != null ? account.getId() : 0L;
         } catch (Exception e) {
             return 0L;
+        }
+    }
+
+    private List<WikiPage> filterVisible(Authentication authentication, List<WikiPage> pages) {
+        if (authentication == null) return pages;
+        return wikiPermissionService.filterVisiblePages(authentication, pages);
+    }
+
+    private boolean canView(Authentication authentication, WikiPage page) {
+        return authentication == null || wikiPermissionService.canView(authentication, page);
+    }
+
+    private boolean canViewSource(Authentication authentication, WikiSource source) {
+        if (authentication == null || wikiPermissionService.isAdmin(authentication)) return true;
+        String category = wikiPermissionService.getManagedCategory(authentication);
+        return category != null && (source.getCategory() == null || category.equals(source.getCategory()));
+    }
+
+    private boolean canAdministerWiki(Authentication authentication, String category) {
+        if (authentication == null || wikiPermissionService.isAdmin(authentication)) return true;
+        if (category == null || category.isBlank()) return false;
+        String managedCategory = wikiPermissionService.getManagedCategory(authentication);
+        return category.equals(managedCategory);
+    }
+
+    private void recordAudit(String action, String targetType, Long targetId,
+                             Authentication authentication, HttpServletRequest request, String detail) {
+        try {
+            auditLogMapper.insert(action, targetType, targetId, resolveActorId(authentication),
+                    authentication != null ? authentication.getName() : "system",
+                    request != null ? request.getRemoteAddr() : null,
+                    detail);
+        } catch (Exception e) {
+            log.warn("Audit log write failed: {}", e.getMessage());
         }
     }
 

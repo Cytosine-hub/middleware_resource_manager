@@ -22,6 +22,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
@@ -32,6 +33,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class IngestAgent {
     private static final int MAX_RETRIES = 3;
+    private static final Set<String> VALID_PAGE_TYPES = Set.of(
+            "ENTITY", "CONCEPT", "RUNBOOK", "EXPERIENCE", "STANDARD", "SYNTHESIS", "OVERVIEW");
 
     private final ChatModel chatModel;
     private final WikiPageMapper pageMapper;
@@ -86,6 +89,7 @@ public class IngestAgent {
         public void setStatus(String v) { this.status = v; }
     }
 
+    @Transactional
     public IngestResult ingest(WikiSource source, Long operatorId) {
         long startTime = System.currentTimeMillis();
         IngestResult result = new IngestResult();
@@ -146,6 +150,7 @@ public class IngestAgent {
             int created = 0, updated = 0, contradictions = 0;
             List<WikiPage> savedPages = new ArrayList<>();
             JsonArray pages = pagesResult.getAsJsonArray("pages");
+            validateGeneratedPages(pages);
 
             for (JsonElement elem : pages) {
                 JsonObject pageObj = elem.getAsJsonObject();
@@ -250,6 +255,7 @@ public class IngestAgent {
     /**
      * 直接编译内容，不创建/更新 WikiSource（用于分段编译）
      */
+    @Transactional
     public IngestResult ingestContent(String content, String title, String category, String software, Long operatorId) {
         IngestResult result = new IngestResult();
 
@@ -287,6 +293,7 @@ public class IngestAgent {
             // 保存页面
             int created = 0, updated = 0;
             JsonArray pages = pagesResult.getAsJsonArray("pages");
+            validateGeneratedPages(pages);
             for (JsonElement pageElem : pages) {
                 JsonObject pageObj = pageElem.getAsJsonObject();
                 String pageTitle = getAsString(pageObj, "title");
@@ -416,6 +423,47 @@ public class IngestAgent {
     private String getAsString(JsonObject obj, String key) {
         JsonElement elem = obj.get(key);
         return elem != null && !elem.isJsonNull() ? elem.getAsString() : null;
+    }
+
+    private void validateGeneratedPages(JsonArray pages) {
+        if (pages == null || pages.isEmpty()) {
+            throw new com.middleware.manager.exception.BusinessException(
+                    com.middleware.manager.constant.ErrorCode.PARAM_INVALID, "LLM 未生成有效 Wiki 页面");
+        }
+        for (JsonElement elem : pages) {
+            if (!elem.isJsonObject()) {
+                throw new com.middleware.manager.exception.BusinessException(
+                        com.middleware.manager.constant.ErrorCode.PARAM_INVALID, "LLM 页面格式非法");
+            }
+            JsonObject page = elem.getAsJsonObject();
+            String title = trimToNull(getAsString(page, "title"));
+            String pageType = trimToNull(getAsString(page, "page_type"));
+            String content = trimToNull(getAsString(page, "content"));
+            String summary = getAsString(page, "summary");
+
+            if (title == null || content == null) {
+                throw new com.middleware.manager.exception.BusinessException(
+                        com.middleware.manager.constant.ErrorCode.PARAM_INVALID, "LLM 页面缺少标题或正文");
+            }
+            if (title.length() > 200) {
+                throw new com.middleware.manager.exception.BusinessException(
+                        com.middleware.manager.constant.ErrorCode.PARAM_INVALID, "LLM 页面标题超过 200 字符");
+            }
+            if (pageType == null || !VALID_PAGE_TYPES.contains(pageType)) {
+                throw new com.middleware.manager.exception.BusinessException(
+                        com.middleware.manager.constant.ErrorCode.PARAM_INVALID, "LLM 页面类型非法: " + pageType);
+            }
+            if (summary != null && summary.length() > 500) {
+                throw new com.middleware.manager.exception.BusinessException(
+                        com.middleware.manager.constant.ErrorCode.PARAM_INVALID, "LLM 页面摘要超过 500 字符");
+            }
+        }
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private void updatePageFromJson(WikiPage page, JsonObject json, WikiSource source) {

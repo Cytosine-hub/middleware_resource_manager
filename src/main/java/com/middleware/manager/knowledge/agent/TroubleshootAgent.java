@@ -17,6 +17,8 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -36,7 +38,7 @@ public class TroubleshootAgent {
             "1. 分析问题描述\n" +
             "2. 根据提供的知识库内容给出诊断\n" +
             "3. 给出具体的排查步骤和解决方案\n" +
-            "4. 如果知识库中没有相关信息，基于你的经验给出建议\n\n" +
+            "4. 如果知识库中没有相关信息，明确说明未找到，不要编造内部标准、参数或流程\n\n" +
             "回答格式要求：\n" +
             "- 先给出问题诊断\n" +
             "- 再给出排查步骤\n" +
@@ -44,8 +46,8 @@ public class TroubleshootAgent {
             "信息来源标注规则（必须严格遵守）：\n" +
             "- 如果上下文来自 Wiki 知识库，引用时标注【Wiki：页面标题】\n" +
             "- 如果上下文来自知识库文档，引用时标注【知识库：来源标题】\n" +
-            "- 基于你自身知识补充的内容，在相关段落后标注【模型知识】\n" +
-            "- 如果知识库中完全没有相关信息，明确告知用户：'知识库中未找到相关内容，以下基于模型通用知识给出建议'";
+            "- 不要使用未提供的内部知识；如确需通用排查方向，只能写成'通用排查建议'并明确非知识库依据\n" +
+            "- 如果知识库中完全没有相关信息，明确告知用户：'知识库中未找到相关内容，无法给出基于内部知识库的结论'";
 
     private static final int MAX_HISTORY_MESSAGES = 10;
     private static final int DEFAULT_SEARCH_TOP_K = 5;
@@ -117,13 +119,14 @@ public class TroubleshootAgent {
         List<WikiSearchService.WikiSearchResult> wikiResults = Collections.emptyList();
         if (wikiSearchService != null) {
             try {
-                wikiResults = wikiSearchService.search(userMessage, DEFAULT_SEARCH_TOP_K);
+                Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                wikiResults = wikiSearchService.search(userMessage, DEFAULT_SEARCH_TOP_K, authentication);
             } catch (Exception e) {
                 log.warn("Wiki search failed, falling back to chunk search: {}", e.getMessage());
             }
         }
 
-        if (wikiResults.size() >= 2) {
+        if (!wikiResults.isEmpty()) {
             // Wiki has sufficient results — use Wiki context
             contextMessage = buildWikiContextMessage(userMessage, wikiResults);
             for (WikiSearchService.WikiSearchResult r : wikiResults) {

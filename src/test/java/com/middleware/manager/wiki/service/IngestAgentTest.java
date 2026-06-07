@@ -75,7 +75,7 @@ class IngestAgentTest {
             com.google.gson.JsonArray pages = new com.google.gson.JsonArray();
             JsonObject pageObj = new JsonObject();
             pageObj.addProperty("title", "Test Page");
-            pageObj.addProperty("page_type", "CONFIG");
+            pageObj.addProperty("page_type", "ENTITY");
             pageObj.addProperty("content", "new content");
             pageObj.addProperty("summary", "summary");
             pages.add(pageObj);
@@ -101,7 +101,7 @@ class IngestAgentTest {
             existing.setTitle("Test Page");
             existing.setPageType("CONFIG");
             existing.setContent("old content");
-            when(pageMapper.findByTitleAndType("Test Page", "CONFIG")).thenReturn(existing);
+            when(pageMapper.findByTitleAndType("Test Page", "ENTITY")).thenReturn(existing);
             when(softwareTypeMapper.findAllByOrderByCategoryAscNameAsc()).thenReturn(Collections.emptyList());
 
             IngestAgent.IngestResult result = ingestAgent.ingestContent(
@@ -126,7 +126,7 @@ class IngestAgentTest {
             com.google.gson.JsonArray pages = new com.google.gson.JsonArray();
             JsonObject pageObj = new JsonObject();
             pageObj.addProperty("title", "Test Page");
-            pageObj.addProperty("page_type", "CONFIG");
+            pageObj.addProperty("page_type", "ENTITY");
             pageObj.addProperty("content", "contradicting content");
             pages.add(pageObj);
             pagesResult.add("pages", pages);
@@ -148,7 +148,7 @@ class IngestAgentTest {
             existing.setTitle("Test Page");
             existing.setPageType("CONFIG");
             existing.setContent("old content");
-            when(pageMapper.findByTitleAndType("Test Page", "CONFIG")).thenReturn(existing);
+            when(pageMapper.findByTitleAndType("Test Page", "ENTITY")).thenReturn(existing);
             when(softwareTypeMapper.findAllByOrderByCategoryAscNameAsc()).thenReturn(Collections.emptyList());
 
             IngestAgent.IngestResult result = ingestAgent.ingestContent(
@@ -176,7 +176,13 @@ class IngestAgentTest {
             analysis.addProperty("status", "ok");
 
             JsonObject pagesResult = new JsonObject();
-            pagesResult.add("pages", new com.google.gson.JsonArray());
+            com.google.gson.JsonArray pages = new com.google.gson.JsonArray();
+            JsonObject page = new JsonObject();
+            page.addProperty("title", "Valid Page");
+            page.addProperty("page_type", "ENTITY");
+            page.addProperty("content", "valid content");
+            pages.add(page);
+            pagesResult.add("pages", pages);
 
             ChatResponse resp1 = createChatResponse("```json\n" + gson.toJson(analysis) + "\n```");
             ChatResponse resp2 = createChatResponse(gson.toJson(pagesResult));
