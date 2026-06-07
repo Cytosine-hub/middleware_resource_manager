@@ -1654,7 +1654,6 @@ td.row-actions {
   font-size: var(--text-xs);
   padding: 1px 6px;
 }
-}
 
 .review-hint {
   color: var(--color-warning);
