@@ -6,6 +6,7 @@
         <id property="id" column="id"/>
         <result property="title" column="title"/>
         <result property="mode" column="mode"/>
+        <result property="createdBy" column="created_by"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
@@ -14,17 +15,27 @@
         SELECT * FROM chat_sessions WHERE id = #{id}
     </select>
 
+    <select id="findByIdAndCreatedBy" resultMap="sessionResultMap">
+        SELECT * FROM chat_sessions WHERE id = #{id} AND created_by = #{createdBy}
+    </select>
+
     <select id="findAllByOrderByUpdatedAtDesc" resultMap="sessionResultMap">
         SELECT * FROM chat_sessions ORDER BY updated_at DESC
     </select>
 
+    <select id="findByCreatedByOrderByUpdatedAtDesc" resultMap="sessionResultMap">
+        SELECT * FROM chat_sessions WHERE created_by = #{createdBy} ORDER BY updated_at DESC
+    </select>
+
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO chat_sessions (title, mode, created_at, updated_at)
-        VALUES (#{title}, #{mode}, COALESCE(#{createdAt}, NOW()), COALESCE(#{updatedAt}, NOW()))
+        INSERT INTO chat_sessions (title, mode, created_by, created_at, updated_at)
+        VALUES (#{title}, #{mode}, #{createdBy}, COALESCE(#{createdAt}, NOW()), COALESCE(#{updatedAt}, NOW()))
     </insert>
 
     <update id="update">
-        UPDATE chat_sessions SET title=#{title}, mode=#{mode}, updated_at=#{updatedAt} WHERE id=#{id}
+        UPDATE chat_sessions
+        SET title=#{title}, mode=#{mode}, updated_at=COALESCE(#{updatedAt}, NOW())
+        WHERE id=#{id}
     </update>
 
 </mapper>

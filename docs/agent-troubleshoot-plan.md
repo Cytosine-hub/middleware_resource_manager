@@ -801,3 +801,39 @@ public class OutputSafetyFilter {
     }
 }
 ```
+
+## 九、当前修复计划（2026-06-07）
+
+### 9.1 本轮 P0 修复范围
+
+1. **会话一致性**
+   - 修复 Ops Agent 首次回复时用 `insert` 更新标题导致的会话分裂。
+   - RAG 和 Ops 写入前必须校验会话存在、归属和模式。
+
+2. **会话用户隔离**
+   - `chat_sessions` 增加创建人字段。
+   - 会话列表、会话详情、聊天写入、模式切换均按当前用户过滤。
+   - 系统管理员可作为审计角色查看全部会话，普通用户只能查看自己的会话。
+
+3. **Wiki/RAG 权限传递**
+   - SSE 异步线程不再从 `SecurityContextHolder` 隐式取用户。
+   - Controller 显式传入 `Authentication`，避免线程池复用导致权限上下文丢失。
+
+4. **Skill 管理权限**
+   - Skill 新增、编辑、删除、保存经验只允许系统管理员或专业管理员操作。
+   - 普通登录用户只允许查看 Skill/Tool 列表和发起排查。
+
+### 9.2 后续 P1/P2 修复方向
+
+- 增加 `agent_tool_calls` 审计表，记录工具名、参数摘要、调用人、耗时、结果状态。
+- 引入 ToolGateway，统一做权限校验、参数 schema、超时、脱敏和错误收敛。
+- 将“保存经验”从直接写 Skill YAML 调整为生成 LLM Wiki `EXPERIENCE` DRAFT 页面，审核通过后再参与检索。
+- 增加 Agent 状态机：`PLANNING / WAITING_FOR_PARAMS / RUNNING_TOOL / NEED_APPROVAL / SUMMARIZING / COMPLETED / FAILED / CANCELLED`。
+
+### 9.3 本轮验收标准
+
+- 普通用户无法读取或写入他人的排查会话。
+- RAG Agent 调用 Wiki 搜索时使用当前请求用户权限。
+- Ops Agent 首轮回答后刷新页面，问答仍在同一个会话下。
+- 普通用户调用 Skill 写接口返回 403。
+- 后端编译通过，关键 Controller/Service 单元测试覆盖新增权限逻辑。

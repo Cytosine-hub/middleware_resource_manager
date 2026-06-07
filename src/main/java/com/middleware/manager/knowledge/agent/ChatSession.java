@@ -13,6 +13,7 @@ public class ChatSession {
     private Long id;
     private String title;
     private String mode;
+    private Long createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

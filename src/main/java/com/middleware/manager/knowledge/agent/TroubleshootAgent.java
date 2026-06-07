@@ -18,8 +18,8 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -78,9 +78,15 @@ public class TroubleshootAgent {
      * Create a new chat session.
      */
     public ChatSession createSession() {
+        return createSession(null);
+    }
+
+    @Transactional
+    public ChatSession createSession(Long createdBy) {
         ChatSession session = new ChatSession();
         session.setTitle("新会话");
         session.setMode("rag");
+        session.setCreatedBy(createdBy);
         chatSessionMapper.insert(session);
         return session;
     }
@@ -93,6 +99,12 @@ public class TroubleshootAgent {
     }
 
     public AgentResponse chat(Long sessionId, String userMessage, Consumer<String> onRetry) {
+        return chat(sessionId, userMessage, onRetry, null);
+    }
+
+    @Transactional
+    public AgentResponse chat(Long sessionId, String userMessage, Consumer<String> onRetry,
+                              Authentication authentication) {
         // 1. Save user message
         com.middleware.manager.knowledge.agent.ChatMessage userMsg = new com.middleware.manager.knowledge.agent.ChatMessage();
         userMsg.setSessionId(sessionId);
@@ -119,7 +131,6 @@ public class TroubleshootAgent {
         List<WikiSearchService.WikiSearchResult> wikiResults = Collections.emptyList();
         if (wikiSearchService != null) {
             try {
-                Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
                 wikiResults = wikiSearchService.search(userMessage, DEFAULT_SEARCH_TOP_K, authentication);
             } catch (Exception e) {
                 log.warn("Wiki search failed, falling back to chunk search: {}", e.getMessage());

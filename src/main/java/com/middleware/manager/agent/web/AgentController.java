@@ -3,13 +3,23 @@ package com.middleware.manager.agent.web;
 import com.middleware.manager.agent.service.AgentService;
 import com.middleware.manager.agent.skill.Skill;
 import com.middleware.manager.agent.skill.SkillLoader;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.domain.AdminAccount;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.exception.ForbiddenException;
+import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.knowledge.agent.ChatMessage;
 import com.middleware.manager.knowledge.agent.ChatMessageMapper;
 import com.middleware.manager.knowledge.agent.ChatSession;
 import com.middleware.manager.knowledge.agent.ChatSessionMapper;
 import org.springframework.http.MediaType;
+import com.middleware.manager.repository.AdminAccountMapper;
+import com.middleware.manager.security.PermissionService;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -20,48 +30,55 @@ import java.util.concurrent.Executors;
 
 @RestController("opsAgentController")
 @RequestMapping("/api/ops-agent")
+@Slf4j
 public class AgentController {
 
     private final AgentService agentService;
     private final SkillLoader skillLoader;
     private final ChatSessionMapper chatSessionMapper;
     private final ChatMessageMapper chatMessageMapper;
+    private final AdminAccountMapper adminAccountMapper;
+    private final PermissionService permissionService;
     private final ExecutorService sseExecutor = Executors.newCachedThreadPool();
 
     public AgentController(AgentService agentService, SkillLoader skillLoader,
                            ChatSessionMapper chatSessionMapper,
-                           ChatMessageMapper chatMessageMapper) {
+                           ChatMessageMapper chatMessageMapper,
+                           AdminAccountMapper adminAccountMapper,
+                           PermissionService permissionService) {
         this.agentService = agentService;
         this.skillLoader = skillLoader;
         this.chatSessionMapper = chatSessionMapper;
         this.chatMessageMapper = chatMessageMapper;
+        this.adminAccountMapper = adminAccountMapper;
+        this.permissionService = permissionService;
     }
 
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter chat(@RequestBody ChatRequest req) {
+    public SseEmitter chat(@RequestBody ChatRequest req, Authentication authentication) {
         SseEmitter emitter = new SseEmitter(300_000L);
 
         sseExecutor.submit(() -> {
             try {
+                String message = requireMessage(req.getMessage());
                 // 创建或获取会话
                 Long sessionId = req.getSessionId();
                 ChatSession session;
                 if (sessionId != null) {
-                    session = chatSessionMapper.findById(sessionId);
-                    if (session == null) session = createNewSession();
+                    session = requireSessionForMode(sessionId, authentication, "ops");
                 } else {
-                    session = createNewSession();
+                    session = createNewSession(resolveActorId(authentication));
                 }
 
                 // 保存用户消息
                 ChatMessage userMsg = new ChatMessage();
                 userMsg.setSessionId(session.getId());
                 userMsg.setRole("user");
-                userMsg.setContent(req.getMessage());
+                userMsg.setContent(message);
                 chatMessageMapper.insert(userMsg);
 
                 // 调用 Agent（带重试回调）
-                Map<String, Object> result = agentService.chat(req.getMessage(), req.getContext(), retryMsg -> {
+                Map<String, Object> result = agentService.chat(message, req.getContext(), retryMsg -> {
                     try {
                         emitter.send(SseEmitter.event()
                                 .name("retry")
@@ -78,17 +95,17 @@ public class AgentController {
 
                 // 更新会话标题
                 if (session.getTitle() == null || session.getTitle().isEmpty()) {
-                    String title = req.getMessage().length() > 30 ?
-                            req.getMessage().substring(0, 30) + "..." : req.getMessage();
+                    String title = message.length() > 30 ?
+                            message.substring(0, 30) + "..." : message;
                     session.setTitle(title);
-                    chatSessionMapper.insert(session);
+                    chatSessionMapper.update(session);
                 }
 
                 result.put("sessionId", session.getId());
                 emitter.send(SseEmitter.event().name("result").data(result));
                 emitter.complete();
             } catch (Exception e) {
-                String msg = e.getMessage() != null ? e.getMessage() : "未知错误";
+                String msg = toClientError(e);
                 boolean isRetryFail = msg.contains("已重试");
                 try {
                     emitter.send(SseEmitter.event()
@@ -104,21 +121,26 @@ public class AgentController {
         return emitter;
     }
 
-    private ChatSession createNewSession() {
+    private ChatSession createNewSession(Long createdBy) {
         ChatSession session = new ChatSession();
         session.setTitle("");
         session.setMode("ops");
+        session.setCreatedBy(createdBy);
         chatSessionMapper.insert(session);
         return session;
     }
 
     @GetMapping("/sessions")
-    public List<ChatSession> getSessions() {
-        return chatSessionMapper.findAllByOrderByUpdatedAtDesc();
+    public List<ChatSession> getSessions(Authentication authentication) {
+        if (canViewAllSessions(authentication)) {
+            return chatSessionMapper.findAllByOrderByUpdatedAtDesc();
+        }
+        return chatSessionMapper.findByCreatedByOrderByUpdatedAtDesc(resolveActorId(authentication));
     }
 
     @GetMapping("/sessions/{id}")
-    public List<ChatMessage> getSessionMessages(@PathVariable Long id) {
+    public List<ChatMessage> getSessionMessages(@PathVariable Long id, Authentication authentication) {
+        requireAccessibleSession(id, authentication);
         return chatMessageMapper.findBySessionIdOrderByCreatedAtAsc(id);
     }
 
@@ -133,22 +155,24 @@ public class AgentController {
     }
 
     @PostMapping("/skills")
-    public Map<String, Object> saveSkill(@RequestBody Skill skill) {
+    public Map<String, Object> saveSkill(@RequestBody Skill skill, Authentication authentication) {
+        requireSkillAdmin(authentication);
+        requireValidSkillName(skill);
         skillLoader.save(skill);
         return Map.of("status", "ok", "name", skill.getName());
     }
 
     @DeleteMapping("/skills/{name}")
-    public Map<String, Object> deleteSkill(@PathVariable String name) {
+    public Map<String, Object> deleteSkill(@PathVariable String name, Authentication authentication) {
+        requireSkillAdmin(authentication);
         skillLoader.delete(name);
         return Map.of("status", "ok");
     }
 
     @PostMapping("/experience")
-    public Map<String, Object> saveExperience(@RequestBody Skill skill) {
-        if (skill.getName() == null || skill.getName().isBlank()) {
-            return Map.of("status", "error", "message", "name 不能为空");
-        }
+    public Map<String, Object> saveExperience(@RequestBody Skill skill, Authentication authentication) {
+        requireSkillAdmin(authentication);
+        requireValidSkillName(skill);
         skillLoader.save(skill);
         return Map.of("status", "ok", "name", skill.getName());
     }
@@ -183,5 +207,69 @@ public class AgentController {
         public void setDescription(String description) { this.description = description; }
         public String getSeverity() { return severity; }
         public void setSeverity(String severity) { this.severity = severity; }
+    }
+
+    private String requireMessage(String message) {
+        if (message == null || message.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "消息不能为空");
+        }
+        return message.trim();
+    }
+
+    private ChatSession requireSessionForMode(Long sessionId, Authentication authentication, String mode) {
+        ChatSession session = requireAccessibleSession(sessionId, authentication);
+        if (!mode.equals(session.getMode())) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "会话模式不匹配");
+        }
+        return session;
+    }
+
+    private ChatSession requireAccessibleSession(Long sessionId, Authentication authentication) {
+        ChatSession session = canViewAllSessions(authentication)
+                ? chatSessionMapper.findById(sessionId)
+                : chatSessionMapper.findByIdAndCreatedBy(sessionId, resolveActorId(authentication));
+        if (session == null) {
+            throw new NotFoundException(ErrorCode.NOT_FOUND, ErrorMessages.NOT_FOUND);
+        }
+        return session;
+    }
+
+    private boolean canViewAllSessions(Authentication authentication) {
+        return permissionService.isAdmin(authentication);
+    }
+
+    private void requireSkillAdmin(Authentication authentication) {
+        if (!permissionService.isAdmin(authentication) && !permissionService.isCategoryAdmin(authentication)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN, ErrorMessages.FORBIDDEN);
+        }
+    }
+
+    private void requireValidSkillName(Skill skill) {
+        if (skill == null || skill.getName() == null || skill.getName().isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "Skill 名称不能为空");
+        }
+        String name = skill.getName().trim();
+        if (!name.matches("[A-Za-z0-9_-]{1,80}")) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "Skill 名称只能包含字母、数字、下划线和中划线");
+        }
+        skill.setName(name);
+    }
+
+    private Long resolveActorId(Authentication authentication) {
+        if (authentication == null) return 0L;
+        try {
+            AdminAccount account = adminAccountMapper.findByUsername(authentication.getName());
+            return account != null ? account.getId() : 0L;
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.UNKNOWN_ERROR, ErrorMessages.UNKNOWN_ERROR);
+        }
+    }
+
+    private String toClientError(Exception e) {
+        if (e instanceof BusinessException) {
+            return e.getMessage() != null ? e.getMessage() : ErrorMessages.UNKNOWN_ERROR;
+        }
+        log.error("Ops agent SSE failed", e);
+        return ErrorMessages.UNKNOWN_ERROR;
     }
 }

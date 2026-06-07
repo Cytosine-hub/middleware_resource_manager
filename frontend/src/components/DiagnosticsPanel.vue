@@ -35,7 +35,7 @@
           >
             <div class="skill-item-head">
               <span class="skill-item-name">{{ skill.name }}</span>
-              <div class="skill-item-actions">
+              <div v-if="canManageSkills" class="skill-item-actions">
                 <button class="ghost" @click.stop="startEditSkill(skill)">编辑</button>
                 <button class="ghost danger" @click.stop="confirmDeleteSkill(skill)">删除</button>
               </div>
@@ -47,7 +47,7 @@
             </div>
           </div>
           <p v-if="skills.length === 0" class="empty-hint">暂无 Skill，点击下方按钮新增。</p>
-          <button class="skill-new-btn" @click="startCreateSkill">+ 新增 Skill</button>
+          <button v-if="canManageSkills" class="skill-new-btn" @click="startCreateSkill">+ 新增 Skill</button>
         </div>
       </div>
 
@@ -94,7 +94,7 @@
           <div class="skill-edit-header">
             <h3>{{ editingSkill.name }}</h3>
             <div style="display:flex;gap:8px">
-              <button class="ghost" @click="startEditSkill(editingSkill)">编辑</button>
+              <button v-if="canManageSkills" class="ghost" @click="startEditSkill(editingSkill)">编辑</button>
               <button class="ghost" @click="cancelSkillEdit">返回</button>
             </div>
           </div>
@@ -252,7 +252,7 @@
                   <span v-for="t in msg.tools" :key="t" class="tool-chip">{{ t }}</span>
                 </div>
                 <!-- Agent 模式：保存为经验 -->
-                <div v-if="msg.role === 'assistant' && msg.tools && msg.tools.length > 0 && !msg._savedExp" class="save-exp-row">
+                <div v-if="canManageSkills && msg.role === 'assistant' && msg.tools && msg.tools.length > 0 && !msg._savedExp" class="save-exp-row">
                   <button class="save-exp-btn" @click="openSaveExperience(msg, idx)">保存为经验</button>
                 </div>
                 <!-- 引用来源 -->
@@ -366,6 +366,11 @@ const deleteSkillTarget = ref(null)
 
 const displaySessions = computed(() => {
   return ragSessions.value
+})
+
+const canManageSkills = computed(() => {
+  const role = props.auth?.user?.role || ''
+  return role === '系统管理员' || role.endsWith('管理员')
 })
 
 onMounted(() => {

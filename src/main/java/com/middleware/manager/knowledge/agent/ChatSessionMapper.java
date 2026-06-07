@@ -10,7 +10,11 @@ public interface ChatSessionMapper {
 
     ChatSession findById(@Param("id") Long id);
 
+    ChatSession findByIdAndCreatedBy(@Param("id") Long id, @Param("createdBy") Long createdBy);
+
     List<ChatSession> findAllByOrderByUpdatedAtDesc();
+
+    List<ChatSession> findByCreatedByOrderByUpdatedAtDesc(@Param("createdBy") Long createdBy);
 
     int insert(ChatSession session);
 
