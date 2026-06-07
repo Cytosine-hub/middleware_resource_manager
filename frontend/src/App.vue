@@ -1,9 +1,9 @@
 <template>
   <div class="app-shell">
-    <header v-if="auth.token || route.name !== 'admin'" :class="['topbar', route.name === 'home' ? 'portal-topbar' : '']">
-      <div :class="{ 'clickable-title': route.name?.startsWith('forum') }" @click="route.name?.startsWith('forum') && navigate('forum')">
+    <header :class="['topbar', route.name === 'home' ? 'portal-topbar' : '']">
+      <div class="clickable-title" @click="navigate('home')">
         <p class="eyebrow">Infrastructure Portal</p>
-        <h1>{{ pageTitle }}</h1>
+        <h1>{{ auth.token ? pageTitle : '运营集成中心门户' }}</h1>
       </div>
       <div class="topbar-right">
         <nav v-if="route.name !== 'home'" class="nav-tabs" aria-label="Primary">
