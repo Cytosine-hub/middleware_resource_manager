@@ -197,10 +197,10 @@
     </template>
   </BaseModal>
 
-  <BaseModal v-model="admin.showRevisionModal.value" :title="admin.revisionDocTitle.value + ' - 修订历史'" width="700px">
+  <BaseModal v-model="admin.showRevisionModal.value" :title="admin.revisionDocTitle.value + ' - 修订历史'" width="800px">
     <div v-if="admin.revisionList.value.length === 0" class="empty-state" style="padding:40px 0">暂无修订记录</div>
     <div v-else class="revision-list">
-      <div v-for="rev in admin.revisionList.value" :key="rev.id" class="revision-item">
+      <div v-for="(rev, idx) in admin.revisionList.value" :key="rev.id" class="revision-item">
         <div class="revision-header">
           <span class="revision-version">V{{ rev.version }}</span>
           <span class="revision-time">{{ admin.formatTime(rev.revisedAt) }}</span>
@@ -208,11 +208,24 @@
           <span class="revision-author">修订人：{{ rev.revisedBy || '-' }}</span>
         </div>
         <p v-if="rev.revisionComment" class="revision-comment">审核意见：{{ rev.revisionComment }}</p>
-        <details class="revision-content-detail">
-          <summary>查看修订详情</summary>
-          <div class="revision-content-block">
-            <div v-if="rev.content" class="revision-rendered" v-html="renderMarkdown(rev.content)"></div>
-            <div v-else class="empty-state" style="padding:12px 0;font-size:13px">无内容快照</div>
+
+        <!-- 差异对比 -->
+        <details class="revision-content-detail" open>
+          <summary>变更内容</summary>
+          <div class="revision-diff-block">
+            <template v-if="idx < admin.revisionList.value.length - 1">
+              <div v-for="(line, li) in computeDiff(admin.revisionList.value[idx + 1]?.content, rev.content)" :key="li"
+                :class="['diff-line', line.type === 'add' ? 'diff-add' : line.type === 'del' ? 'diff-del' : '']">
+                <span class="diff-marker">{{ line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' ' }}</span>
+                <span class="diff-text">{{ line.text }}</span>
+              </div>
+            </template>
+            <template v-else>
+              <div v-for="(line, li) in (rev.content || '').split('\n')" :key="li" class="diff-line">
+                <span class="diff-marker"> </span>
+                <span class="diff-text">{{ line }}</span>
+              </div>
+            </template>
           </div>
         </details>
       </div>
@@ -267,4 +280,59 @@ const diffLines = computed(() => (props.selectedReviewDiff || '').split('\n'))
 function handleImport() {
   props.admin.submitImport()
 }
+
+/** 计算两段文本的逐行差异 */
+function computeDiff(oldText, newText) {
+  const oldLines = (oldText || '').split('\n')
+  const newLines = (newText || '').split('\n')
+  const result = []
+  const maxLen = Math.max(oldLines.length, newLines.length)
+
+  for (let i = 0; i < maxLen; i++) {
+    const oldLine = i < oldLines.length ? oldLines[i] : null
+    const newLine = i < newLines.length ? newLines[i] : null
+
+    if (oldLine === null) {
+      result.push({ type: 'add', text: newLine })
+    } else if (newLine === null) {
+      result.push({ type: 'del', text: oldLine })
+    } else if (oldLine !== newLine) {
+      result.push({ type: 'del', text: oldLine })
+      result.push({ type: 'add', text: newLine })
+    } else {
+      result.push({ type: 'same', text: oldLine })
+    }
+  }
+  return result
+}
 </script>
+
+<style scoped>
+.revision-list { display: flex; flex-direction: column; gap: var(--space-lg); }
+.revision-item { border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-lg); }
+.revision-header { display: flex; flex-wrap: wrap; gap: var(--space-md); align-items: center; margin-bottom: var(--space-sm); }
+.revision-version { font-weight: 700; color: var(--color-primary); }
+.revision-time { color: var(--color-text-secondary); font-size: var(--text-sm); }
+.revision-author { color: var(--color-text-tertiary); font-size: var(--text-sm); }
+.revision-comment { margin: var(--space-sm) 0; color: var(--color-text-secondary); font-size: var(--text-sm); }
+.revision-content-detail { margin-top: var(--space-sm); }
+.revision-content-detail summary { cursor: pointer; color: var(--color-primary); font-size: var(--text-sm); }
+.revision-diff-block {
+  margin-top: var(--space-sm);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  overflow-x: auto;
+}
+.diff-line { display: flex; gap: var(--space-sm); white-space: pre-wrap; word-break: break-all; }
+.diff-marker { flex-shrink: 0; width: 16px; text-align: center; font-weight: 700; }
+.diff-text { flex: 1; min-width: 0; }
+.diff-add { background: var(--color-success-light); color: var(--color-success); }
+.diff-add .diff-marker { color: var(--color-success); }
+.diff-del { background: var(--color-danger-light); color: var(--color-danger); }
+.diff-del .diff-marker { color: var(--color-danger); }
+</style>
