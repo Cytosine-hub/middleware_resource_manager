@@ -567,6 +567,7 @@ async function sendMessage() {
               currentSessionId.value = data.sessionId
             }
             await loadSessions()
+            return
           }
         }
       }
