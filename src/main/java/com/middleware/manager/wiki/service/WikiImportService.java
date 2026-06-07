@@ -257,6 +257,7 @@ public class WikiImportService {
                             case "software" -> page.setSoftware(value);
                             case "version" -> page.setVersion(value);
                             case "summary" -> page.setSummary(value);
+                            case "source_refs" -> page.setSourceRefs(value);
                             case "status" -> page.setStatus(value);
                             case "compiled_by" -> page.setCompiledBy(value);
                         }

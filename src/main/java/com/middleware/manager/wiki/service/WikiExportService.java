@@ -3,9 +3,11 @@ package com.middleware.manager.wiki.service;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.middleware.manager.wiki.entity.WikiLink;
 import com.middleware.manager.wiki.entity.WikiPage;
+import com.middleware.manager.wiki.entity.WikiSource;
 import com.middleware.manager.wiki.repository.WikiLinkMapper;
 import com.middleware.manager.wiki.repository.WikiPageMapper;
 import com.middleware.manager.wiki.repository.WikiSourceMapper;
@@ -20,8 +22,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -100,9 +104,54 @@ public class WikiExportService {
         }
         entries.put("links.json", gson.toJson(linksArray));
         if (sourceMapper != null) {
-            entries.put("sources.json", gson.toJson(sourceMapper.findAll()));
+            Set<Long> referencedSourceIds = collectReferencedSourceIds(pages);
+            List<WikiSource> sources = sourceMapper.findAll().stream()
+                    .filter(source -> referencedSourceIds.contains(source.getId()))
+                    .collect(Collectors.toList());
+            entries.put("sources.json", gson.toJson(sources));
         }
         return entries;
+    }
+
+    private Set<Long> collectReferencedSourceIds(List<WikiPage> pages) {
+        Set<Long> sourceIds = new HashSet<>();
+        for (WikiPage page : pages) {
+            String sourceRefs = page.getSourceRefs();
+            if (sourceRefs == null || sourceRefs.isBlank()) {
+                continue;
+            }
+            try {
+                JsonElement element = gson.fromJson(sourceRefs, JsonElement.class);
+                collectReferencedSourceIds(element, sourceIds);
+            } catch (Exception e) {
+                log.warn("Skip invalid source_refs for page {}: {}", page.getId(), e.getMessage());
+            }
+        }
+        return sourceIds;
+    }
+
+    private void collectReferencedSourceIds(JsonElement element, Set<Long> sourceIds) {
+        if (element == null || element.isJsonNull()) {
+            return;
+        }
+        if (element.isJsonArray()) {
+            for (JsonElement item : element.getAsJsonArray()) {
+                collectReferencedSourceIds(item, sourceIds);
+            }
+            return;
+        }
+        if (!element.isJsonObject()) {
+            return;
+        }
+        JsonObject object = element.getAsJsonObject();
+        JsonElement idElement = object.get("id");
+        if (idElement != null && !idElement.isJsonNull()) {
+            try {
+                sourceIds.add(idElement.getAsLong());
+            } catch (Exception ignored) {
+                // Invalid source id in historical source_refs; ignore it.
+            }
+        }
     }
 
     private JsonObject buildManifest(List<WikiPage> pages, Map<String, String> entries) {
@@ -138,6 +187,7 @@ public class WikiExportService {
         if (page.getSoftware() != null) sb.append("software: ").append(page.getSoftware()).append("\n");
         if (page.getVersion() != null) sb.append("version: ").append(page.getVersion()).append("\n");
         if (page.getSummary() != null) sb.append("summary: ").append(page.getSummary()).append("\n");
+        if (page.getSourceRefs() != null) sb.append("source_refs: ").append(page.getSourceRefs()).append("\n");
         sb.append("status: ").append(page.getStatus()).append("\n");
         if (page.getCompiledBy() != null) sb.append("compiled_by: ").append(page.getCompiledBy()).append("\n");
         sb.append("---\n\n");
