@@ -45,6 +45,7 @@
 
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+import { request } from '../api'
 
 const props = defineProps({
   auth: Object,
@@ -63,15 +64,10 @@ const totalElements = ref(0)
 async function loadPosts() {
   loading.value = true
   try {
-    const res = await fetch(`/api/forum/my-posts?page=${page.value}&size=12`, {
-      headers: { 'Authorization': `Basic ${props.auth.token}` }
-    })
-    if (res.ok) {
-      const data = await res.json()
-      posts.value = data.content || []
-      totalPages.value = data.totalPages || 1
-      totalElements.value = data.totalElements || 0
-    }
+    const data = await request(`/api/forum/my-posts?page=${page.value}&size=12`)
+    posts.value = data?.content || []
+    totalPages.value = data?.totalPages || 1
+    totalElements.value = data?.totalElements || 0
   } catch {
     posts.value = []
   } finally {
@@ -87,18 +83,11 @@ function changePage(p) {
 async function deletePost(post) {
   if (!confirm(`确认删除「${post.title}」？`)) return
   try {
-    const res = await fetch(`/api/forum/posts/${post.id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Basic ${props.auth.token}` }
-    })
-    if (res.ok) {
-      props.notify('文章已删除', 'success')
-      loadPosts()
-    } else {
-      props.notify('删除失败', 'error')
-    }
-  } catch {
-    props.notify('删除失败', 'error')
+    await request(`/api/forum/posts/${post.id}`, { method: 'DELETE' })
+    props.notify('文章已删除', 'success')
+    loadPosts()
+  } catch (e) {
+    props.notify(e.message || '删除失败', 'error')
   }
 }
 
@@ -113,101 +102,101 @@ onMounted(loadPosts)
 .forum-personal-center {
   max-width: 900px;
   margin: 0 auto;
-  padding: 24px;
+  padding: var(--space-xl);
 }
 .center-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-xl);
 }
 .center-header h2 {
   margin: 0;
 }
 .center-tabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid #e5e7eb;
-  padding-bottom: 12px;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xl);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-md);
 }
 .center-tabs button {
-  padding: 8px 16px;
+  padding: var(--space-sm) var(--space-lg);
   border: none;
   background: none;
   cursor: pointer;
-  border-radius: 6px;
-  font-size: 14px;
-  color: #6b7280;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
 }
 .center-tabs button.active {
-  background: #eff6ff;
-  color: #2563eb;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
   font-weight: 500;
 }
 .my-posts-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
 }
 .post-card {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  gap: var(--space-lg);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: border-color var(--transition-fast);
 }
 .post-card:hover {
-  border-color: #93c5fd;
+  border-color: var(--color-primary-200);
 }
 .post-card-body {
   flex: 1;
   min-width: 0;
 }
 .post-card-body h3 {
-  margin: 0 0 6px;
-  font-size: 15px;
-  color: #111827;
+  margin: 0 0 var(--space-sm);
+  font-size: var(--text-lg);
+  color: var(--color-text);
 }
 .post-summary {
-  margin: 0 0 8px;
-  font-size: 13px;
-  color: #6b7280;
+  margin: 0 0 var(--space-sm);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .post-meta {
   display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: #9ca3af;
+  gap: var(--space-md);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
 }
 .post-actions {
   display: flex;
-  gap: 6px;
+  gap: var(--space-sm);
   flex-shrink: 0;
 }
 .empty-state {
   text-align: center;
-  color: #9ca3af;
-  padding: 40px 0;
+  color: var(--color-text-tertiary);
+  padding: var(--space-3xl) 0;
 }
 .pagination {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  margin-top: 20px;
-  font-size: 13px;
+  gap: var(--space-md);
+  margin-top: var(--space-xl);
+  font-size: var(--text-sm);
 }
 .loading-panel {
   text-align: center;
-  padding: 40px 0;
-  color: #9ca3af;
+  padding: var(--space-3xl) 0;
+  color: var(--color-text-tertiary);
 }
 </style>
