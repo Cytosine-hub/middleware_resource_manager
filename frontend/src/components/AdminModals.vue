@@ -281,28 +281,38 @@ function handleImport() {
   props.admin.submitImport()
 }
 
-/** 计算两段文本的逐行差异 */
+/** 计算两段文本的差异（基于内容而非位置） */
 function computeDiff(oldText, newText) {
   const oldLines = (oldText || '').split('\n')
   const newLines = (newText || '').split('\n')
+
+  // 转换为 Set 进行内容比较
+  const oldSet = new Set(oldLines)
+  const newSet = new Set(newLines)
+
   const result = []
-  const maxLen = Math.max(oldLines.length, newLines.length)
 
-  for (let i = 0; i < maxLen; i++) {
-    const oldLine = i < oldLines.length ? oldLines[i] : null
-    const newLine = i < newLines.length ? newLines[i] : null
-
-    if (oldLine === null) {
-      result.push({ type: 'add', text: newLine })
-    } else if (newLine === null) {
-      result.push({ type: 'del', text: oldLine })
-    } else if (oldLine !== newLine) {
-      result.push({ type: 'del', text: oldLine })
-      result.push({ type: 'add', text: newLine })
-    } else {
-      result.push({ type: 'same', text: oldLine })
+  // 只在旧文本中存在 → 删除
+  for (const line of oldLines) {
+    if (!newSet.has(line)) {
+      result.push({ type: 'del', text: line })
     }
   }
+
+  // 只在新文本中存在 → 新增
+  for (const line of newLines) {
+    if (!oldSet.has(line)) {
+      result.push({ type: 'add', text: line })
+    }
+  }
+
+  // 两边都有 → 未变更（展示在末尾）
+  for (const line of newLines) {
+    if (oldSet.has(line) && newSet.has(line)) {
+      result.push({ type: 'same', text: line })
+    }
+  }
+
   return result
 }
 </script>
