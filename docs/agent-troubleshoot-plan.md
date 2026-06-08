@@ -837,3 +837,473 @@ public class OutputSafetyFilter {
 - Ops Agent 首轮回答后刷新页面，问答仍在同一个会话下。
 - 普通用户调用 Skill 写接口返回 403。
 - 后端编译通过，关键 Controller/Service 单元测试覆盖新增权限逻辑。
+
+## 十、目标架构优化方案（2026-06-08）
+
+### 10.1 目标定位
+
+下一阶段的目标不是继续堆固定问答模板，而是把当前 Ops Agent 升级为一个可审计、可扩展、可热插拔的线上问题自动排查系统。
+
+目标能力：
+
+1. 输入告警、异常现象或服务名后，自动补齐排查上下文。
+2. 接入日志、监控、CMDB、知识库和后续自动化平台。
+3. 支持 Skill 和 Tool 热插拔，新增排查能力尽量不改核心 Agent 代码。
+4. 每一步工具调用、证据、结论都可回放、审计和复盘。
+5. 写操作必须人工确认，只读诊断可以自动执行。
+
+### 10.2 当前设计评估
+
+当前实现已经具备 MVP 基础：
+
+- `SkillLoader` 支持内置 YAML Skill 和外部目录 Skill。
+- `Tool` 使用 Spring Bean 注册，开发 Java 工具较简单。
+- `AgentService` 能匹配 Skill、顺序执行步骤并调用 LLM 总结。
+- 已有知识库检索、Zabbix 查询、SSE 对话和会话记录。
+
+但它更接近“Skill 驱动的排查脚本 + LLM 总结器”，还不是完整自动排查 Agent：
+
+- Skill 是固定流程，缺少 ReAct 式动态规划和分支决策。
+- Tool 只能通过 Spring Bean 静态注册，新增工具仍需发版重启。
+- Tool 只返回字符串，缺少结构化结果、错误码、证据和置信度。
+- 日志和 Prometheus 工具仍是占位实现，CMDB 工具缺失。
+- 缺少排查运行态模型，无法完整回放每次工具调用和证据链。
+- 缺少工具权限分级、人工确认、超时、熔断和脱敏的统一网关。
+
+### 10.3 推荐目标架构
+
+建议拆成五层：
+
+```text
+用户问题 / 告警 Webhook
+        |
+        v
+Incident Context 层
+  - 抽取 service/env/host/timeRange/symptom/severity
+  - 调用 CMDB 补齐实例、owner、依赖、日志索引、监控模板
+        |
+        v
+Planner 层
+  - Skill 匹配优先
+  - Skill 不完整时由 LLM 生成或补全排查计划
+  - 输出结构化 Plan，而不是直接自由文本回答
+        |
+        v
+Tool Gateway + Tool Registry
+  - 权限、参数 schema、超时、重试、脱敏、审计
+  - Java / HTTP / MCP / Script 多种执行器
+        |
+        v
+Evidence 层
+  - 保存工具结果、日志片段、监控摘要、CMDB 拓扑、知识库引用
+        |
+        v
+Summary 层
+  - 基于 Evidence 输出根因候选、置信度、影响范围、修复建议
+```
+
+### 10.4 核心领域模型
+
+建议新增以下核心表或等价持久化模型。
+
+#### 10.4.1 `agent_runs`
+
+记录一次完整排查任务。
+
+| 字段 | 说明 |
+|------|------|
+| `id` | 排查运行 ID |
+| `session_id` | 所属会话 |
+| `created_by` | 发起人 |
+| `mode` | `SKILL` / `REACT` / `HYBRID` |
+| `status` | `PLANNING` / `WAITING_FOR_PARAMS` / `RUNNING` / `NEED_APPROVAL` / `COMPLETED` / `FAILED` / `CANCELLED` |
+| `input_text` | 用户原始问题 |
+| `context_json` | 结构化排查上下文 |
+| `plan_json` | 结构化排查计划 |
+| `final_answer` | 最终回答 |
+| `started_at` / `finished_at` | 开始和结束时间 |
+
+#### 10.4.2 `agent_steps`
+
+记录计划中的每个步骤。
+
+| 字段 | 说明 |
+|------|------|
+| `id` | 步骤 ID |
+| `run_id` | 关联排查运行 |
+| `step_order` | 步骤序号 |
+| `step_type` | `TOOL` / `PROMPT` / `ASK_USER` / `APPROVAL` |
+| `name` | 步骤名称 |
+| `status` | `PENDING` / `RUNNING` / `SUCCESS` / `FAILED` / `SKIPPED` |
+| `input_json` | 步骤输入 |
+| `output_json` | 步骤输出 |
+| `error_code` / `error_message` | 失败原因 |
+| `duration_ms` | 耗时 |
+
+#### 10.4.3 `agent_tool_invocations`
+
+记录每一次工具调用，作为审计和排障依据。
+
+| 字段 | 说明 |
+|------|------|
+| `id` | 调用 ID |
+| `run_id` / `step_id` | 关联运行和步骤 |
+| `tool_name` / `tool_version` | 工具名和版本 |
+| `executor_type` | `JAVA` / `HTTP` / `MCP` / `SCRIPT` |
+| `request_json` | 脱敏后的请求 |
+| `response_json` | 脱敏后的响应 |
+| `status` | `SUCCESS` / `FAILED` / `TIMEOUT` / `FORBIDDEN` |
+| `latency_ms` | 耗时 |
+| `created_by` | 调用人 |
+
+#### 10.4.4 `agent_evidence`
+
+记录最终回答可引用的证据。
+
+| 字段 | 说明 |
+|------|------|
+| `id` | 证据 ID |
+| `run_id` | 关联排查运行 |
+| `source_type` | `CMDB` / `METRICS` / `LOGS` / `ALERTS` / `WIKI` / `COMMAND` |
+| `source_name` | 数据源名称 |
+| `summary` | 证据摘要 |
+| `raw_ref` | 原始数据引用，如日志查询 ID、指标查询 ID |
+| `confidence` | 证据可信度 |
+| `sensitive_level` | 敏感级别 |
+
+### 10.5 Tool Registry 设计
+
+当前 `Tool` 只有 `name/description/call`，下一阶段应升级为注册表驱动。
+
+#### 10.5.1 Tool 元数据
+
+```yaml
+name: query_logs
+version: 1.0.0
+description: 查询日志系统中的日志
+executor_type: HTTP
+permission_level: READ_SENSITIVE
+timeout_ms: 10000
+retry:
+  max_attempts: 2
+  backoff_ms: 500
+input_schema:
+  type: object
+  required: [service, query, timeRange]
+  properties:
+    service:
+      type: string
+    query:
+      type: string
+    timeRange:
+      type: string
+    level:
+      type: string
+output_schema:
+  type: object
+  properties:
+    summary:
+      type: string
+    records:
+      type: array
+enabled: true
+owner: ops-platform
+```
+
+#### 10.5.2 Tool 执行器类型
+
+| 类型 | 用途 | 是否需重启 |
+|------|------|------------|
+| `JAVA` | 高性能内置工具，如知识库、Zabbix | 需要发版 |
+| `HTTP` | 调用日志、CMDB、工单、自动化平台 API | 不需要 |
+| `MCP` | 接外部 MCP Server | 通常不需要 |
+| `SCRIPT` | 受控脚本工具，适合临时诊断 | 不需要，但必须受限 |
+
+#### 10.5.3 Tool Gateway 职责
+
+所有工具调用必须经过 Tool Gateway：
+
+- 参数 schema 校验。
+- 当前用户和角色权限校验。
+- 工具级超时和重试。
+- 请求和响应脱敏。
+- 调用审计落库。
+- 错误码统一收敛。
+- 写操作触发人工确认。
+- 返回结构化 `ToolResult`。
+
+建议 `ToolResult` 结构：
+
+```json
+{
+  "success": true,
+  "errorCode": null,
+  "summary": "过去 1 小时 CPU 峰值 97%，持续 12 分钟",
+  "data": {},
+  "evidence": [],
+  "confidence": 0.82,
+  "latencyMs": 342
+}
+```
+
+### 10.6 Skill 设计升级
+
+当前 Skill YAML 只包含关键词和顺序步骤。下一阶段需要增加版本、输入参数、适用范围、依赖工具、输出要求和风控信息。
+
+建议 Skill 格式：
+
+```yaml
+name: redis-cpu-high
+version: 1.2.0
+status: ACTIVE
+owner: middleware-team
+description: Redis CPU 高排查
+scope:
+  categories: ["中间件"]
+  products: ["redis"]
+trigger:
+  keywords: ["redis cpu高", "redis cpu飙高", "redis cpu high"]
+inputs:
+  required: ["service"]
+  optional: ["env", "timeRange"]
+defaults:
+  timeRange: "1h"
+steps:
+  - id: resolve_context
+    type: tool
+    tool: cmdb_query_service
+    args:
+      service: "{{service}}"
+    output: service_context
+
+  - id: query_cpu_metric
+    type: tool
+    tool: query_metrics
+    args:
+      service: "{{service}}"
+      metric: "cpu"
+      timeRange: "{{timeRange}}"
+    output: cpu_metric
+
+  - id: query_slowlog
+    type: tool
+    tool: search_logs
+    args:
+      service: "{{service}}"
+      query: "slowlog OR latency OR commandstats"
+      timeRange: "{{timeRange}}"
+    output: log_evidence
+
+  - id: summarize
+    type: prompt
+    prompt: |
+      基于 service_context、cpu_metric、log_evidence 和知识库证据，
+      输出根因候选、证据、置信度、影响范围和修复建议。
+risk:
+  write_actions: false
+  requires_approval: false
+```
+
+Skill 发布流程：
+
+1. 新建或编辑 Skill 生成 `DRAFT`。
+2. 运行 dry-run，验证 schema、工具存在、参数可解析。
+3. 管理员审核后变为 `ACTIVE`。
+4. 保存历史版本，可回滚。
+5. 禁用后不再参与匹配，但历史排查仍可回放。
+
+### 10.7 CMDB 接入设计
+
+CMDB 应作为自动排查的上下文入口，而不是普通工具。
+
+首批 CMDB 能力：
+
+| Tool | 输入 | 输出 |
+|------|------|------|
+| `cmdb_query_service` | `service` | 服务 ID、名称、owner、等级、环境 |
+| `cmdb_query_instances` | `service/env` | 主机/IP/容器/集群/状态 |
+| `cmdb_query_dependencies` | `service` | 上下游依赖、端口、协议 |
+| `cmdb_query_observability` | `service` | 日志索引、监控模板、告警规则 |
+
+Agent 首步应做：
+
+1. 从用户输入抽取服务名和时间范围。
+2. 如果服务名不明确，向用户追问或列出候选服务。
+3. 通过 CMDB 补齐实例、owner、日志索引、监控指标模板。
+4. 后续日志/监控工具使用 CMDB 输出作为参数来源。
+
+### 10.8 日志和监控接入设计
+
+#### 10.8.1 日志工具
+
+建议先支持 Loki 或 Elasticsearch 其中一种，抽象统一接口：
+
+```text
+query_logs(service, query, timeRange, level, limit)
+```
+
+返回内容必须包含：
+
+- 命中条数。
+- 时间范围。
+- Top N 日志片段。
+- 聚类摘要，如相同异常堆栈聚合。
+- 是否命中 ERROR/WARN。
+- 原始查询引用 ID。
+
+#### 10.8.2 监控工具
+
+统一 Prometheus 和 Zabbix 输出：
+
+```text
+query_metrics(service, metric, timeRange, aggregation)
+```
+
+返回内容必须包含：
+
+- 当前值、最大值、平均值、P95。
+- 异常时间窗口。
+- 与基线对比。
+- 是否超过阈值。
+- 图表或查询引用 ID。
+
+### 10.9 Agent 编排策略
+
+建议采用混合模式：
+
+1. **Skill 优先**：命中明确 Skill 时，先使用 Skill 作为主流程，保证生产可控。
+2. **LLM 补全**：Skill 缺参数或缺步骤时，LLM 只负责补全计划，不直接执行高风险操作。
+3. **ReAct 辅助**：未命中 Skill 时，进入受限 ReAct：每轮只能调用只读工具，最多 N 步。
+4. **证据驱动总结**：最终回答必须引用 Evidence，不允许只凭模型常识下结论。
+5. **人工确认**：写操作、重启、变更配置、执行命令必须暂停到 `NEED_APPROVAL`。
+
+推荐状态机：
+
+```text
+CREATED
+  -> PLANNING
+  -> WAITING_FOR_PARAMS
+  -> RUNNING_TOOL
+  -> SUMMARIZING
+  -> COMPLETED
+
+异常分支：
+  -> NEED_APPROVAL
+  -> FAILED
+  -> CANCELLED
+```
+
+### 10.10 前端交互优化
+
+前端不应只显示最终回答，还应显示排查过程：
+
+- 当前状态：规划中、查 CMDB、查监控、查日志、总结中。
+- 每个步骤的开始、成功、失败和耗时。
+- 工具调用的摘要结果。
+- 最终回答引用的证据。
+- 缺少参数时显示表单，而不是让模型长篇提示。
+- 写操作展示审批卡片：操作内容、风险、回滚方案、确认按钮。
+
+SSE 事件建议：
+
+| 事件 | 说明 |
+|------|------|
+| `run_started` | 排查开始 |
+| `plan_created` | 计划生成 |
+| `step_started` | 步骤开始 |
+| `tool_result` | 工具结果 |
+| `need_input` | 缺少参数 |
+| `need_approval` | 需要人工确认 |
+| `final` | 最终回答 |
+| `error` | 失败 |
+| `completed` | 流结束 |
+
+前端收到 `final/error/completed` 任一事件后必须清理 loading 状态。
+
+### 10.11 安全和合规要求
+
+工具权限分级：
+
+| 等级 | 示例 | 执行策略 |
+|------|------|----------|
+| `READ_PUBLIC` | 查询公开知识库 | 自动执行 |
+| `READ_INTERNAL` | 查询 CMDB、普通监控 | 自动执行，记录审计 |
+| `READ_SENSITIVE` | 查询日志、敏感配置 | 角色校验，结果脱敏 |
+| `WRITE_SAFE` | 创建工单、保存经验草稿 | 人工确认或管理员权限 |
+| `WRITE_RISKY` | 重启服务、变更配置 | 必须审批、记录回滚方案 |
+| `DESTRUCTIVE` | 删除数据、清空缓存 | 默认禁止 |
+
+必须实现：
+
+- Tool 输入输出脱敏。
+- Tool 参数白名单和 schema 校验。
+- 用户、角色、时间、参数摘要、结果状态审计。
+- 只读命令白名单。
+- 高风险操作二次确认。
+- Prompt Injection 检测和工具指令隔离。
+
+### 10.12 分阶段实施路线
+
+#### P0：稳定和可观测
+
+- 新增 `agent_runs`、`agent_steps`、`agent_tool_invocations`、`agent_evidence`。
+- Tool 返回结构化 `ToolResult`。
+- ToolGateway 统一超时、重试、错误码、审计。
+- SSE 增加步骤级事件，前端展示执行进度。
+- 修复工具异常导致 SSE 无最终事件的问题。
+
+验收标准：
+
+- 任意工具失败都能返回明确 `error` 或步骤失败事件。
+- 每次排查可在数据库中回放。
+- 前端不会因为 SSE 未正常关闭而残留 loading。
+
+#### P1：接入真实数据源
+
+- 实现 CMDB Tool：服务、实例、依赖、可观测配置。
+- 实现日志 Tool：Loki 或 Elasticsearch 先接一种。
+- 统一 Zabbix/Prometheus 监控结果结构。
+- Skill 参数可引用 CMDB 输出和上一步工具输出。
+
+验收标准：
+
+- 用户只输入服务名和现象，Agent 能自动补齐实例、日志索引和监控查询。
+- Redis CPU 高、连接池耗尽、磁盘满、OOM 至少 4 个场景可自动跑完只读排查链路。
+
+#### P2：热插拔和治理
+
+- 建立 Tool Registry。
+- 支持 HTTP Tool 热注册。
+- Skill 支持版本、启停、审核、dry-run 和回滚。
+- 前端 Skill 编辑器改为工具选择 + 参数表单。
+
+验收标准：
+
+- 新增一个 HTTP Tool 不需要重启后端。
+- 新增 Skill 必须通过 dry-run 才能启用。
+- 禁用 Skill 后不影响历史排查回放。
+
+#### P3：智能规划和经验沉淀
+
+- 引入受限 ReAct 模式。
+- 未命中 Skill 时自动生成排查计划。
+- 好回答生成 `EXPERIENCE` 草稿，审核后进入 Wiki 或 Skill。
+- 形成问题类型、根因、证据、处置动作的数据闭环。
+
+验收标准：
+
+- 未命中 Skill 的常见问题也能自动规划只读排查。
+- 最终回答包含根因候选、证据、置信度和下一步动作。
+- 经验沉淀必须经过人工审核。
+
+### 10.13 推荐下一步
+
+建议下一轮优先做 P0，不急着继续增加日志或 CMDB API：
+
+1. 先定义 `ToolResult` 和 `ToolGateway`。
+2. 新增 Agent Run/Step/Invocation/Evidence 表。
+3. 改造现有 `knowledge_search`、`zabbix_query`、`search_logs`、`query_metrics` 走统一网关。
+4. SSE 改为步骤级事件。
+5. 前端展示排查步骤和工具结果。
+
+这一步完成后，再接 CMDB、日志和监控会更稳，也更容易排查线上问题。
