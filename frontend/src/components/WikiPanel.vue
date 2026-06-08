@@ -138,7 +138,7 @@
       <!-- 操作栏 -->
       <div class="action-bar">
         <div class="action-left">
-          <label class="action-btn primary" style="cursor:pointer" title="上传文档，由 LLM 编译为 Wiki 页面（支持多选）">
+          <label class="action-btn primary" style="cursor:pointer" title="上传文档，由 LLM 编译为 Wiki 页面（支持批量上传）">
             上传文档
             <input type="file" accept=".md,.txt,.pdf,.doc,.docx" @change="uploadDocument" style="display:none" multiple />
           </label>
@@ -364,6 +364,44 @@
         </div>
       </div>
 
+      <!-- 批量上传对话框 -->
+      <div v-if="showUploadDialog" class="modal-overlay" @click.self="closeUploadDialog">
+        <div class="modal-dialog upload-dialog">
+          <h3>上传文档</h3>
+          <p class="modal-desc">选择分类和软件类型后，后台会为每个文件创建异步编译任务。</p>
+          <div class="upload-file-list">
+            <div v-for="file in uploadFiles" :key="file.name + file.size" class="upload-file-item">
+              <span class="upload-file-name">{{ file.name }}</span>
+              <span class="upload-file-size">{{ formatFileSize(file.size) }}</span>
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label>分类</label>
+              <select v-model="uploadForm.category" class="form-input" required @change="uploadForm.software = ''">
+                <option value="">-- 选择分类 --</option>
+                <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+              </select>
+            </div>
+            <div>
+              <label>软件类型</label>
+              <input v-model.trim="uploadForm.software" class="form-input" list="wiki-upload-software-options"
+                     placeholder="选择或输入软件类型" :disabled="!uploadForm.category" />
+              <datalist id="wiki-upload-software-options">
+                <option v-for="name in uploadSoftwareOptions" :key="name" :value="name" />
+              </datalist>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="action-btn ghost" @click="closeUploadDialog">取消</button>
+            <button class="action-btn primary" @click="submitUploadDocuments"
+                    :disabled="!uploadForm.category || !uploadForm.software || ingesting">
+              创建 {{ uploadFiles.length }} 个编译任务
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- 手动录入对话框 -->
       <div v-if="showTextIngest" class="modal-overlay" @click.self="showTextIngest = false">
         <div class="modal-dialog wide">
@@ -544,6 +582,39 @@ const ingestResult = ref(null)
 const ingestProgress = ref(0)       // 0-100
 const ingestStep = ref('')           // current step description
 const textIngestForm = ref({ title: '', content: '', category: '', software: '' })
+const showUploadDialog = ref(false)
+const uploadFiles = ref([])
+const uploadForm = ref({ category: '', software: '' })
+const softwareTypes = ref([])
+
+const uploadSoftwareOptions = computed(() => {
+  if (!uploadForm.value.category) return []
+  return softwareTypes.value
+    .filter(type => type.category === uploadForm.value.category)
+    .map(type => type.name)
+    .filter(Boolean)
+})
+
+async function loadSoftwareTypes() {
+  try {
+    softwareTypes.value = await request('/api/admin/software-types?activeOnly=true')
+  } catch (e) {
+    console.warn('Failed to load software types:', e)
+  }
+}
+
+function closeUploadDialog() {
+  if (ingesting.value) return
+  showUploadDialog.value = false
+  uploadFiles.value = []
+  uploadForm.value = { category: '', software: '' }
+}
+
+function formatFileSize(size) {
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
+}
 
 // Tree data (reactive)
 const treeData = ref([])
@@ -1036,18 +1107,30 @@ async function uploadDocument(event) {
   ingestResult.value = null
 
   const MAX_SIZE = 10 * 1024 * 1024
-  const validFiles = files.filter(f => {
+  uploadFiles.value = files.filter(f => {
     if (f.size > MAX_SIZE) {
       ingestResult.value = { success: false, message: `「${f.name}」过大（${(f.size / 1024 / 1024).toFixed(1)}MB），最大 10MB` }
       return false
     }
     return true
   })
-  if (!validFiles.length) return
+  if (!uploadFiles.value.length) return
+  showUploadDialog.value = true
+}
+
+async function submitUploadDocuments() {
+  if (!uploadFiles.value.length) return
+  if (!uploadForm.value.category || !uploadForm.value.software) {
+    ingestResult.value = { success: false, message: '请选择分类和软件类型' }
+    return
+  }
 
   // 批量上传：每个文件创建一个任务
   const tasks = []
-  for (const file of validFiles) {
+  const files = [...uploadFiles.value]
+  showUploadDialog.value = false
+
+  for (const file of files) {
     ingesting.value = true
     ingestProgress.value = 0
     ingestStep.value = `正在上传「${file.name}」...`
@@ -1055,17 +1138,12 @@ async function uploadDocument(event) {
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const token = props.auth?.token || localStorage.getItem('token') || ''
-      const resp = await fetch('/api/wiki/ingest/upload', {
+      formData.append('category', uploadForm.value.category)
+      formData.append('software', uploadForm.value.software)
+      const task = await request('/api/wiki/ingest/upload', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       })
-      if (!resp.ok) {
-        const errText = await resp.text()
-        throw new Error(`HTTP ${resp.status}: ${errText}`)
-      }
-      const task = await resp.json()
       tasks.push(task)
     } catch (e) {
       ingestResult.value = { success: false, message: `「${file.name}」上传失败: ${e.message}` }
@@ -1076,6 +1154,8 @@ async function uploadDocument(event) {
 
   // 轮询所有任务进度
   ingestStep.value = `正在编译 ${tasks.length} 个文档...`
+  uploadFiles.value = []
+  uploadForm.value = { category: '', software: '' }
   await pollTasks(tasks)
 }
 
@@ -1089,7 +1169,7 @@ async function pollTasks(tasks) {
       const allTasks = await request('/api/wiki/ingest/tasks')
       const myTasks = allTasks.filter(t => taskIds.includes(t.id))
 
-      completed = myTasks.filter(t => t.status === 'COMPLETED' || t.status === 'FAILED').length
+      completed = myTasks.filter(t => isTerminalTaskStatus(t.status)).length
       const processing = myTasks.find(t => t.status === 'PROCESSING')
 
       if (processing) {
@@ -1104,7 +1184,7 @@ async function pollTasks(tasks) {
         setTimeout(poll, 1500)
       } else {
         // 全部完成
-        const succeeded = myTasks.filter(t => t.status === 'COMPLETED')
+        const succeeded = myTasks.filter(t => t.status === 'COMPLETED' || t.status === 'PARTIAL')
         const failed = myTasks.filter(t => t.status === 'FAILED')
         const totalCreated = succeeded.reduce((s, t) => s + (t.pagesCreated || 0), 0)
         const totalUpdated = succeeded.reduce((s, t) => s + (t.pagesUpdated || 0), 0)
@@ -1113,11 +1193,14 @@ async function pollTasks(tasks) {
         ingestStep.value = '全部完成'
 
         let msg = `编译完成: ${totalCreated} 个新页面, ${totalUpdated} 个更新`
+        const partial = myTasks.filter(t => t.status === 'PARTIAL')
+        if (partial.length) msg += `，${partial.length} 个部分成功`
         if (failed.length) msg += `，${failed.length} 个失败`
         ingestResult.value = { success: failed.length === 0, message: msg }
 
         ingesting.value = false
         loadPages()
+        loadSources()
       }
     } catch {
       setTimeout(poll, 3000)
@@ -1125,6 +1208,10 @@ async function pollTasks(tasks) {
   }
 
   await poll()
+}
+
+function isTerminalTaskStatus(status) {
+  return status === 'COMPLETED' || status === 'PARTIAL' || status === 'FAILED'
 }
 
 async function submitTextIngest() {
@@ -1254,6 +1341,7 @@ function handleWikiLinkClick(e) {
 
 onMounted(() => {
   loadPages()
+  loadSoftwareTypes()
   document.addEventListener('click', handleWikiLinkClick)
 })
 
@@ -1688,6 +1776,7 @@ onBeforeUnmount(() => {
 
 .form-row { display: flex; flex-direction: column; gap: 4px; }
 .form-row.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.form-row.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 .form-row label {
   font-size: 12px;
@@ -1742,8 +1831,40 @@ onBeforeUnmount(() => {
 }
 
 .modal-dialog.wide { max-width: 700px; }
+.modal-dialog.upload-dialog { max-width: 560px; }
 
 .modal-dialog h3 { margin: 0 0 8px; color: #e6edf3; }
+
+.upload-file-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  margin: 12px 0;
+}
+
+.upload-file-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #21262d;
+  font-size: 12px;
+}
+
+.upload-file-item:last-child { border-bottom: none; }
+
+.upload-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #c9d1d9;
+}
+
+.upload-file-size {
+  flex-shrink: 0;
+  color: #8b949e;
+}
 
 .conflict-note-text {
   background: transparent;
