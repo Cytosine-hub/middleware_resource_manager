@@ -138,10 +138,9 @@
       <!-- 操作栏 -->
       <div class="action-bar">
         <div class="action-left">
-          <label class="action-btn primary" style="cursor:pointer" title="上传文档，由 LLM 编译为 Wiki 页面（支持批量上传）">
+          <button class="action-btn primary" @click="openUploadDialog" title="上传文档，由 LLM 编译为 Wiki 页面（支持批量上传）">
             上传文档
-            <input type="file" accept=".md,.txt,.pdf,.doc,.docx" @change="uploadDocument" style="display:none" multiple />
-          </label>
+          </button>
           <button class="action-btn" @click="showTextIngest = true" title="手动粘贴文本内容">手动录入</button>
           <button class="action-btn" @click="openBatchCategory" title="批量设置未分类页面的分类">批量分类</button>
           <span class="action-divider"></span>
@@ -369,12 +368,18 @@
         <div class="modal-dialog upload-dialog">
           <h3>上传文档</h3>
           <p class="modal-desc">选择分类和软件类型后，后台会为每个文件创建异步编译任务。</p>
-          <div class="upload-file-list">
+          <label class="upload-picker">
+            <span>选择文件</span>
+            <small>支持 Markdown、TXT、PDF、Word，可多选</small>
+            <input type="file" accept=".md,.txt,.pdf,.doc,.docx" @change="uploadDocument" multiple />
+          </label>
+          <div v-if="uploadFiles.length" class="upload-file-list">
             <div v-for="file in uploadFiles" :key="file.name + file.size" class="upload-file-item">
               <span class="upload-file-name">{{ file.name }}</span>
               <span class="upload-file-size">{{ formatFileSize(file.size) }}</span>
             </div>
           </div>
+          <div v-else class="upload-empty">尚未选择文件</div>
           <div class="form-row two-col">
             <div>
               <label>分类</label>
@@ -395,7 +400,7 @@
           <div class="modal-actions">
             <button class="action-btn ghost" @click="closeUploadDialog">取消</button>
             <button class="action-btn primary" @click="submitUploadDocuments"
-                    :disabled="!uploadForm.category || !uploadForm.software || ingesting">
+                    :disabled="!uploadForm.category || !uploadForm.software || !uploadFiles.length || ingesting">
               创建 {{ uploadFiles.length }} 个编译任务
             </button>
           </div>
@@ -601,6 +606,11 @@ async function loadSoftwareTypes() {
   } catch (e) {
     console.warn('Failed to load software types:', e)
   }
+}
+
+function openUploadDialog() {
+  ingestResult.value = null
+  showUploadDialog.value = true
 }
 
 function closeUploadDialog() {
@@ -1831,9 +1841,58 @@ onBeforeUnmount(() => {
 }
 
 .modal-dialog.wide { max-width: 700px; }
-.modal-dialog.upload-dialog { max-width: 560px; }
+.modal-dialog.upload-dialog {
+  --upload-border: #30363d;
+  --upload-border-hover: #58a6ff;
+  --upload-bg: #0d1117;
+  --upload-bg-hover: #1c2128;
+  --upload-text: #c9d1d9;
+  --upload-text-muted: #8b949e;
+  --upload-empty-text: #6e7681;
+  max-width: 560px;
+}
 
 .modal-dialog h3 { margin: 0 0 8px; color: #e6edf3; }
+
+.upload-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+  border: 1px dashed var(--upload-border);
+  border-radius: 8px;
+  background: var(--upload-bg);
+  color: var(--upload-text);
+  cursor: pointer;
+  margin: 12px 0;
+}
+
+.upload-picker:hover {
+  border-color: var(--upload-border-hover);
+  background: var(--upload-bg-hover);
+}
+
+.upload-picker span {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.upload-picker small {
+  font-size: 12px;
+  color: var(--upload-text-muted);
+}
+
+.upload-picker input { display: none; }
+
+.upload-empty {
+  padding: 10px;
+  margin-bottom: 12px;
+  color: var(--upload-empty-text);
+  font-size: 12px;
+  text-align: center;
+}
 
 .upload-file-list {
   max-height: 180px;
