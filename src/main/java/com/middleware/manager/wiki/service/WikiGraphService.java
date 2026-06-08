@@ -36,6 +36,9 @@ public class WikiGraphService {
     private static final double W_SAME_CATEGORY = 2.0;
     private static final double W_CO_OCCURRENCE = 1.5;
     private static final double W_TRANSITIVE_DEP = 2.5;
+    private static final Set<String> PUBLIC_GRAPH_STATUSES = Set.of("ACTIVE", "CONTRADICTED");
+    private static final Set<String> AUTHENTICATED_GRAPH_STATUSES = Set.of(
+            "DRAFT", "PENDING_REVIEW", "ACTIVE", "CONTRADICTED");
 
     public WikiGraphService(WikiPageMapper pageMapper, WikiLinkMapper linkMapper,
                             WikiPermissionService permissionService) {
@@ -60,12 +63,13 @@ public class WikiGraphService {
     }
 
     public Map<String, Object> buildGraph(Authentication authentication) {
+        boolean authenticated = isRealUser(authentication);
         List<WikiPage> pages = pageMapper.findAll();
-        if (authentication != null) {
+        if (authenticated) {
             pages = permissionService.filterVisiblePages(authentication, pages);
         }
         pages = pages.stream()
-                .filter(page -> "ACTIVE".equals(page.getStatus()) || "CONTRADICTED".equals(page.getStatus()))
+                .filter(page -> isGraphVisibleStatus(page, authenticated))
                 .limit(Math.max(1, maxNodes))
                 .collect(Collectors.toList());
         List<WikiLink> links = linkMapper.findAll();
@@ -245,6 +249,18 @@ public class WikiGraphService {
         result.put("communityCount", communityNames.size());
         result.put("communities", communityNames);
         return result;
+    }
+
+    private boolean isRealUser(Authentication authentication) {
+        return authentication != null
+                && authentication.isAuthenticated()
+                && !"anonymousUser".equals(authentication.getName());
+    }
+
+    private boolean isGraphVisibleStatus(WikiPage page, boolean authenticated) {
+        if (page == null) return false;
+        Set<String> allowedStatuses = authenticated ? AUTHENTICATED_GRAPH_STATUSES : PUBLIC_GRAPH_STATUSES;
+        return allowedStatuses.contains(page.getStatus());
     }
 
     private void addEdgeWeight(Graph<Long, DefaultWeightedEdge> graph, Map<String, Double> weights,
