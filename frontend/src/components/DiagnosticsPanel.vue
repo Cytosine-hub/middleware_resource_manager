@@ -469,6 +469,23 @@ async function sendMessage() {
 
   // 重试提示消息的索引（用于更新或移除）
   let retryMsgIdx = -1
+  const upsertProgress = (content) => {
+    const idx = messages.value.findIndex(msg => msg._agentProgress)
+    if (idx >= 0) {
+      messages.value[idx].content = content
+    } else {
+      messages.value.push({ role: 'assistant', content, _agentProgress: true })
+    }
+    scrollToBottom()
+  }
+  const clearProgress = () => {
+    const idx = messages.value.findIndex(msg => msg._agentProgress)
+    if (idx >= 0) messages.value.splice(idx, 1)
+  }
+  const compactText = (text, max = 160) => {
+    if (!text) return ''
+    return text.length > max ? `${text.slice(0, max)}...` : text
+  }
 
   try {
     const url = agentMode.value === 'ops' ? '/api/ops-agent/chat' : '/api/agent/chat'
@@ -520,10 +537,24 @@ async function sendMessage() {
           currentEvent.data = line.slice(5).trim()
         } else if (line === '' && currentEvent.data) {
           console.log('[SSE] event:', currentEvent.type, 'data:', currentEvent.data.substring(0, 100))
+          const eventType = currentEvent.type || ''
           const data = JSON.parse(currentEvent.data)
           currentEvent = { type: '', data: '' }
 
-          if (data.message) {
+          if (eventType === 'run_started') {
+            upsertProgress(data.skill ? `匹配排查 Skill：${data.skill}` : '正在规划排查步骤')
+          } else if (eventType === 'step_started') {
+            const toolLabel = data.toolName ? ` (${data.toolName})` : ''
+            upsertProgress(`正在执行：${data.stepName || '排查步骤'}${toolLabel}`)
+          } else if (eventType === 'tool_result') {
+            const status = data.success === false ? '失败' : '完成'
+            const summary = data.summary ? ` - ${compactText(data.summary)}` : ''
+            upsertProgress(`${status}：${data.stepName || data.toolName || '工具调用'}${summary}`)
+          } else if (eventType === 'completed') {
+            clearProgress()
+            await loadSessions()
+            return
+          } else if (data.message) {
             if (retryMsgIdx >= 0) {
               messages.value[retryMsgIdx].content = `⏳ ${data.message}`
             } else {
@@ -532,6 +563,7 @@ async function sendMessage() {
             }
             scrollToBottom()
           } else if (data.error) {
+            clearProgress()
             if (retryMsgIdx >= 0) {
               messages.value[retryMsgIdx].content = data.retryFailed
                 ? `⚠️ ${data.error}`
@@ -544,7 +576,8 @@ async function sendMessage() {
             }
             await loadSessions()
             return
-          } else {
+          } else if (eventType === 'result' || data.response || data.answer || data.content) {
+            clearProgress()
             if (retryMsgIdx >= 0) {
               messages.value.splice(retryMsgIdx, 1)
               retryMsgIdx = -1
@@ -574,15 +607,18 @@ async function sendMessage() {
     }
   } catch (error) {
     if (error.name === 'AbortError') {
+      clearProgress()
       if (retryMsgIdx >= 0) messages.value.splice(retryMsgIdx, 1)
       messages.value.push({ role: 'assistant', content: '*（已停止）*' })
     } else if (error.status === 503) {
+      clearProgress()
       if (retryMsgIdx >= 0) {
         messages.value[retryMsgIdx].content = `⚠️ ${error.message || '模型响应超时，请稍后再试'}`
       } else {
         messages.value.push({ role: 'assistant', content: `⚠️ ${error.message || '模型响应超时，请稍后再试'}` })
       }
     } else {
+      clearProgress()
       if (retryMsgIdx >= 0) messages.value.splice(retryMsgIdx, 1)
       messages.value.push({ role: 'assistant', content: `请求失败：${error.message || '未知错误'}` })
     }

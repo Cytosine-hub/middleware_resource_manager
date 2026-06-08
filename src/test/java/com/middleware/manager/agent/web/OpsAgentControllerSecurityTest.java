@@ -1,6 +1,7 @@
 package com.middleware.manager.agent.web;
 
 import com.middleware.manager.agent.service.AgentService;
+import com.middleware.manager.agent.service.AgentEvent;
 import com.middleware.manager.agent.skill.Skill;
 import com.middleware.manager.agent.skill.SkillLoader;
 import com.middleware.manager.domain.AdminAccount;
@@ -118,6 +119,17 @@ class OpsAgentControllerSecurityTest {
         @Override
         public Map<String, Object> chat(String userMessage, Map<String, String> context,
                                         Consumer<String> onRetry) {
+            return response();
+        }
+
+        @Override
+        public Map<String, Object> chat(String userMessage, Map<String, String> context,
+                                        Consumer<String> onRetry, Long sessionId, Long actorId,
+                                        Consumer<AgentEvent> onEvent) {
+            return response();
+        }
+
+        private Map<String, Object> response() {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("response", "ok");
             result.put("skill", null);

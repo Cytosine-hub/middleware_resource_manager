@@ -1,6 +1,7 @@
 package com.middleware.manager.agent.web;
 
 import com.middleware.manager.agent.service.AgentService;
+import com.middleware.manager.agent.service.AgentEvent;
 import com.middleware.manager.agent.skill.Skill;
 import com.middleware.manager.agent.skill.SkillLoader;
 import com.middleware.manager.constant.ErrorCode;
@@ -61,13 +62,14 @@ public class AgentController {
         sseExecutor.submit(() -> {
             try {
                 String message = requireMessage(req.getMessage());
+                Long actorId = resolveActorId(authentication);
                 // 创建或获取会话
                 Long sessionId = req.getSessionId();
                 ChatSession session;
                 if (sessionId != null) {
                     session = requireSessionForMode(sessionId, authentication, "ops");
                 } else {
-                    session = createNewSession(resolveActorId(authentication));
+                    session = createNewSession(actorId);
                 }
 
                 // 保存用户消息
@@ -84,7 +86,7 @@ public class AgentController {
                                 .name("retry")
                                 .data(Map.of("message", retryMsg)));
                     } catch (IOException ignored) {}
-                });
+                }, session.getId(), actorId, event -> sendAgentEvent(emitter, event));
 
                 // 保存助手消息
                 ChatMessage assistantMsg = new ChatMessage();
@@ -103,6 +105,7 @@ public class AgentController {
 
                 result.put("sessionId", session.getId());
                 emitter.send(SseEmitter.event().name("result").data(result));
+                emitter.send(SseEmitter.event().name("completed").data(Map.of("sessionId", session.getId())));
                 emitter.complete();
             } catch (Exception e) {
                 String msg = toClientError(e);
@@ -119,6 +122,14 @@ public class AgentController {
         emitter.onTimeout(emitter::complete);
         emitter.onError(t -> emitter.complete());
         return emitter;
+    }
+
+    private void sendAgentEvent(SseEmitter emitter, AgentEvent event) {
+        try {
+            emitter.send(SseEmitter.event().name(event.getType()).data(event.getPayload()));
+        } catch (IOException e) {
+            log.warn("Failed to send agent SSE event type={}: {}", event.getType(), e.getMessage());
+        }
     }
 
     private ChatSession createNewSession(Long createdBy) {

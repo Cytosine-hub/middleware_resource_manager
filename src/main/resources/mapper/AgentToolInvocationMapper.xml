@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.middleware.manager.agent.repository.AgentToolInvocationMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO agent_tool_invocations (
+            session_id, step_name, tool_name, request_json, response_json,
+            status, error_code, error_message, latency_ms, created_by, created_at
+        )
+        VALUES (
+            #{sessionId}, #{stepName}, #{toolName}, #{requestJson}, #{responseJson},
+            #{status}, #{errorCode}, #{errorMessage}, #{latencyMs}, #{createdBy}, COALESCE(#{createdAt}, NOW())
+        )
+    </insert>
+
+</mapper>

@@ -5,6 +5,8 @@ import com.middleware.manager.agent.model.ChatModel.Message;
 import com.middleware.manager.agent.skill.Skill;
 import com.middleware.manager.agent.skill.SkillLoader;
 import com.middleware.manager.agent.tool.Tool;
+import com.middleware.manager.agent.tool.ToolResult;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -34,12 +36,19 @@ public class AgentService {
     private final ChatModel chatModel;
     private final SkillLoader skillLoader;
     private final Map<String, Tool> toolMap;
+    private final ToolGateway toolGateway;
 
     public AgentService(ChatModel chatModel, SkillLoader skillLoader, List<Tool> tools) {
+        this(chatModel, skillLoader, tools, null);
+    }
+
+    @Autowired
+    public AgentService(ChatModel chatModel, SkillLoader skillLoader, List<Tool> tools, ToolGateway toolGateway) {
         this.chatModel = chatModel;
         this.skillLoader = skillLoader;
         this.toolMap = tools.stream()
                 .collect(Collectors.toMap(Tool::name, t -> t));
+        this.toolGateway = toolGateway;
     }
 
     public Map<String, Object> chat(String userMessage, Map<String, String> context) {
@@ -47,6 +56,11 @@ public class AgentService {
     }
 
     public Map<String, Object> chat(String userMessage, Map<String, String> context, Consumer<String> onRetry) {
+        return chat(userMessage, context, onRetry, null, null, null);
+    }
+
+    public Map<String, Object> chat(String userMessage, Map<String, String> context, Consumer<String> onRetry,
+                                    Long sessionId, Long actorId, Consumer<AgentEvent> onEvent) {
         log.info("[Agent] Received: {}", userMessage);
 
         // 1. Try to match a skill
@@ -58,9 +72,12 @@ public class AgentService {
         if (skill != null) {
             log.info("[Agent] Matched skill: {}", skill.getName());
             skillName = skill.getName();
-            response = executeSkill(skill, context != null ? context : new HashMap<>(), toolsUsed, onRetry);
+            emit(onEvent, AgentEvent.of("run_started", Map.of("skill", skillName)));
+            response = executeSkill(skill, context != null ? context : new HashMap<>(), toolsUsed,
+                    onRetry, sessionId, actorId, onEvent);
         } else {
             // 2. General reasoning with tool awareness
+            emit(onEvent, AgentEvent.of("run_started", Map.of("skill", "")));
             response = generalChat(userMessage, onRetry);
         }
 
@@ -71,33 +88,42 @@ public class AgentService {
         return result;
     }
 
-    private String executeSkill(Skill skill, Map<String, String> context, List<String> toolsUsed, Consumer<String> onRetry) {
+    private String executeSkill(Skill skill, Map<String, String> context, List<String> toolsUsed,
+                                Consumer<String> onRetry, Long sessionId, Long actorId,
+                                Consumer<AgentEvent> onEvent) {
         StringBuilder accumulated = new StringBuilder();
         accumulated.append("正在执行排查流程：").append(skill.getName()).append("\n\n");
 
         for (Skill.Step step : skill.getSteps()) {
             if (step.getTool() != null) {
+                String stepName = step.getDescription() != null ? step.getDescription() : step.getTool();
                 Tool tool = toolMap.get(step.getTool());
                 if (tool == null) {
-                    accumulated.append("[").append(step.getDescription()).append("] 工具不存在: ").append(step.getTool()).append("\n\n");
+                    accumulated.append("[").append(stepName).append("] 工具不存在: ").append(step.getTool()).append("\n\n");
+                    emit(onEvent, AgentEvent.toolResult(stepName, step.getTool(), false,
+                            "工具不存在: " + step.getTool(), 0L));
                     continue;
                 }
                 Map<String, Object> args = resolveArgs(step.getArgs(), context);
                 List<String> missing = findUnresolved(args);
                 if (!missing.isEmpty()) {
-                    accumulated.append("[").append(step.getDescription()).append("] 缺少必要参数：")
+                    accumulated.append("[").append(stepName).append("] 缺少必要参数：")
                             .append(String.join(", ", missing)).append("，请补充后重试\n\n");
+                    emit(onEvent, AgentEvent.toolResult(stepName, step.getTool(), false,
+                            "缺少必要参数：" + String.join(", ", missing), 0L));
                     continue;
                 }
-                log.info("[Agent] Calling tool: {} with args: {}", step.getTool(), args);
-                try {
-                    String result = tool.call(args);
-                    toolsUsed.add(step.getTool());
-                    accumulated.append("[").append(step.getDescription()).append("]\n").append(result).append("\n\n");
-                } catch (Exception e) {
-                    accumulated.append("[").append(step.getDescription()).append("] 调用失败: ").append(e.getMessage()).append("\n\n");
-                }
+                log.info("[Agent] Calling tool: {} argKeys={}", step.getTool(), args.keySet());
+                emit(onEvent, AgentEvent.stepStarted(stepName, step.getTool()));
+                ToolResult result = callTool(tool, args, sessionId, actorId, stepName);
+                toolsUsed.add(step.getTool());
+                accumulated.append("[").append(stepName).append("]\n")
+                        .append(result.toPromptText()).append("\n\n");
+                emit(onEvent, AgentEvent.toolResult(stepName, step.getTool(), result.isSuccess(),
+                        result.getSummary(), result.getLatencyMs()));
             } else if (step.getPrompt() != null) {
+                String stepName = step.getDescription() != null ? step.getDescription() : "综合分析";
+                emit(onEvent, AgentEvent.stepStarted(stepName, "llm"));
                 String prompt = accumulated + "\n" + resolveTemplate(step.getPrompt(), context);
                 List<Message> messages = List.of(
                         Message.system("你是线上问题排查专家。根据以下数据综合分析，给出根因和修复建议。"),
@@ -112,6 +138,22 @@ public class AgentService {
                 Message.user(accumulated.toString())
         );
         return chatModel.generate(messages, onRetry);
+    }
+
+    private ToolResult callTool(Tool tool, Map<String, Object> args, Long sessionId, Long actorId, String stepName) {
+        if (toolGateway != null) {
+            return toolGateway.call(tool, args, sessionId, actorId, stepName);
+        }
+        long start = System.currentTimeMillis();
+        try {
+            String output = tool.call(args);
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("text", output);
+            return ToolResult.success(output, data, System.currentTimeMillis() - start);
+        } catch (Exception e) {
+            return ToolResult.failure("TOOL_EXECUTION_FAILED", "工具执行失败，请查看后台日志",
+                    System.currentTimeMillis() - start);
+        }
     }
 
     private String generalChat(String userMessage, Consumer<String> onRetry) {
@@ -154,6 +196,12 @@ public class AgentService {
             result = result.replace("{{" + entry.getKey() + "}}", entry.getValue());
         }
         return result;
+    }
+
+    private void emit(Consumer<AgentEvent> sink, AgentEvent event) {
+        if (sink != null) {
+            sink.accept(event);
+        }
     }
 
     public List<Map<String, Object>> listTools() {
