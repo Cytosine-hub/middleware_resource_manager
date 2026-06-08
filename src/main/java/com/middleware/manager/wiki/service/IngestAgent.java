@@ -374,7 +374,6 @@ public class IngestAgent {
         messages.add(new SystemMessage("你是一个严格的知识编译器。只输出要求的格式，不要包含任何其他文字。"));
         messages.add(new UserMessage(prompt));
 
-        Exception lastException = null;
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 ChatResponse response = chatModel.chat(messages);
@@ -382,7 +381,6 @@ public class IngestAgent {
                 return aiMessage != null ? aiMessage.text() : "";
             } catch (Exception e) {
                 log.warn("LLM call failed (attempt {}/{}): {}", attempt, MAX_RETRIES, e.getMessage());
-                lastException = e;
                 if (attempt < MAX_RETRIES) {
                     try { Thread.sleep(attempt * 2000L); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
                 }

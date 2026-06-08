@@ -21,13 +21,11 @@
 
 | backend/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar | 107M |
 | backend/application.yml.example | 4.0K |
-| frontend/favicon.svg | 4.0K |
 | frontend/index.html | 4.0K |
-| frontend/assets/index-CiXlGcCh.js | 644K |
-| frontend/assets/index-DZyOvTZI.css | 108K |
-| db/upgrade-v1.0.9.sql | 4.0K |
-| docs/startup-manual.md | 8.0K |
-| docs/production-deploy.md |  12K |
+| frontend/favicon.svg | 4.0K |
+| frontend/assets/index-CmRNLiWq.css | 108K |
+| frontend/assets/index-DhOa06YH.js | 648K |
+| db/upgrade-v1.0.9.sql | 8.0K |
 
 ---
 

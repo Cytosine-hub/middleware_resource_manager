@@ -1,10 +1,6 @@
 package com.middleware.manager.wiki.web;
 
 import com.middleware.manager.constant.ErrorCode;
-import com.middleware.manager.exception.BusinessException;
-import com.middleware.manager.exception.NotFoundException;
-import com.middleware.manager.constant.ErrorMessages;
-
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.middleware.manager.domain.AdminAccount;
@@ -43,7 +39,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.InputStream;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.*;
