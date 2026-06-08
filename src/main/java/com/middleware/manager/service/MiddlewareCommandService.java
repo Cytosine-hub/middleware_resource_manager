@@ -56,6 +56,8 @@ public class MiddlewareCommandService {
         MiddlewareCommand cmd = new MiddlewareCommand();
         cmd.setSoftwareTypeId(type.getId());
         cmd.setCommandFormat(commandFormat);
+        cmd.setName(briefDescription);
+        cmd.setCommand(commandFormat);
         cmd.setBriefDescription(briefDescription);
         cmd.setDetailedDescription(detailedDescription);
         cmd.setCategories(categories);
@@ -80,6 +82,8 @@ public class MiddlewareCommandService {
             cmd.setSoftwareTypeId(type.getId());
         }
         cmd.setCommandFormat(commandFormat);
+        cmd.setName(briefDescription);
+        cmd.setCommand(commandFormat);
         cmd.setBriefDescription(briefDescription);
         cmd.setDetailedDescription(detailedDescription);
         cmd.setCategories(categories);

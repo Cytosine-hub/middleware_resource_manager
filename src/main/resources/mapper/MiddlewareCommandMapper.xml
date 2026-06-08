@@ -12,7 +12,7 @@
     <select id="findDistinctSoftwareTypeIds" resultType="long">SELECT DISTINCT software_type_id FROM middleware_commands</select>
     <select id="findById" resultType="MiddlewareCommand">SELECT * FROM middleware_commands WHERE id = #{id}</select>
     <select id="count" resultType="long">SELECT COUNT(*) FROM middleware_commands</select>
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id">INSERT INTO middleware_commands (software_type_id, command_format, brief_description, detailed_description, categories, sort_order) VALUES (#{softwareTypeId}, #{commandFormat}, #{briefDescription}, #{detailedDescription}, #{categories}, #{sortOrder})</insert>
-    <update id="update">UPDATE middleware_commands SET software_type_id=#{softwareTypeId}, command_format=#{commandFormat}, brief_description=#{briefDescription}, detailed_description=#{detailedDescription}, categories=#{categories}, sort_order=#{sortOrder} WHERE id=#{id}</update>
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">INSERT INTO middleware_commands (software_type_id, name, command, command_format, brief_description, detailed_description, categories, sort_order) VALUES (#{softwareTypeId}, #{name}, #{command}, #{commandFormat}, #{briefDescription}, #{detailedDescription}, #{categories}, #{sortOrder})</insert>
+    <update id="update">UPDATE middleware_commands SET software_type_id=#{softwareTypeId}, name=#{name}, command=#{command}, command_format=#{commandFormat}, brief_description=#{briefDescription}, detailed_description=#{detailedDescription}, categories=#{categories}, sort_order=#{sortOrder} WHERE id=#{id}</update>
     <delete id="deleteById">DELETE FROM middleware_commands WHERE id=#{id}</delete>
 </mapper>

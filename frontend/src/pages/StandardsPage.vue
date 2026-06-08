@@ -122,8 +122,6 @@
                   <span v-if="!standard.relatedDocuments?.length" class="muted">暂无已发布关联手册</span>
                 </div>
               </div>
-              <span>{{ standard.softwareVersion || '-' }}</span>
-              <span>{{ formatDate(standard.publishedAt || standard.updatedAt) }}</span>
             </article>
           </div>
         </section>

@@ -11,6 +11,8 @@ public class MiddlewareCommand {
 
     private Long id;
     private Long softwareTypeId;
+    private String name;
+    private String command;
     private String commandFormat;
     private String briefDescription;
     private String detailedDescription;

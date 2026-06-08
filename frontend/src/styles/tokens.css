@@ -47,6 +47,7 @@
   --color-primary-ring: rgba(var(--color-primary-rgb), 0.12);
 
   /* === 间距 === */
+  --space-2xs: 2px;
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 12px;
@@ -97,4 +98,13 @@
   --z-dropdown: 100;
   --z-modal: 200;
   --z-toast: 300;
+
+  /* === 布局 === */
+  --card-min-width: 25%;
+  --grid-columns: 4;
+  --grid-columns-sm: 2;
+  --grid-rows: 3;
+  --grid-rows-sm: 2;
+  --card-height: 200px;
+  --dropdown-max-height: 200px;
 }
