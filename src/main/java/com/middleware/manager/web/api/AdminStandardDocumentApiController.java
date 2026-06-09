@@ -70,8 +70,10 @@ public class AdminStandardDocumentApiController {
 
     @PostMapping("/upload")
     public DocumentUploadResponse upload(@RequestParam("file") MultipartFile file,
-                                         @RequestParam(value = "convertToMarkdown", defaultValue = "true") boolean convertToMarkdown) {
-        return conversionService.convert(file, convertToMarkdown);
+                                         @RequestParam(value = "convertToMarkdown", defaultValue = "true") boolean convertToMarkdown,
+                                         @RequestParam(value = "title", required = false) String title,
+                                         @RequestParam(value = "documentType", defaultValue = StandardDocumentService.DOC_TYPE_MANUAL) String documentType) {
+        return conversionService.convertAndCreate(file, convertToMarkdown, title, documentType);
     }
 
     @PutMapping("/{id}")

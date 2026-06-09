@@ -30,7 +30,7 @@ public class StandardDocumentService {
     private static final String STATUS_MODIFYING = "MODIFYING";
     private static final String STATUS_PENDING = "PENDING";
     private static final String DOC_TYPE_STANDARD = "STANDARD";
-    private static final String DOC_TYPE_MANUAL = "MANUAL";
+    public static final String DOC_TYPE_MANUAL = "MANUAL";
     private static final String DOC_TYPE_ARTICLE = "ARTICLE";
 
     private final StandardDocumentMapper standardDocumentMapper;

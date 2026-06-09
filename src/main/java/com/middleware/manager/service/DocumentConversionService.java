@@ -3,8 +3,10 @@ package com.middleware.manager.service;
 import com.middleware.manager.config.StorageProperties;
 import com.middleware.manager.constant.ErrorCode;
 import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.domain.StandardDocument;
 import com.middleware.manager.exception.BusinessException;
 import com.middleware.manager.web.api.dto.DocumentUploadResponse;
+import com.middleware.manager.web.api.dto.StandardDocumentRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xwpf.usermodel.*;
 import org.apache.tika.metadata.Metadata;
@@ -42,7 +44,9 @@ public class DocumentConversionService {
     private static final Set<String> WORD_EXTENSIONS = new HashSet<>(Arrays.asList(".doc", ".docx"));
     private static final Set<String> MARKDOWN_EXTENSIONS = new HashSet<>(Arrays.asList(".md", ".markdown"));
     private static final String IMAGE_URL_PREFIX = "/files/images/";
+    private static final String IMAGES_SUBDIR = "images";
     private static final String DOCUMENTS_SUBDIR = "documents";
+    private static final String EMPTY_CONTENT = "";
     private static final int MAX_FILE_SIZE = 20 * 1024 * 1024;
     private static final int MAX_TITLE_LENGTH = 50;
     private static final int MAX_LIST_INDENT = 3;
@@ -52,12 +56,18 @@ public class DocumentConversionService {
     private final Path imageStoragePath;
     private final Path documentsStoragePath;
     private final AutoDetectParser tikaParser;
+    private final StandardDocumentService documentService;
 
-    public DocumentConversionService(StorageProperties storageProperties) throws IOException {
-        this.imageStoragePath = Paths.get(storageProperties.getLocation(), "images").toAbsolutePath().normalize();
+    public DocumentConversionService(StorageProperties storageProperties, StandardDocumentService documentService) {
+        this.imageStoragePath = Paths.get(storageProperties.getLocation(), IMAGES_SUBDIR).toAbsolutePath().normalize();
         this.documentsStoragePath = Paths.get(storageProperties.getLocation(), DOCUMENTS_SUBDIR).toAbsolutePath().normalize();
-        Files.createDirectories(this.imageStoragePath);
-        Files.createDirectories(this.documentsStoragePath);
+        this.documentService = documentService;
+        try {
+            Files.createDirectories(this.imageStoragePath);
+            Files.createDirectories(this.documentsStoragePath);
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, ErrorMessages.DOCUMENT_CONVERT_FAILED);
+        }
         this.tikaParser = new AutoDetectParser();
     }
 
@@ -89,6 +99,35 @@ public class DocumentConversionService {
             log.error("文档转换失败 fileName={}", fileName, e);
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, ErrorMessages.DOCUMENT_CONVERT_FAILED);
         }
+    }
+
+    /**
+     * 转换文档并在不转换模式下自动创建文档记录
+     * @param file 上传的文件
+     * @param convertToMarkdown 是否转换为 Markdown
+     * @param title 文档标题（可选，从文件提取）
+     * @param documentType 文档类型
+     * @return 转换结果；不转换时包含 documentId
+     */
+    public DocumentUploadResponse convertAndCreate(MultipartFile file, boolean convertToMarkdown,
+                                                    String title, String documentType) {
+        DocumentUploadResponse result = convert(file, convertToMarkdown);
+
+        if (!convertToMarkdown) {
+            // 不转换：创建文档记录，保存原始文件引用
+            StandardDocumentRequest request = new StandardDocumentRequest();
+            request.setTitle(title != null && !title.isBlank() ? title : result.getTitle());
+            request.setDocumentType(documentType);
+            request.setContent(result.getContent() != null ? result.getContent() : EMPTY_CONTENT);
+            StandardDocument doc = documentService.create(request);
+            doc.setStoredFileName(result.getStoredFileName());
+            doc.setOriginalFileName(result.getOriginalFileName());
+            documentService.save(doc);
+            result.setDocumentId(doc.getId());
+            log.info("上传文档已创建（未转换） documentId={}, fileName={}", doc.getId(), file.getOriginalFilename());
+        }
+
+        return result;
     }
 
     /** Markdown 文件：直接读取 */
@@ -162,7 +201,7 @@ public class DocumentConversionService {
             tikaParser.parse(is, handler, metadata);
         } catch (Exception e) {
             log.error("DOC 文件解析失败 fileName={}", originalName, e);
-            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "文档解析失败");
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, ErrorMessages.DOCUMENT_PARSE_FAILED);
         }
         String content = handler.toString();
         String title = content.length() > MAX_TITLE_LENGTH ? content.substring(0, MAX_TITLE_LENGTH).trim() : content;
