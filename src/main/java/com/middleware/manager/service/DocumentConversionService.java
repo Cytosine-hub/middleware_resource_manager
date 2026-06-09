@@ -401,7 +401,18 @@ public class DocumentConversionService {
         Metadata metadata = new Metadata();
         try (InputStream is = Files.newInputStream(filePath)) {
             tikaParser.parse(is, handler, metadata);
-            return handler.toString();
+            String html = handler.toString();
+            // 提取 body 内容，避免嵌套完整 HTML 文档
+            String bodyOpenTag = "<body>";
+            String bodyCloseTag = "</body>";
+            int bodyStart = html.indexOf(bodyOpenTag);
+            int bodyEnd = html.indexOf(bodyCloseTag);
+            if (bodyStart >= 0 && bodyEnd > bodyStart) {
+                return html.substring(bodyStart + bodyOpenTag.length(), bodyEnd);
+            }
+            return html;
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("文档预览渲染失败 storedFileName={}", storedFileName, e);
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, ErrorMessages.DOCUMENT_PARSE_FAILED);
