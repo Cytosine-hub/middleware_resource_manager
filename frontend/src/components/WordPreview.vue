@@ -7,7 +7,9 @@
       </div>
       <div class="toolbar-actions">
         <button class="ghost" @click="$emit('back')">返回列表</button>
+        <button class="ghost" :disabled="replacing" @click="replaceFileInput.click()">{{ replacing ? '上传中...' : '替换文档' }}</button>
         <button class="ghost" @click="openInfoDialog">编辑信息</button>
+        <input ref="replaceFileInput" type="file" accept=".doc,.docx" class="hidden-file-input" @change="replaceDocument" />
       </div>
     </div>
 
@@ -95,7 +97,7 @@ const props = defineProps({
   notify: { type: Function, default: (msg, type) => type === 'error' ? alert(msg) : null }
 })
 
-const emit = defineEmits(['back', 'saved'])
+const emit = defineEmits(['back', 'saved', 'replaced'])
 
 const docxContainer = ref(null)
 const htmlContent = ref('')
@@ -105,6 +107,12 @@ const saving = ref(false)
 const saveError = ref('')
 const showInfoDialog = ref(false)
 const parameters = ref([])
+const replacing = ref(false)
+const replaceFileInput = ref(null)
+
+// 本地副本：替换文档后更新，避免重新挂载组件
+const effectiveStoredFileName = ref(props.storedFileName)
+const effectiveOriginalFileName = ref(props.originalFileName)
 
 const docInfo = reactive({ title: props.initialTitle || '', id: props.docId || null })
 
@@ -113,7 +121,7 @@ const infoForm = reactive({
   category: '', software: '', relatedStandardDocumentId: ''
 })
 
-const isDocx = computed(() => props.storedFileName.toLowerCase().endsWith('.docx'))
+const isDocx = computed(() => effectiveStoredFileName.value.toLowerCase().endsWith('.docx'))
 
 const softwareOptions = computed(() => {
   if (!infoForm.category) return []
@@ -184,8 +192,8 @@ async function saveInfo() {
       summary: infoForm.summary || '',
       relatedStandardDocumentId: infoForm.relatedStandardDocumentId,
       content: props.initialContent || '',
-      storedFileName: props.storedFileName,
-      originalFileName: props.originalFileName
+      storedFileName: effectiveStoredFileName.value,
+      originalFileName: effectiveOriginalFileName.value
     }
     let result
     if (docInfo.id) {
@@ -239,7 +247,7 @@ async function loadPreview() {
   try {
     if (isDocx.value) {
       const { renderAsync } = await import('docx-preview')
-      const blob = await fetchBinary(`/api/admin/standard-documents/raw?storedFileName=${encodeURIComponent(props.storedFileName)}`)
+      const blob = await fetchBinary(`/api/admin/standard-documents/raw?storedFileName=${encodeURIComponent(effectiveStoredFileName.value)}`)
       // 先关 loading 让容器 DOM 渲染出来，再调 renderAsync
       loading.value = false
       await nextTick()
@@ -248,7 +256,7 @@ async function loadPreview() {
         applyParamsToDOM(docxContainer.value, parameters.value)
       }
     } else {
-      const result = await request(`/api/admin/standard-documents/preview?storedFileName=${encodeURIComponent(props.storedFileName)}`)
+      const result = await request(`/api/admin/standard-documents/preview?storedFileName=${encodeURIComponent(effectiveStoredFileName.value)}`)
       htmlContent.value = applyParams(result.html || `<p>${MSG_EMPTY_DOC}</p>`, parameters.value)
     }
   } catch (e) {
@@ -256,6 +264,44 @@ async function loadPreview() {
     props.notify(error.value, 'error')
   } finally {
     loading.value = false
+  }
+}
+
+async function replaceDocument(event) {
+  const file = event.target.files[0]
+  if (!file) return
+  replacing.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('convertToMarkdown', 'false')
+    const result = await request('/api/admin/standard-documents/upload', { method: 'POST', body: fd })
+    if (!result.storedFileName) { props.notify('上传失败，未获得文件名', 'error'); return }
+    effectiveStoredFileName.value = result.storedFileName
+    effectiveOriginalFileName.value = result.originalFileName || file.name
+    if (docInfo.id) {
+      if (!infoForm.relatedStandardDocumentId) await loadExistingDocInfo()
+      await request(`/api/admin/standard-documents/${docInfo.id}`, {
+        method: 'PUT',
+        body: {
+          title: infoForm.title || docInfo.title,
+          documentType: infoForm.documentType || 'MANUAL',
+          summary: infoForm.summary || '',
+          relatedStandardDocumentId: infoForm.relatedStandardDocumentId,
+          content: '',
+          storedFileName: result.storedFileName,
+          originalFileName: result.originalFileName || file.name
+        }
+      })
+    }
+    emit('replaced', { storedFileName: result.storedFileName, originalFileName: result.originalFileName || file.name })
+    props.notify('文档已替换，正在刷新预览...', 'success')
+    await loadPreview()
+  } catch (e) {
+    props.notify(e.message || '替换失败', 'error')
+  } finally {
+    replacing.value = false
+    event.target.value = ''
   }
 }
 
@@ -342,4 +388,5 @@ onMounted(async () => {
 .meta-dialog-grid input:focus, .meta-dialog-grid select:focus { outline: none; border-color: var(--color-primary); }
 .meta-error { color: var(--color-danger); font-size: var(--text-sm); margin: 0 0 var(--space-md); }
 .meta-dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); }
+.hidden-file-input { display: none; }
 </style>

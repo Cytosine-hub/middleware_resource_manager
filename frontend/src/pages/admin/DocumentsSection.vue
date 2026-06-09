@@ -52,7 +52,7 @@
                 <button v-else class="ghost" @click="$emit('preview', doc)">预览</button>
                 <button v-if="doc.canEdit && !doc.storedFileName" class="ghost" @click="$emit('edit', doc)">编辑</button>
                 <button v-if="doc.availableActions?.includes('submit-review')" class="ghost" @click="$emit('submitReview', doc)">提交审核</button>
-                <button v-if="doc.availableActions?.includes('start-modify') && !doc.storedFileName" class="ghost" @click="$emit('startModify', doc)">开始修改</button>
+                <button v-if="doc.availableActions?.includes('start-modify')" class="ghost" @click="$emit('startModify', doc)">开始修改</button>
                 <button v-if="doc.availableActions?.includes('cancel-modify')" class="ghost" @click="$emit('cancelModify', doc)">取消修改</button>
                 <button v-if="doc.status === 'PUBLISHED'" class="ghost" @click="$emit('revisionHistory', doc)">修订历史</button>
                 <button v-if="doc.availableActions?.includes('delete')" class="ghost danger" @click="$emit('delete', doc)">删除</button>

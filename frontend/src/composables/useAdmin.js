@@ -399,8 +399,23 @@ export function useAdmin(auth, notify, confirm) {
     catch (error) { notify(error.message || '提交审核失败', 'error') }
   }
   async function startModify(doc) {
-    try { await request(`${standardApiBase()}/${doc.id}/start-modify`, { method: 'POST' }); notify('已进入修改状态', 'success'); await loadStandardDocuments() }
-    catch (error) { notify(error.message || '操作失败', 'error') }
+    try {
+      const updated = await request(`${standardApiBase()}/${doc.id}/start-modify`, { method: 'POST' })
+      notify('已进入修改状态', 'success')
+      await loadStandardDocuments()
+      if (doc.storedFileName) {
+        uploadResult.value = {
+          storedFileName: updated.storedFileName || doc.storedFileName,
+          docId: updated.id || doc.id,
+          isNewDoc: false,
+          title: updated.title || doc.title,
+          originalFileName: updated.originalFileName || doc.originalFileName,
+          content: updated.content || doc.content || '',
+          relatedStandardDocumentId: updated.relatedStandardDocumentId || doc.relatedStandardDocumentId || null
+        }
+        window.location.hash = HASH_WORD_PREVIEW
+      }
+    } catch (error) { notify(error.message || '操作失败', 'error') }
   }
   function cancelModify(doc) { confirm(`确认取消修改「${displayTitle(doc)}」？内容将恢复到上次发布版本。`, () => doCancelModify(doc)) }
   async function doCancelModify(doc) {

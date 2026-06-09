@@ -59,6 +59,7 @@
         :notify="notify"
         @back="onDocumentEditorCancel"
         @saved="onWordPreviewSaved"
+        @replaced="onWordPreviewReplaced"
       />
       <template v-else>
       <HomePage
@@ -484,6 +485,12 @@ function openUploadAndEdit() {
 function onWordPreviewSaved() {
   loadStandardDocuments()
   onDocumentEditorCancel()
+}
+
+function onWordPreviewReplaced({ storedFileName, originalFileName }) {
+  if (uploadResult.value) {
+    uploadResult.value = { ...uploadResult.value, storedFileName, originalFileName }
+  }
 }
 
 
