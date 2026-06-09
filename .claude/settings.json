@@ -10,7 +10,7 @@
           },
           {
             "type": "prompt",
-            "prompt": "检查刚修改的文件 $FILE_PATH 是否符合开发规范（docs/development-standards.md）。重点检查：1) 后端：是否使用 BusinessException 而非原生异常，是否有魔法值，日志是否参数化 2) 前端：是否使用设计令牌，组件是否用 script setup。如有违规，列出具体问题和修复建议。",
+            "prompt": "判断文件 $FILE_PATH 的类型，然后按规则检查：\n\n- 如果是 .css / .xml / .yml / .yaml / .properties / .sql / .md / .json / .sh 文件 → 直接回复「无需检查」，不要做任何分析。\n- 如果是 .java 文件 → 只检查：① 是否用 throw new IllegalArgumentException / RuntimeException 抛异常（应改为 BusinessException）② 日志是否用字符串拼接（应改为参数化）③ 是否有明显魔法值（硬编码中文错误消息、重复出现的数字常量）。注意：DTO 的字段名、方法名、注解参数不算魔法值；catch 里的 log.error(msg, ex) 是正确写法无需修改。\n- 如果是 .vue / .js / .ts 文件 → 只检查：① 是否有硬编码 hex 颜色（#xxxxxx），rgba/hsla 是可接受的 ② catch 块是否显示 error.toString() 或堆栈（应改为 error.message）③ 组件是否缺少 <script setup>（仅限新增的 .vue 组件，已有组件不报告）。注意：CSS 设计令牌只在组件 <style> 内检查，外部 styles.css 里的写法不算违规。\n\n只报告在当前这次修改中新引入的问题，不要扫描整个文件的历史代码。若无新问题，回复「检查通过」。",
             "continueOnBlock": true
           }
         ]
