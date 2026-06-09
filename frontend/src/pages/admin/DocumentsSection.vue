@@ -46,8 +46,9 @@
               </td>
               <td>{{ getStandardLabel(doc.relatedStandardDocumentId) }}</td>
               <td class="row-actions">
-                <button class="ghost" @click="$emit('preview', doc)">预览</button>
-                <button v-if="doc.canEdit" class="ghost" @click="$emit('edit', doc)">编辑</button>
+                <button v-if="doc.storedFileName" class="ghost" @click="$emit('previewWord', doc)">预览</button>
+                <button v-else class="ghost" @click="$emit('preview', doc)">预览</button>
+                <button v-if="doc.canEdit && !doc.storedFileName" class="ghost" @click="$emit('edit', doc)">编辑</button>
                 <button v-if="doc.availableActions?.includes('submit-review')" class="ghost" @click="$emit('submitReview', doc)">提交审核</button>
                 <button v-if="doc.availableActions?.includes('start-modify')" class="ghost" @click="$emit('startModify', doc)">开始修改</button>
                 <button v-if="doc.availableActions?.includes('cancel-modify')" class="ghost" @click="$emit('cancelModify', doc)">取消修改</button>
@@ -76,7 +77,7 @@ defineProps({
   pageInfo: { type: Object, default: () => ({}) },
   getStandardLabel: { type: Function, default: () => '' }
 })
-defineEmits(['applyFilters', 'preview', 'edit', 'submitReview', 'startModify', 'cancelModify', 'revisionHistory', 'delete', 'changePage', 'uploadDoc'])
+defineEmits(['applyFilters', 'preview', 'previewWord', 'edit', 'submitReview', 'startModify', 'cancelModify', 'revisionHistory', 'delete', 'changePage', 'uploadDoc'])
 
 function displayTitle(doc) {
   if (!doc) return ''

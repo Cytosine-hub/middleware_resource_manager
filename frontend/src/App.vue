@@ -216,6 +216,7 @@
                 :documents="pagedMaintenanceDocuments" :filters="maintenanceDocumentFilters"
                 :pageInfo="maintenanceDocumentPageComputed" :getStandardLabel="getStandardLabel"
                 @applyFilters="applyMaintenanceDocumentFilters" @preview="previewDocument"
+                @previewWord="previewWordDocument"
                 @edit="(doc) => goDocumentEditorEdit(doc.id)" @submitReview="submitForReview"
                 @startModify="startModify" @cancelModify="cancelModify"
                 @revisionHistory="(doc) => openRevisionHistory(doc, doc.documentType || 'MANUAL')"
@@ -485,6 +486,10 @@ function previewDocument(document) {
   } else {
     standardParameters.value = []
   }
+}
+function previewWordDocument(doc) {
+  uploadResult.value = { storedFileName: doc.storedFileName, title: doc.title, originalFileName: doc.originalFileName }
+  window.location.hash = HASH_WORD_PREVIEW
 }
 function closePreviewDocument() { selectedPreviewDocument.value = null }
 
