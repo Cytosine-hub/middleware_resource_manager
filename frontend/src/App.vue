@@ -350,7 +350,8 @@ function syncRoute() {
   if (!hash || hash === '/' || hash === '/home') next = { name: 'home', token: null }
   else if (hash.startsWith('/admin/document-editor')) {
     const m = hash.match(/^\/admin\/document-editor\/(\d+)$/); next = { name: 'documentEditor', documentId: m ? m[1] : null }
-  } else if (hash.startsWith('/admin')) next = { name: 'admin', token: null }
+  } else if (hash.startsWith(ROUTE_WORD_PREVIEW)) next = { name: 'wordPreview' }
+  else if (hash.startsWith('/admin')) next = { name: 'admin', token: null }
   else if (hash === '/forum/mine') next = { name: 'forumMine', postId: null }
   else if (hash.startsWith('/forum/new')) next = { name: 'forumEditor', postId: null }
   else if (/^\/forum\/edit\/(\d+)$/.test(hash)) next = { name: 'forumEditor', postId: hash.match(/\d+/)[0] }
@@ -447,8 +448,10 @@ function openDetail(token) {
   window.location.hash = `#/downloads/${token}`
 }
 
-const HASH_WORD_PREVIEW = '#/admin/word-preview'
-const HASH_DOCUMENT_EDITOR = '#/admin/document-editor'
+const ROUTE_WORD_PREVIEW = '/admin/word-preview'
+const ROUTE_DOCUMENT_EDITOR = '/admin/document-editor'
+const HASH_WORD_PREVIEW = '#' + ROUTE_WORD_PREVIEW
+const HASH_DOCUMENT_EDITOR = '#' + ROUTE_DOCUMENT_EDITOR
 
 function goDocumentEditor() {
   window.location.hash = HASH_DOCUMENT_EDITOR
