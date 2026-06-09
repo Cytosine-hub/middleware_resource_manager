@@ -20,8 +20,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -74,7 +77,20 @@ public class ReviewService {
     public ReviewResponse getReviewDetail(Long id) {
         ReviewRecord record = getRecord(id);
         ReviewResponse response = ReviewResponse.from(record);
-        response.setDiff(computeDiff(record));
+
+        if (DOC_TYPE_PARAMETER_STANDARD.equals(record.getDocumentType())) {
+            // 参数标准审核：填充结构化元数据和参数列表
+            ParameterStandard ps = parameterStandardService.get(record.getDocumentId());
+            response.setMetadata(buildMetadataJson(ps));
+
+            List<StandardParameter> currentParams = parameterMapper
+                    .findByParameterStandardIdAndActiveTrueOrderByParamTypeAscCodeAsc(ps.getId());
+            response.setCurrentParameters(serializeParameterList(currentParams));
+            response.setPreviousParameters(parseParametersFromContent(record.getPreviousContent()));
+        } else {
+            // 文档审核：保持现有 diff 逻辑
+            response.setDiff(computeDiff(record));
+        }
         return response;
     }
 
@@ -253,6 +269,68 @@ public class ReviewService {
             }
         }
         return sb.toString();
+    }
+
+    private String buildMetadataJson(ParameterStandard ps) {
+        return String.format("{\"category\":\"%s\",\"software\":\"%s\",\"softwareVersion\":\"%s\",\"code\":\"%s\"}",
+                escapeJson(ps.getCategory()),
+                escapeJson(ps.getSoftware()),
+                escapeJson(ps.getSoftwareVersion()),
+                escapeJson(ps.getCode()));
+    }
+
+    private List<Map<String, Object>> serializeParameterList(List<StandardParameter> params) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (StandardParameter p : params) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", p.getId());
+            map.put("code", p.getCode());
+            map.put("name", p.getName());
+            map.put("value", p.getValue());
+            map.put("paramType", p.getParamType());
+            map.put("valueRange", p.getValueRange());
+            map.put("description", p.getDescription());
+            map.put("deploymentStandard", p.isDeploymentStandard());
+            map.put("active", p.isActive());
+            list.add(map);
+        }
+        return list;
+    }
+
+    /** 从 previousContent 的 Markdown 表格中解析参数列表 */
+    private List<Map<String, Object>> parseParametersFromContent(String content) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        if (content == null) return list;
+        String[] lines = content.split("\\n");
+        boolean inTable = false;
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (!trimmed.startsWith("|")) {
+                if (inTable) break;
+                continue;
+            }
+            // 跳过表头行和分隔行
+            if (trimmed.contains("---")) continue;
+            if (trimmed.contains("参数编码")) { inTable = true; continue; }
+            if (!inTable) continue;
+
+            String[] cells = trimmed.split("\\|");
+            // 格式: | code | value | paramType | valueRange |
+            if (cells.length >= 5) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("code", cells[1].trim());
+                map.put("value", cells[2].trim());
+                map.put("paramType", cells[3].trim());
+                map.put("valueRange", cells[4].trim());
+                list.add(map);
+            }
+        }
+        return list;
+    }
+
+    private String escapeJson(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private String truncate(String s, int max) {

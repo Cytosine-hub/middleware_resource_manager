@@ -512,10 +512,40 @@ export function useAdmin(auth, notify, confirm) {
   async function openReviewDetail(record) {
     try {
       const detail = await request(`/api/admin/reviews/${record.id}`)
+      // 解析元数据 JSON
+      if (detail.metadata) {
+        try { detail._metadata = JSON.parse(detail.metadata) } catch { detail._metadata = null }
+      }
+      // 计算参数差异
+      if (detail.documentType === 'PARAMETER_STANDARD') {
+        detail._paramDiff = computeParamDiff(detail.previousParameters || [], detail.currentParameters || [])
+      }
       selectedReview.value = detail; selectedReviewDiff.value = detail.diff || '无差异信息'; reviewComment.value = ''
     } catch (e) { notify(e.message || '加载审核详情失败', 'error') }
   }
   function closeReviewDetail() { selectedReview.value = null }
+  /** 计算参数列表差异：对比 previous 和 current 参数，返回带状态的列表 */
+  function computeParamDiff(previous, current) {
+    const prevMap = new Map(previous.map(p => [p.code, p]))
+    const currMap = new Map(current.map(p => [p.code, p]))
+    const result = []
+    for (const [code, curr] of currMap) {
+      const prev = prevMap.get(code)
+      if (!prev) {
+        result.push({ ...curr, _status: 'added' })
+      } else if (prev.value !== curr.value || prev.paramType !== curr.paramType || prev.valueRange !== curr.valueRange) {
+        result.push({ ...curr, _status: 'changed', _prevValue: prev.value, _prevParamType: prev.paramType, _prevValueRange: prev.valueRange })
+      } else {
+        result.push({ ...curr, _status: 'unchanged' })
+      }
+    }
+    for (const [code, prev] of prevMap) {
+      if (!currMap.has(code)) {
+        result.push({ ...prev, _status: 'removed' })
+      }
+    }
+    return result
+  }
   async function reviewApprove(record) {
     try {
       await request(`/api/admin/reviews/${record.id}/approve`, { method: 'POST', body: { comment: reviewComment.value || null } })

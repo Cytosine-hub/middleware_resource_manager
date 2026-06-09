@@ -1,9 +1,12 @@
 package com.middleware.manager.web.api.dto;
 
 import com.middleware.manager.domain.ReviewRecord;
+import com.middleware.manager.domain.ReviewStatus;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
 @Data
 public class ReviewResponse {
@@ -25,6 +28,15 @@ public class ReviewResponse {
     private String diff;
     private String currentContent;
 
+    /** 元数据信息（JSON）：category, software, softwareVersion, code */
+    private String metadata;
+
+    /** 当前参数列表（参数标准审核时填充） */
+    private List<Map<String, Object>> currentParameters;
+
+    /** 上一版参数列表（参数标准审核且有 previousContent 时填充） */
+    private List<Map<String, Object>> previousParameters;
+
     public static ReviewResponse from(ReviewRecord record) {
         ReviewResponse r = new ReviewResponse();
         r.setId(record.getId());
@@ -37,21 +49,12 @@ public class ReviewResponse {
         r.setSubmitterUsername(record.getSubmitterUsername());
         r.setSubmitterDisplayName(record.getSubmitterDisplayName());
         r.setStatus(record.getStatus());
-        r.setStatusLabel(computeStatusLabel(record.getStatus()));
+        r.setStatusLabel(ReviewStatus.labelOf(record.getStatus()));
         r.setSubmittedAt(record.getSubmittedAt());
         r.setReviewerUsername(record.getReviewerUsername());
         r.setReviewedAt(record.getReviewedAt());
         r.setReviewComment(record.getReviewComment());
         r.setCurrentContent(record.getCurrentContent());
         return r;
-    }
-
-    private static String computeStatusLabel(String status) {
-        switch (status) {
-            case "PENDING": return "待审核";
-            case "APPROVED": return "已通过";
-            case "REJECTED": return "已驳回";
-            default: return status;
-        }
     }
 }

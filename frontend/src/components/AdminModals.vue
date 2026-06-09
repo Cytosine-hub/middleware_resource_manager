@@ -248,21 +248,104 @@
     </div>
   </BaseModal>
 
-  <BaseModal :modelValue="!!admin.selectedReview.value" @update:modelValue="admin.closeReviewDetail()" :title="admin.selectedReview.value?.documentType === 'PARAMETER_STANDARD' ? [admin.selectedReview.value?.category, admin.selectedReview.value?.software].filter(Boolean).join(' / ') : (admin.selectedReview.value?.documentTitle || '')" width="700px">
+  <BaseModal :modelValue="!!admin.selectedReview.value" @update:modelValue="admin.closeReviewDetail()" :title="admin.selectedReview.value?.documentType === 'PARAMETER_STANDARD' ? [admin.selectedReview.value?.category, admin.selectedReview.value?.software].filter(Boolean).join(' / ') : (admin.selectedReview.value?.documentTitle || '')" width="780px">
+    <!-- 状态行 -->
     <p class="review-status-line">
       <span :class="['status', admin.reviewStatusClass(admin.selectedReview.value?.status)]">{{ admin.selectedReview.value?.statusLabel }}</span>
       V{{ admin.selectedReview.value?.documentVersion || '-' }} · {{ admin.selectedReview.value?.category || '-' }} / {{ admin.selectedReview.value?.software || '-' }}
     </p>
+    <!-- 审核信息 -->
     <div class="review-meta">
       <p>提交人：{{ admin.selectedReview.value?.submitterDisplayName || admin.selectedReview.value?.submitterUsername }} · 提交时间：{{ admin.formatTime(admin.selectedReview.value?.submittedAt) }}</p>
       <p v-if="admin.selectedReview.value?.reviewerUsername">审核人：{{ admin.selectedReview.value?.reviewerUsername }} · 审核时间：{{ admin.formatTime(admin.selectedReview.value?.reviewedAt) }}</p>
       <p v-if="admin.selectedReview.value?.reviewComment">审核意见：{{ admin.selectedReview.value?.reviewComment }}</p>
     </div>
-    <div class="diff-view">
-      <h4>版本差异对比</h4>
-      <pre class="diff-content"><template v-for="(line, idx) in diffLines" :key="idx"><span :class="['diff-line', line.startsWith('+') ? 'diff-line-add' : line.startsWith('-') ? 'diff-line-del' : line.startsWith('@@') ? 'diff-line-info' : '' ]">{{ line }}</span>
-</template></pre>
+
+    <!-- 元数据信息（参数标准审核） -->
+    <div v-if="admin.selectedReview.value?.documentType === 'PARAMETER_STANDARD' && admin.selectedReview.value?._metadata" class="review-section">
+      <h4 class="review-section-title">📋 元数据信息</h4>
+      <div class="review-metadata-grid">
+        <div class="review-meta-item">
+          <span class="review-meta-label">分类</span>
+          <span class="review-meta-value">{{ admin.selectedReview.value._metadata.category || '-' }}</span>
+        </div>
+        <div class="review-meta-item">
+          <span class="review-meta-label">软件</span>
+          <span class="review-meta-value">{{ admin.selectedReview.value._metadata.software || '-' }}</span>
+        </div>
+        <div class="review-meta-item">
+          <span class="review-meta-label">软件版本</span>
+          <span class="review-meta-value">{{ admin.selectedReview.value._metadata.softwareVersion || '-' }}</span>
+        </div>
+        <div class="review-meta-item">
+          <span class="review-meta-label">编码</span>
+          <span class="review-meta-value">{{ admin.selectedReview.value._metadata.code || '-' }}</span>
+        </div>
+      </div>
     </div>
+
+    <!-- 参数变更表格（参数标准审核） -->
+    <div v-if="admin.selectedReview.value?.documentType === 'PARAMETER_STANDARD'" class="review-section">
+      <h4 class="review-section-title">📊 参数变更</h4>
+      <div v-if="admin.selectedReview.value?._paramDiff?.length" class="review-params-table-wrap">
+        <table class="review-params-table">
+          <thead>
+            <tr>
+              <th class="col-status">状态</th>
+              <th>参数编码</th>
+              <th>参数值</th>
+              <th>参数类型</th>
+              <th>取值范围</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="param in admin.selectedReview.value._paramDiff" :key="param.code" :class="['review-param-row', 'status-' + param._status]">
+              <td class="col-status">
+                <span :class="['review-param-badge', param._status]">
+                  {{ { added: '新增', removed: '删除', changed: '修改', unchanged: '无变更' }[param._status] }}
+                </span>
+              </td>
+              <td>{{ param.code }}</td>
+              <td>
+                <template v-if="param._status === 'changed'">
+                  <span class="review-old-value">{{ param._prevValue }}</span>
+                  <span class="review-arrow">→</span>
+                  <span class="review-new-value">{{ param.value }}</span>
+                </template>
+                <template v-else>{{ param.value }}</template>
+              </td>
+              <td>
+                <template v-if="param._status === 'changed' && param._prevParamType !== param.paramType">
+                  <span class="review-old-value">{{ param._prevParamType }}</span>
+                  <span class="review-arrow">→</span>
+                  <span class="review-new-value">{{ param.paramType }}</span>
+                </template>
+                <template v-else>{{ param.paramType || '-' }}</template>
+              </td>
+              <td>
+                <template v-if="param._status === 'changed' && param._prevValueRange !== param.valueRange">
+                  <span class="review-old-value">{{ param._prevValueRange }}</span>
+                  <span class="review-arrow">→</span>
+                  <span class="review-new-value">{{ param.valueRange }}</span>
+                </template>
+                <template v-else>{{ param.valueRange || '-' }}</template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-else class="muted review-empty-hint">暂无参数</p>
+    </div>
+
+    <!-- 内容差异（文档审核） -->
+    <div v-if="admin.selectedReview.value?.documentType !== 'PARAMETER_STANDARD'" class="review-section">
+      <h4 class="review-section-title">📝 内容差异</h4>
+      <div class="diff-view">
+        <pre class="diff-content"><template v-for="(line, idx) in diffLines" :key="idx"><span :class="['diff-line', line.startsWith('+') ? 'diff-line-add' : line.startsWith('-') ? 'diff-line-del' : line.startsWith('@@') ? 'diff-line-info' : '' ]">{{ line }}</span>
+</template></pre>
+      </div>
+    </div>
+
     <template v-if="admin.selectedReview.value?.status === 'PENDING' && (isSysAdmin || (isCategoryAdmin && managedCategory === admin.selectedReview.value?.category))" #footer>
       <div class="review-footer">
         <input v-model.trim="admin.reviewComment.value" maxlength="1000" placeholder="审核意见（可选）" class="review-comment-input" />
@@ -381,4 +464,51 @@ function computeDiff(oldText, newText) {
 .review-comment-input:focus { border-color: var(--color-primary); outline: none; box-shadow: 0 0 0 3px var(--color-primary-ring); }
 .review-footer-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); }
 .review-status-line { margin: 0 0 var(--space-md); color: var(--color-text-secondary); }
+
+/* 审核详情分层样式 */
+.review-section { margin-bottom: var(--space-lg); }
+.review-section-title {
+  margin: 0 0 var(--space-md); font-size: var(--text-base); font-weight: 600;
+  color: var(--color-text); padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+.review-metadata-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm) var(--space-lg);
+  padding: var(--space-md); background: var(--color-bg-secondary); border-radius: var(--radius-md);
+}
+.review-meta-item { display: flex; align-items: center; gap: var(--space-sm); }
+.review-meta-label { font-size: var(--text-sm); color: var(--color-text-tertiary); flex-shrink: 0; min-width: 60px; }
+.review-meta-value { font-size: var(--text-sm); color: var(--color-text); font-weight: 500; }
+.review-empty-hint { padding: var(--space-md) 0; }
+
+/* 参数变更表格 */
+.review-params-table-wrap {
+  border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: auto;
+  max-height: 40vh;
+}
+.review-params-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.review-params-table thead { position: sticky; top: 0; z-index: 1; }
+.review-params-table th {
+  background: var(--color-bg-tertiary); padding: var(--space-sm) var(--space-md);
+  text-align: left; font-weight: 600; color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border); white-space: nowrap;
+}
+.review-params-table td {
+  padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+.review-params-table .col-status { width: 70px; text-align: center; }
+.review-param-row.status-added { background: var(--color-success-light); }
+.review-param-row.status-removed { background: var(--color-danger-light); }
+.review-param-row.status-changed { background: var(--color-warning-light, #fffbeb); }
+.review-param-badge {
+  display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: var(--text-xs); font-weight: 500;
+}
+.review-param-badge.added { background: var(--color-success); color: #fff; }
+.review-param-badge.removed { background: var(--color-danger); color: #fff; }
+.review-param-badge.changed { background: var(--color-warning, #f59e0b); color: #fff; }
+.review-param-badge.unchanged { background: var(--color-bg-tertiary); color: var(--color-text-tertiary); }
+.review-old-value { color: var(--color-danger); text-decoration: line-through; font-size: var(--text-xs); }
+.review-new-value { color: var(--color-success); font-weight: 500; }
+.review-arrow { margin: 0 var(--space-xs); color: var(--color-text-tertiary); font-size: var(--text-xs); }
 </style>
