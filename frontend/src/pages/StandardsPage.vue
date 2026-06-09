@@ -43,16 +43,18 @@
 
         <div v-if="loading" class="loading-panel"><div class="spinner"></div><p>加载中...</p></div>
 
-        <!-- 参数标准详情：显示关联文档和参数 -->
+        <!-- 参数标准详情：显示标准文档和参数 -->
         <template v-if="!selectedDoc">
-          <div v-if="relatedDocs.length > 0" class="doc-nav-list">
-            <h3>关联手册</h3>
-            <a v-for="doc in relatedDocs" :key="doc.id" class="doc-nav-link" href="#" @click.prevent="openDocDetail(doc.id)">
-              <span class="doc-nav-title">{{ doc.title }}</span>
-              <span class="doc-nav-meta muted">v{{ doc.version || '-' }}</span>
-            </a>
+          <div v-if="relatedDocs.length > 0" class="doc-card-list">
+            <h3 class="doc-card-list-title">标准文档</h3>
+            <div class="doc-card-grid">
+              <a v-for="doc in relatedDocs" :key="doc.id" class="doc-card" href="#" @click.prevent="openDocDetail(doc.id)">
+                <span class="doc-card-title">{{ doc.title }}</span>
+                <span class="doc-card-meta muted">v{{ doc.version || '-' }}</span>
+              </a>
+            </div>
           </div>
-          <div v-else-if="!loading" class="muted" style="padding:16px 0">暂无关联手册</div>
+          <div v-else-if="!loading" class="muted doc-empty-hint">暂无标准文档</div>
 
           <div v-if="params.length > 0" class="public-params-section">
             <div class="public-params-header">
@@ -123,7 +125,7 @@
                     class="ghost related-document-link" @click="openDocDetail(doc.id)">
                     {{ doc.title }}
                   </button>
-                  <span v-if="!standard.relatedDocuments?.length" class="muted">暂无已发布关联手册</span>
+                  <span v-if="!standard.relatedDocuments?.length" class="muted">暂无已发布标准文档</span>
                 </div>
               </div>
             </article>
@@ -314,4 +316,29 @@ onBeforeUnmount(destroyScrollSpy)
 }
 .tree-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-empty { padding: var(--space-lg); color: var(--color-text-tertiary); font-size: var(--text-sm); }
+
+/* 标准文档卡片列表 */
+.doc-card-list { margin-bottom: var(--space-lg); }
+.doc-card-list-title {
+  margin: 0 0 var(--space-md); font-size: var(--text-lg); font-weight: 600;
+  color: var(--color-text); padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+.doc-card-grid {
+  display: flex; flex-wrap: wrap; gap: var(--space-md);
+}
+.doc-card {
+  display: flex; flex-direction: column; gap: var(--space-xs);
+  padding: var(--space-md) var(--space-lg); border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border); background: var(--color-bg);
+  cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s;
+  min-width: 200px; flex: 0 0 auto; max-width: 300px;
+  text-decoration: none; color: var(--color-text);
+}
+.doc-card:hover {
+  border-color: var(--color-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.doc-card-title { font-size: var(--text-base); font-weight: 500; color: var(--color-primary); }
+.doc-card-meta { font-size: var(--text-xs); color: var(--color-text-tertiary); }
+.doc-empty-hint { padding: var(--space-md) 0; }
 </style>
