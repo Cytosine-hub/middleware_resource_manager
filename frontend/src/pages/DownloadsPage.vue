@@ -100,6 +100,7 @@ onMounted(loadData)
 
 <style scoped>
 .release-list-container {
+  --grid-offset: 320px; /* toolbar + pagination + gaps */
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
@@ -107,7 +108,7 @@ onMounted(loadData)
 .release-list-container :deep(.release-grid) {
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(3, 1fr);
-  height: calc(100vh - 220px);
+  height: calc(100vh - var(--grid-offset));
 }
 .release-list-container :deep(.release-card) {
   min-height: unset;
