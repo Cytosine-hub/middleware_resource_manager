@@ -1660,6 +1660,11 @@ td.row-actions {
   background: var(--color-warning-light);
 }
 
+.status.warn {
+  color: var(--color-warning);
+  background: var(--color-warning-light);
+}
+
 .status.draft {
   color: var(--color-text-secondary);
   background: var(--color-bg-tertiary);
