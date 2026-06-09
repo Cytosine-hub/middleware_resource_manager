@@ -150,7 +150,7 @@
     <div class="form-grid single">
       <label class="file-field">选择文件
         <span class="file-control">
-          <input type="file" accept=".doc,.docx,.md,.markdown" @change="onUploadFileChange" required />
+          <input type="file" accept=".doc,.docx,.md,.markdown,.pdf" @change="onUploadFileChange" required />
           <span class="file-button">选择文件</span>
           <span class="file-name">{{ admin.uploadFile.value?.name || '支持 .doc、.docx、.md 格式' }}</span>
         </span>
@@ -360,10 +360,10 @@
     <!-- 内容差异（文档审核） -->
     <div v-if="admin.selectedReview.value?.documentType !== 'PARAMETER_STANDARD'" class="review-section">
       <h4 class="review-section-title">📝 内容差异</h4>
-      <!-- Word 文档：不显示内容对比，提供预览入口 -->
+      <!-- Word/PDF 文档：不显示内容对比，提供预览入口 -->
       <template v-if="admin.selectedReview.value?.storedFileName">
-        <p class="muted review-empty-hint">Word 文档不支持在线内容对比。</p>
-        <BaseButton variant="ghost" @click="admin.previewWordDocFromReview(admin.selectedReview.value.documentId)">预览 Word 文档</BaseButton>
+        <p class="muted review-empty-hint">该文档不支持在线内容对比。</p>
+        <BaseButton variant="ghost" @click="admin.previewWordDocFromReview(admin.selectedReview.value.documentId)">预览文档</BaseButton>
       </template>
       <!-- Markdown 文档：显示差异 -->
       <div v-else class="diff-view">

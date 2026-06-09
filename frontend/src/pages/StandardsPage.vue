@@ -89,8 +89,14 @@
 
         <!-- 标准文档详情：显示文档内容 -->
         <template v-else>
+          <!-- PDF 文档 -->
+          <template v-if="isPdfDoc">
+            <div v-if="wordLoading" class="loading-panel"><div class="spinner"></div><p>加载中...</p></div>
+            <div v-else-if="wordError" class="error-hint muted">{{ wordError }}</div>
+            <iframe v-else :src="pdfPublicUrl" class="public-pdf-frame" />
+          </template>
           <!-- Word 文档 -->
-          <template v-if="selectedDoc.storedFileName">
+          <template v-else-if="selectedDoc.storedFileName">
             <div v-if="wordLoading" class="loading-panel"><div class="spinner"></div><p>加载中...</p></div>
             <div v-else-if="wordError" class="error-hint muted">{{ wordError }}</div>
             <template v-else>
@@ -180,6 +186,12 @@ const docWordHtml = ref('')
 
 const isDocxDoc = computed(() =>
   selectedDoc.value?.storedFileName?.toLowerCase().endsWith('.docx') ?? false
+)
+const isPdfDoc = computed(() =>
+  selectedDoc.value?.storedFileName?.toLowerCase().endsWith('.pdf') ?? false
+)
+const pdfPublicUrl = computed(() =>
+  isPdfDoc.value ? `/api/public/standards/raw?storedFileName=${encodeURIComponent(selectedDoc.value.storedFileName)}` : ''
 )
 
 let scrollHandler = null
@@ -314,12 +326,14 @@ async function openDocFromList(standard, docId) {
   await openDocDetail(docId)
 }
 
-// Watch selectedDoc: 当切换到 Word 文档时渲染
+// Watch selectedDoc: 当切换到 Word/PDF 文档时渲染
 watch(selectedDoc, async (doc) => {
   wordLoading.value = false
   wordError.value = ''
   docWordHtml.value = ''
   if (!doc?.storedFileName) return
+  // PDF 由 iframe :src 直接加载，无需预取
+  if (doc.storedFileName.toLowerCase().endsWith('.pdf')) return
   wordLoading.value = true
   try {
     if (doc.storedFileName.toLowerCase().endsWith('.docx')) {
@@ -405,6 +419,10 @@ onBeforeUnmount(destroyScrollSpy)
 .public-word-container {
   background: var(--color-bg-secondary);
   border-radius: var(--radius-md); min-height: 400px;
+}
+.public-pdf-frame {
+  width: 100%; height: calc(100vh - 220px); min-height: 500px; border: none;
+  border-radius: var(--radius-md); background: var(--color-bg-secondary);
 }
 .public-word-container :deep(.docx-render) {
   background: #fff; margin: 0 auto; box-shadow: 0 2px 8px rgba(0,0,0,0.08);

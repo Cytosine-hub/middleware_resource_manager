@@ -45,6 +45,7 @@ public class DocumentConversionService {
 
     private static final String DOCX_EXTENSION = ".docx";
     private static final String DOC_EXTENSION = ".doc";
+    private static final String PDF_EXTENSION = ".pdf";
     private static final String DEFAULT_IMAGE_EXT = ".png";
     private static final Set<String> WORD_EXTENSIONS = new HashSet<>(Arrays.asList(DOC_EXTENSION, DOCX_EXTENSION));
     private static final Set<String> MARKDOWN_EXTENSIONS = new HashSet<>(Arrays.asList(".md", ".markdown"));
@@ -100,6 +101,9 @@ public class DocumentConversionService {
             } else if (DOC_EXTENSION.equals(ext)) {
                 // .doc 格式始终保存原始文件，不支持 Markdown 转换
                 return convertDoc(file);
+            } else if (PDF_EXTENSION.equals(ext)) {
+                // PDF 格式：直接保存原始文件，不做任何转换
+                return convertPdf(file);
             } else {
                 throw new BusinessException(ErrorCode.PARAM_INVALID, ErrorMessages.DOCUMENT_FORMAT_NOT_SUPPORTED);
             }
@@ -112,6 +116,13 @@ public class DocumentConversionService {
     }
 
 
+
+    /** PDF 文件：直接保存原始文件，内容置空（由前端 iframe 渲染） */
+    private DocumentUploadResponse convertPdf(MultipartFile file) {
+        String storedName = saveOriginalFile(file);
+        log.info("PDF 文件已保存 fileName={}, storedName={}", file.getOriginalFilename(), storedName);
+        return new DocumentUploadResponse("", "", Collections.emptyList(), storedName, file.getOriginalFilename());
+    }
 
     /** Markdown 文件：直接读取 */
     private DocumentUploadResponse convertMarkdown(MultipartFile file) {
@@ -350,7 +361,7 @@ public class DocumentConversionService {
             throw new BusinessException(ErrorCode.FILE_TOO_LARGE, ErrorMessages.DOCUMENT_FILE_TOO_LARGE);
         }
         String ext = getExtension(file.getOriginalFilename());
-        if (!WORD_EXTENSIONS.contains(ext) && !MARKDOWN_EXTENSIONS.contains(ext)) {
+        if (!WORD_EXTENSIONS.contains(ext) && !MARKDOWN_EXTENSIONS.contains(ext) && !PDF_EXTENSION.equals(ext)) {
             throw new BusinessException(ErrorCode.PARAM_INVALID, ErrorMessages.DOCUMENT_FORMAT_NOT_SUPPORTED);
         }
     }

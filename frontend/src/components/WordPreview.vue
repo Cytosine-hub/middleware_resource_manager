@@ -9,15 +9,17 @@
         <button class="ghost" @click="$emit('back')">返回列表</button>
         <button class="ghost" :disabled="replacing" @click="replaceFileInput.click()">{{ replacing ? '上传中...' : '替换文档' }}</button>
         <button class="ghost" @click="openInfoDialog">编辑信息</button>
-        <input ref="replaceFileInput" type="file" accept=".doc,.docx" class="hidden-file-input" @change="replaceDocument" />
+        <input ref="replaceFileInput" type="file" accept=".doc,.docx,.pdf" class="hidden-file-input" @change="replaceDocument" />
       </div>
     </div>
 
     <div v-if="loading" class="preview-loading">加载中...</div>
     <div v-else-if="error" class="preview-error">{{ error }}</div>
     <template v-else>
+      <!-- pdf: iframe 渲染 -->
+      <iframe v-if="isPdf" :src="pdfBlobUrl" class="preview-body pdf-frame" />
       <!-- docx: docx-preview 渲染 -->
-      <div v-if="isDocx" ref="docxContainer" class="preview-body docx-container"></div>
+      <div v-else-if="isDocx" ref="docxContainer" class="preview-body docx-container"></div>
       <!-- doc: Tika HTML 渲染 -->
       <div v-else class="preview-body word-html-content" v-html="htmlContent"></div>
     </template>
@@ -68,7 +70,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, nextTick } from 'vue'
+import { computed, onMounted, onBeforeUnmount, reactive, ref, nextTick } from 'vue'
 import { request, fetchBinary } from '../api'
 
 const DOCX_RENDER_OPTIONS = {
@@ -122,6 +124,8 @@ const infoForm = reactive({
 })
 
 const isDocx = computed(() => effectiveStoredFileName.value.toLowerCase().endsWith('.docx'))
+const isPdf = computed(() => effectiveStoredFileName.value.toLowerCase().endsWith('.pdf'))
+const pdfBlobUrl = ref('')
 
 const softwareOptions = computed(() => {
   if (!infoForm.category) return []
@@ -245,7 +249,11 @@ async function loadPreview() {
   loading.value = true
   error.value = ''
   try {
-    if (isDocx.value) {
+    if (isPdf.value) {
+      const blob = await fetchBinary(`/api/admin/standard-documents/raw?storedFileName=${encodeURIComponent(effectiveStoredFileName.value)}`)
+      if (pdfBlobUrl.value) URL.revokeObjectURL(pdfBlobUrl.value)
+      pdfBlobUrl.value = URL.createObjectURL(blob)
+    } else if (isDocx.value) {
       const { renderAsync } = await import('docx-preview')
       const blob = await fetchBinary(`/api/admin/standard-documents/raw?storedFileName=${encodeURIComponent(effectiveStoredFileName.value)}`)
       // 先关 loading 让容器 DOM 渲染出来，再调 renderAsync
@@ -305,6 +313,10 @@ async function replaceDocument(event) {
   }
 }
 
+onBeforeUnmount(() => {
+  if (pdfBlobUrl.value) URL.revokeObjectURL(pdfBlobUrl.value)
+})
+
 onMounted(async () => {
   await loadParameters()
   await loadPreview()
@@ -347,6 +359,9 @@ onMounted(async () => {
 .preview-body {
   flex: 1; overflow-y: auto; padding: 24px 32px;
   line-height: 1.85; font-size: var(--text-base);
+}
+.pdf-frame {
+  flex: 1; border: none; background: var(--color-bg-secondary);
 }
 .docx-container {
   flex: 1; overflow-y: auto; padding: 0;

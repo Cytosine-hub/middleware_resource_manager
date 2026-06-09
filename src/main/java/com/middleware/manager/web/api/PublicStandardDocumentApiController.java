@@ -35,8 +35,10 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/public/standards")
 public class PublicStandardDocumentApiController {
     private static final String DOCX_EXT = "docx";
+    private static final String PDF_EXT = "pdf";
     private static final MediaType DOCX_MEDIA_TYPE =
             MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    private static final MediaType PDF_MEDIA_TYPE = MediaType.APPLICATION_PDF;
 
     private final StandardDocumentService service;
     private final DocumentConversionService conversionService;
@@ -55,7 +57,9 @@ public class PublicStandardDocumentApiController {
         Resource resource = new PathResource(filePath);
         int dot = storedFileName.lastIndexOf('.');
         String ext = dot >= 0 ? storedFileName.substring(dot + 1).toLowerCase() : "";
-        MediaType mediaType = DOCX_EXT.equals(ext) ? DOCX_MEDIA_TYPE : MediaType.APPLICATION_OCTET_STREAM;
+        MediaType mediaType = DOCX_EXT.equals(ext) ? DOCX_MEDIA_TYPE
+                : PDF_EXT.equals(ext) ? PDF_MEDIA_TYPE
+                : MediaType.APPLICATION_OCTET_STREAM;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(mediaType);
         headers.setContentDisposition(ContentDisposition.inline().filename(storedFileName).build());

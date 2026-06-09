@@ -40,7 +40,7 @@
             <tr v-for="doc in documents" :key="doc.id">
               <td>{{ displayTitle(doc) }}</td>
               <td>{{ doc.documentType === 'ARTICLE' ? '文章' : '手册' }}</td>
-              <td>{{ doc.storedFileName ? 'Word' : 'Markdown' }}</td>
+              <td>{{ doc.storedFileName?.toLowerCase().endsWith('.pdf') ? 'PDF' : doc.storedFileName ? 'Word' : 'Markdown' }}</td>
               <td>V{{ doc.version || '-' }}</td>
               <td>
                 <span :class="['status', doc.pendingReviewRecordId ? 'warn' : statusClass(doc.status)]">{{ doc.statusLabel || statusLabel(doc.status) }}</span>
