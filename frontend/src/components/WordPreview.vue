@@ -69,6 +69,18 @@
 import { computed, onMounted, reactive, ref, nextTick } from 'vue'
 import { request, fetchBinary } from '../api'
 
+const DOCX_RENDER_OPTIONS = {
+  className: 'docx-render',
+  inWrapper: false,
+  ignoreWidth: false,
+  ignoreHeight: false,
+  ignoreFonts: false,
+  breakPages: true,
+  useBase64URL: true
+}
+const MSG_EMPTY_DOC = '文档内容为空'
+const MSG_LOAD_FAILED = '加载文档预览失败'
+
 const props = defineProps({
   storedFileName: { type: String, required: true },
   docId: { type: [String, Number], default: null },
@@ -76,6 +88,7 @@ const props = defineProps({
   initialContent: { type: String, default: '' },
   initialTitle: { type: String, default: '' },
   originalFileName: { type: String, default: '' },
+  relatedStandardDocumentId: { type: [String, Number], default: null },
   softwareTypeCategories: { type: Array, default: () => [] },
   softwareTypes: { type: Array, default: () => [] },
   standardDocumentOptions: { type: Array, default: () => [] },
@@ -91,6 +104,7 @@ const error = ref('')
 const saving = ref(false)
 const saveError = ref('')
 const showInfoDialog = ref(false)
+const parameters = ref([])
 
 const docInfo = reactive({ title: props.initialTitle || '', id: props.docId || null })
 
@@ -191,6 +205,34 @@ async function saveInfo() {
   }
 }
 
+function applyParams(text, params) {
+  let result = text
+  for (const p of params) {
+    if (p.active !== false) result = result.split(`{{${p.code}}}`).join(p.value || '')
+  }
+  return result
+}
+
+function applyParamsToDOM(container, params) {
+  if (!container || !params.length) return
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+  let node
+  while ((node = walker.nextNode())) {
+    node.textContent = applyParams(node.textContent, params)
+  }
+}
+
+async function loadParameters() {
+  if (!props.relatedStandardDocumentId) return
+  try {
+    parameters.value = await request(
+      `/api/admin/standard-parameters?parameterStandardId=${props.relatedStandardDocumentId}`
+    )
+  } catch {
+    parameters.value = []
+  }
+}
+
 async function loadPreview() {
   loading.value = true
   error.value = ''
@@ -198,24 +240,19 @@ async function loadPreview() {
     if (isDocx.value) {
       const { renderAsync } = await import('docx-preview')
       const blob = await fetchBinary(`/api/admin/standard-documents/raw?storedFileName=${encodeURIComponent(props.storedFileName)}`)
+      // 先关 loading 让容器 DOM 渲染出来，再调 renderAsync
+      loading.value = false
       await nextTick()
       if (docxContainer.value) {
-        await renderAsync(blob, docxContainer.value, null, {
-          className: 'docx-render',
-          inWrapper: false,
-          ignoreWidth: false,
-          ignoreHeight: false,
-          ignoreFonts: false,
-          breakPages: true,
-          useBase64URL: true
-        })
+        await renderAsync(blob, docxContainer.value, null, DOCX_RENDER_OPTIONS)
+        applyParamsToDOM(docxContainer.value, parameters.value)
       }
     } else {
       const result = await request(`/api/admin/standard-documents/preview?storedFileName=${encodeURIComponent(props.storedFileName)}`)
-      htmlContent.value = result.html || '<p>文档内容为空</p>'
+      htmlContent.value = applyParams(result.html || `<p>${MSG_EMPTY_DOC}</p>`, parameters.value)
     }
   } catch (e) {
-    error.value = e.message || '加载文档预览失败'
+    error.value = e.message || MSG_LOAD_FAILED
     props.notify(error.value, 'error')
   } finally {
     loading.value = false
@@ -223,6 +260,7 @@ async function loadPreview() {
 }
 
 onMounted(async () => {
+  await loadParameters()
   await loadPreview()
   if (props.isNewDoc) {
     infoForm.title = props.initialTitle || ''
