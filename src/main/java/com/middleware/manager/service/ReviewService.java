@@ -90,6 +90,13 @@ public class ReviewService {
         } else {
             // 文档审核：保持现有 diff 逻辑
             response.setDiff(computeDiff(record));
+            // 标准文档审核：填充 storedFileName（供前端判断是否为 Word 文档）
+            try {
+                StandardDocument doc = documentService.get(record.getDocumentId());
+                response.setStoredFileName(doc.getStoredFileName());
+            } catch (NotFoundException e) {
+                log.debug("获取文档 storedFileName 失败 documentId={}", record.getDocumentId(), e);
+            }
         }
         return response;
     }

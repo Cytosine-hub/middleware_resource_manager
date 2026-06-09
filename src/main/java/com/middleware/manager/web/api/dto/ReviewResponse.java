@@ -37,6 +37,12 @@ public class ReviewResponse {
     /** 上一版参数列表（参数标准审核且有 previousContent 时填充） */
     private List<Map<String, Object>> previousParameters;
 
+    /** Word 文档的存储文件名（标准文档审核时，若为 Word 文档则填充） */
+    private String storedFileName;
+
+    public String getStoredFileName() { return storedFileName; }
+    public void setStoredFileName(String storedFileName) { this.storedFileName = storedFileName; }
+
     public static ReviewResponse from(ReviewRecord record) {
         ReviewResponse r = new ReviewResponse();
         r.setId(record.getId());

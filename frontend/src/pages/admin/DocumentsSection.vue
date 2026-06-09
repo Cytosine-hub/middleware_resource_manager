@@ -29,6 +29,7 @@
             <tr>
               <th>标题</th>
               <th>类型</th>
+              <th>格式</th>
               <th>版本</th>
               <th>状态</th>
               <th>关联标准</th>
@@ -39,9 +40,10 @@
             <tr v-for="doc in documents" :key="doc.id">
               <td>{{ displayTitle(doc) }}</td>
               <td>{{ doc.documentType === 'ARTICLE' ? '文章' : '手册' }}</td>
+              <td>{{ doc.storedFileName ? 'Word' : 'Markdown' }}</td>
               <td>V{{ doc.version || '-' }}</td>
               <td>
-                <span :class="['status', statusClass(doc.status)]">{{ statusLabel(doc.status) }}</span>
+                <span :class="['status', doc.pendingReviewRecordId ? 'warn' : statusClass(doc.status)]">{{ doc.statusLabel || statusLabel(doc.status) }}</span>
                 <span v-if="doc.reviewComment" class="review-hint" :title="doc.reviewComment">（审核意见）</span>
               </td>
               <td>{{ getStandardLabel(doc.relatedStandardDocumentId) }}</td>
@@ -50,14 +52,14 @@
                 <button v-else class="ghost" @click="$emit('preview', doc)">预览</button>
                 <button v-if="doc.canEdit && !doc.storedFileName" class="ghost" @click="$emit('edit', doc)">编辑</button>
                 <button v-if="doc.availableActions?.includes('submit-review')" class="ghost" @click="$emit('submitReview', doc)">提交审核</button>
-                <button v-if="doc.availableActions?.includes('start-modify')" class="ghost" @click="$emit('startModify', doc)">开始修改</button>
+                <button v-if="doc.availableActions?.includes('start-modify') && !doc.storedFileName" class="ghost" @click="$emit('startModify', doc)">开始修改</button>
                 <button v-if="doc.availableActions?.includes('cancel-modify')" class="ghost" @click="$emit('cancelModify', doc)">取消修改</button>
                 <button v-if="doc.status === 'PUBLISHED'" class="ghost" @click="$emit('revisionHistory', doc)">修订历史</button>
                 <button v-if="doc.availableActions?.includes('delete')" class="ghost danger" @click="$emit('delete', doc)">删除</button>
               </td>
             </tr>
             <tr v-if="documents.length === 0">
-              <td colspan="6" class="empty-state">暂无文档，点击"新增文档"创建手册或文章。</td>
+              <td colspan="7" class="empty-state">暂无文档，点击"新增文档"创建手册或文章。</td>
             </tr>
           </tbody>
         </table>

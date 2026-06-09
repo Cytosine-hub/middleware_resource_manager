@@ -568,6 +568,24 @@ export function useAdmin(auth, notify, confirm) {
     } catch (e) { notify(e.message || '加载审核详情失败', 'error') }
   }
   function closeReviewDetail() { selectedReview.value = null }
+  async function previewWordDocFromReview(documentId) {
+    if (!documentId) return
+    try {
+      const doc = await request(`/api/admin/standard-documents/${documentId}`)
+      if (!doc.storedFileName) { notify('该文档不是 Word 格式', 'error'); return }
+      uploadResult.value = {
+        storedFileName: doc.storedFileName,
+        docId: doc.id,
+        isNewDoc: false,
+        title: doc.title,
+        originalFileName: doc.originalFileName,
+        content: doc.content || '',
+        relatedStandardDocumentId: doc.relatedStandardDocumentId || null
+      }
+      closeReviewDetail()
+      window.location.hash = HASH_WORD_PREVIEW
+    } catch (e) { notify(e.message || '加载文档失败', 'error') }
+  }
   /** 计算参数列表差异：对比 previous 和 current 参数，返回带状态的列表 */
   function computeParamDiff(previous, current) {
     const prevMap = new Map(previous.map(p => [p.code, p]))
@@ -819,7 +837,7 @@ export function useAdmin(auth, notify, confirm) {
     openCreateParameterDialog, openEditParameterDialog, closeParameterDialog, saveParameter, handleParamImportFileChange, importParameters, downloadParameterTemplate,
     submitForReview, startModify, cancelModify, confirmDeleteDoc,
     openUploadDialog, closeUploadDialog, handleUploadFileChange, uploadDocument,
-    loadReviews, openReviewDetail, closeReviewDetail, reviewApprove, reviewReject,
+    loadReviews, openReviewDetail, closeReviewDetail, previewWordDocFromReview, reviewApprove, reviewReject,
     openRevisionHistory, closeRevisionModal,
     openCreateUserDialog, closeUserDialog, createUser, openRoleDialog, closeRoleDialog, changeUserRole, deleteUserAccount,
     switchAdminSection, changeAdminPage,
