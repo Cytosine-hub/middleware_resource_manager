@@ -18,6 +18,7 @@
         <button type="button" @click="$emit('applyFilters')">查询</button>
       </div>
       <div class="actions">
+        <button type="button" class="ghost" @click="$emit('uploadDoc')">上传文档</button>
         <slot name="actions" />
       </div>
     </div>
@@ -75,7 +76,7 @@ defineProps({
   pageInfo: { type: Object, default: () => ({}) },
   getStandardLabel: { type: Function, default: () => '' }
 })
-defineEmits(['applyFilters', 'preview', 'edit', 'submitReview', 'startModify', 'cancelModify', 'revisionHistory', 'delete', 'changePage'])
+defineEmits(['applyFilters', 'preview', 'edit', 'submitReview', 'startModify', 'cancelModify', 'revisionHistory', 'delete', 'changePage', 'uploadDoc'])
 
 function displayTitle(doc) {
   if (!doc) return ''

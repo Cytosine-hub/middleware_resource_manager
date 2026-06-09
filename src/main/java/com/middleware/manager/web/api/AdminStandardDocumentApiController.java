@@ -1,12 +1,16 @@
 package com.middleware.manager.web.api;
 
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
 import com.middleware.manager.domain.StandardDocument;
+import com.middleware.manager.exception.BusinessException;
 import com.middleware.manager.security.PermissionService;
 import com.middleware.manager.service.AdminAccountService;
+import com.middleware.manager.service.DocumentConversionService;
 import com.middleware.manager.service.StandardDocumentService;
 import com.middleware.manager.web.api.dto.StandardDocumentRequest;
+import com.middleware.manager.web.api.dto.DocumentUploadResponse;
 import com.middleware.manager.web.api.dto.StandardDocumentResponse;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,23 +21,27 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/admin/standard-documents")
 public class AdminStandardDocumentApiController {
     private final StandardDocumentService service;
+    private final DocumentConversionService conversionService;
     private final PermissionService permissionService;
     private final AdminAccountService adminAccountService;
 
     public AdminStandardDocumentApiController(StandardDocumentService service,
+                                              DocumentConversionService conversionService,
                                               PermissionService permissionService,
                                               AdminAccountService adminAccountService) {
         this.service = service;
+        this.conversionService = conversionService;
         this.permissionService = permissionService;
         this.adminAccountService = adminAccountService;
     }
@@ -58,6 +66,12 @@ public class AdminStandardDocumentApiController {
     public StandardDocumentResponse create(@Valid @RequestBody StandardDocumentRequest request) {
         StandardDocument document = service.create(request);
         return StandardDocumentResponse.from(document, service.render(document));
+    }
+
+    @PostMapping("/upload")
+    public DocumentUploadResponse upload(@RequestParam("file") MultipartFile file,
+                                         @RequestParam(value = "convertToMarkdown", defaultValue = "true") boolean convertToMarkdown) {
+        return conversionService.convert(file, convertToMarkdown);
     }
 
     @PutMapping("/{id}")
@@ -100,7 +114,7 @@ public class AdminStandardDocumentApiController {
     private StandardDocument checkDocAccess(Long id, Authentication authentication) {
         StandardDocument doc = service.get(id);
         if (!permissionService.canManageCategory(authentication, doc.getCategory())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权操作该分类文档");
+            throw new BusinessException(ErrorCode.FORBIDDEN, ErrorMessages.FORBIDDEN);
         }
         return doc;
     }

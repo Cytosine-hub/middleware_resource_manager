@@ -6,6 +6,9 @@ import { reactive, ref, computed } from 'vue'
 import { request } from '../api'
 import { formatTime } from '../utils'
 
+const ALLOWED_UPLOAD_EXTS = ['.doc', '.docx', '.md', '.markdown']
+const MAX_UPLOAD_FILE_SIZE = 20 * 1024 * 1024
+
 async function sha256Hash(str) {
   try {
     const msgBuffer = new TextEncoder().encode(str)
@@ -45,6 +48,12 @@ export function useAdmin(auth, notify, confirm) {
   const standardDocuments = ref([])
   const standardParameters = ref([])
   const selectedStandard = ref(null)
+
+  // 文档上传
+  const showUploadDialog = ref(false)
+  const uploadFile = ref(null)
+  const uploadConverting = ref(true)
+  const uploadLoading = ref(false)
 
   // 审核管理
   const selectedReview = ref(null)
@@ -432,6 +441,38 @@ export function useAdmin(auth, notify, confirm) {
   function backToStandardList() { selectedStandard.value = null; standardParameters.value = [] }
   function changeMaintenanceDocumentPage(page) { maintenanceDocumentFilters.page = Math.max(page, 0) }
   function applyMaintenanceDocumentFilters() { maintenanceDocumentFilters.page = 0 }
+
+  // ── 文档上传 ──
+  function openUploadDialog() { uploadFile.value = null; uploadConverting.value = true; showUploadDialog.value = true }
+  function closeUploadDialog() { showUploadDialog.value = false; uploadFile.value = null }
+  function handleUploadFileChange(e) { uploadFile.value = e.target.files[0] || null }
+  async function uploadDocument() {
+    if (!uploadFile.value) { notify('请选择文件', 'error'); return }
+    const fileName = uploadFile.value.name.toLowerCase()
+    if (!ALLOWED_UPLOAD_EXTS.some(ext => fileName.endsWith(ext))) {
+      notify('仅支持 .doc、.docx、.md 格式的文件', 'error'); return
+    }
+    if (uploadFile.value.size > MAX_UPLOAD_FILE_SIZE) {
+      notify(`文件大小不能超过 ${MAX_UPLOAD_FILE_SIZE / 1024 / 1024}MB`, 'error'); return
+    }
+    uploadLoading.value = true
+    try {
+      const fd = new FormData()
+      fd.append('file', uploadFile.value)
+      fd.append('convertToMarkdown', uploadConverting.value)
+      const result = await request('/api/admin/standard-documents/upload', { method: 'POST', body: fd })
+      // 将上传结果填充到标准表单
+      Object.assign(standardForm, {
+        content: result.content || '',
+        title: result.title || ''
+      })
+      showUploadDialog.value = false
+      showStandardDialog.value = true
+      notify('文档已上传，请完善文档信息后保存', 'success')
+    } catch (e) { notify(e.message || '上传失败', 'error') }
+    finally { uploadLoading.value = false }
+  }
+
   function changeReviewPage(page) { reviewPage.page = Math.max(page, 0) }
   function applyReviewFilters() { reviewPage.page = 0 }
 
@@ -748,6 +789,7 @@ export function useAdmin(auth, notify, confirm) {
     showTypeDialog, showCategoryDialog, softwareCategories, softwareTypes,
     showStandardDialog, showParameterDialog, showParamImportDialog, paramImporting, paramImportResult, paramImportFile,
     allParameterStandards, standardDocuments, standardParameters, selectedStandard,
+    showUploadDialog, uploadFile, uploadConverting, uploadLoading,
     selectedReview, selectedReviewDiff, reviewComment, allReviews, showRevisionModal, revisionList, revisionDocTitle,
     showUserDialog, showRoleDialog, userFormTarget, userList, allRoles, systemSettings,
     adminFilters, typeFilters, standardFilters, parameterFilters, maintenanceDocumentFilters, reviewFilters, reviewPage,
@@ -773,6 +815,7 @@ export function useAdmin(auth, notify, confirm) {
     openCreateStandardDialog, openEditStandardDialog, closeStandardDialog, saveStandard,
     openCreateParameterDialog, openEditParameterDialog, closeParameterDialog, saveParameter, handleParamImportFileChange, importParameters, downloadParameterTemplate,
     submitForReview, startModify, cancelModify, confirmDeleteDoc,
+    openUploadDialog, closeUploadDialog, handleUploadFileChange, uploadDocument,
     loadReviews, openReviewDetail, closeReviewDetail, reviewApprove, reviewReject,
     openRevisionHistory, closeRevisionModal,
     openCreateUserDialog, closeUserDialog, createUser, openRoleDialog, closeRoleDialog, changeUserRole, deleteUserAccount,

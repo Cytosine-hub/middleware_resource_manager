@@ -146,6 +146,24 @@
     </div>
   </FormModal>
 
+  <FormModal v-model="admin.showUploadDialog.value" title="上传文档" width="480px">
+    <div class="form-grid single">
+      <label class="file-field">选择文件
+        <span class="file-control">
+          <input type="file" accept=".doc,.docx,.md,.markdown" @change="admin.handleUploadFileChange" required />
+          <span class="file-button">选择文件</span>
+          <span class="file-name">{{ admin.uploadFile.value?.name || '支持 .doc、.docx、.md 格式' }}</span>
+        </span>
+      </label>
+      <label class="checkline"><input v-model="admin.uploadConverting.value" type="checkbox" />转换为 Markdown</label>
+      <p class="muted upload-hint">勾选后将保留标题、列表、表格等格式和嵌入图片，不勾选仅提取纯文本。</p>
+    </div>
+    <template #actions>
+      <BaseButton variant="primary" :loading="admin.uploadLoading.value" @click="admin.uploadDocument()">{{ admin.uploadLoading.value ? '上传中...' : '上传' }}</BaseButton>
+      <BaseButton variant="ghost" @click="admin.closeUploadDialog()">取消</BaseButton>
+    </template>
+  </FormModal>
+
   <FormModal v-model="admin.showParamImportDialog.value" title="批量导入参数" submitText="开始导入" @submit="admin.importParameters">
     <div class="form-grid single">
       <p class="muted" style="margin:0 0 12px">请先下载模板，按格式填写后上传 Excel 文件。支持的列：参数编码、参数名称、参数值、参数类型（文本值/布尔值/数值）、取值范围、说明、是否启用（是/否）、是否部署标准（是/否）。</p>
@@ -511,4 +529,5 @@ function computeDiff(oldText, newText) {
 .review-old-value { color: var(--color-danger); text-decoration: line-through; font-size: var(--text-xs); }
 .review-new-value { color: var(--color-success); font-weight: 500; }
 .review-arrow { margin: 0 var(--space-xs); color: var(--color-text-tertiary); font-size: var(--text-xs); }
+.upload-hint { margin: 0; font-size: var(--text-xs); color: var(--color-text-tertiary); line-height: 1.5; }
 </style>

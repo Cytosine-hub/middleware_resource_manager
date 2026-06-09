@@ -210,6 +210,7 @@
                 @startModify="startModify" @cancelModify="cancelModify"
                 @revisionHistory="(doc) => openRevisionHistory(doc, doc.documentType || 'MANUAL')"
                 @delete="confirmDeleteDoc" @changePage="changeMaintenanceDocumentPage"
+                @uploadDoc="openUploadDialog"
               >
                 <template #actions>
                   <button class="ghost" @click="loadStandardDocuments()">刷新</button>
@@ -297,7 +298,7 @@ const {
   startCreate, startEdit, togglePublish, openDeleteReleaseDialog, regeneratePackage,
   openImportPage, openCreateCategoryDialog, openCreateTypeDialog, openEditTypeDialog, deleteType,
   openCreateStandardDialog, openEditStandardDialog,
-  submitForReview, startModify, cancelModify, confirmDeleteDoc,
+  submitForReview, startModify, cancelModify, confirmDeleteDoc, openUploadDialog,
   openCreateParameterDialog, openEditParameterDialog, downloadParameterTemplate, copyParameter,
   openReviewDetail, openRevisionHistory,
   openCreateUserDialog, changeUserRole, deleteUserAccount, resetUserPassword, openChangeRoleDialog,
