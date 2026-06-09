@@ -333,7 +333,7 @@ label {
 .workspace {
   width: 96vw;
   margin: 0 auto;
-  height: 100%;
+  min-height: 100%;
   box-sizing: border-box;
 }
 
