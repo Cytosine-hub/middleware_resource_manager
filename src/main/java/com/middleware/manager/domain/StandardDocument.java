@@ -28,6 +28,8 @@ public class StandardDocument {
     private String content;
     private String renderedContent;
     private String previousContent;
+    private String storedFileName;
+    private String originalFileName;
     private String reviewComment;
     private LocalDateTime submittedAt;
     private LocalDateTime reviewedAt;

@@ -100,6 +100,7 @@ const props = defineProps({
   standardDocumentOptions: { type: Array, required: true },
   markdown: { type: Object, required: true },
   documentId: { type: [String, Number], default: null },
+  initialUpload: { type: Object, default: null },
   notify: { type: Function, default: (msg, type) => type === 'error' ? alert(msg) : null }
 })
 
@@ -273,6 +274,14 @@ async function loadDocument(id) {
 onMounted(() => {
   if (props.documentId) {
     loadDocument(props.documentId)
+  } else if (props.initialUpload) {
+    // 从上传结果预填充内容
+    documentForm.content = props.initialUpload.content || ''
+    if (props.initialUpload.title) {
+      documentForm.title = props.initialUpload.title
+    }
+    renderPreview()
+    openMetaDialog()
   } else {
     renderPreview()
     openMetaDialog()

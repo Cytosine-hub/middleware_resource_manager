@@ -2,6 +2,7 @@ package com.middleware.manager.service;
 
 import com.middleware.manager.config.StorageProperties;
 import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
 import com.middleware.manager.exception.BusinessException;
 import com.middleware.manager.web.api.dto.DocumentUploadResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +42,7 @@ public class DocumentConversionService {
     private static final Set<String> WORD_EXTENSIONS = new HashSet<>(Arrays.asList(".doc", ".docx"));
     private static final Set<String> MARKDOWN_EXTENSIONS = new HashSet<>(Arrays.asList(".md", ".markdown"));
     private static final String IMAGE_URL_PREFIX = "/files/images/";
+    private static final String DOCUMENTS_SUBDIR = "documents";
     private static final int MAX_FILE_SIZE = 20 * 1024 * 1024;
     private static final int MAX_TITLE_LENGTH = 50;
     private static final int MAX_LIST_INDENT = 3;
@@ -48,19 +50,22 @@ public class DocumentConversionService {
     private static final int BODY_CONTENT_HANDLER_UNLIMITED = -1;
 
     private final Path imageStoragePath;
+    private final Path documentsStoragePath;
     private final AutoDetectParser tikaParser;
 
     public DocumentConversionService(StorageProperties storageProperties) throws IOException {
         this.imageStoragePath = Paths.get(storageProperties.getLocation(), "images").toAbsolutePath().normalize();
+        this.documentsStoragePath = Paths.get(storageProperties.getLocation(), DOCUMENTS_SUBDIR).toAbsolutePath().normalize();
         Files.createDirectories(this.imageStoragePath);
+        Files.createDirectories(this.documentsStoragePath);
         this.tikaParser = new AutoDetectParser();
     }
 
     /**
      * 转换文档
      * @param file 上传的文件
-     * @param convertToMarkdown 是否转换为 Markdown（仅 Word 文档有效）
-     * @return 转换结果：content, title, images
+     * @param convertToMarkdown 是否转换为 Markdown（仅 .docx 有效；.doc 始终保存原始文件；.md 直接读取）
+     * @return 转换结果：content, title, images, storedFileName, originalFileName
      */
     public DocumentUploadResponse convert(MultipartFile file, boolean convertToMarkdown) {
         validateFile(file);
@@ -73,36 +78,45 @@ public class DocumentConversionService {
             } else if (".docx".equals(ext)) {
                 return convertDocx(file, convertToMarkdown);
             } else if (".doc".equals(ext)) {
-                return convertDoc(file, convertToMarkdown);
+                // .doc 格式始终保存原始文件，不支持 Markdown 转换
+                return convertDoc(file);
             } else {
-                throw new BusinessException(ErrorCode.PARAM_INVALID, "不支持的文件格式：" + ext);
+                throw new BusinessException(ErrorCode.PARAM_INVALID, ErrorMessages.DOCUMENT_FORMAT_NOT_SUPPORTED);
             }
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
             log.error("文档转换失败 fileName={}", fileName, e);
-            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "文档转换失败：" + e.getMessage());
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, ErrorMessages.DOCUMENT_CONVERT_FAILED);
         }
     }
 
     /** Markdown 文件：直接读取 */
-    private DocumentUploadResponse convertMarkdown(MultipartFile file) throws IOException {
-        String content = new String(file.getBytes(), "UTF-8");
+    private DocumentUploadResponse convertMarkdown(MultipartFile file) {
+        String content;
+        try {
+            content = new String(file.getBytes(), "UTF-8");
+        } catch (IOException e) {
+            log.error("Markdown 文件读取失败 fileName={}", file.getOriginalFilename(), e);
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, ErrorMessages.DOCUMENT_PARSE_FAILED);
+        }
         String title = extractMarkdownTitle(content);
         log.info("Markdown 文件已读取 fileName={}", file.getOriginalFilename());
         return buildResult(content, title, Collections.emptyList());
     }
 
-    /** .docx 转换：使用 POI XWPFDocument 提取格式和图片 */
-    private DocumentUploadResponse convertDocx(MultipartFile file, boolean convertToMarkdown) throws Exception {
+    /** .docx 转换：使用 POI XWPFDocument 提取格式和图片；convertToMarkdown=false 时保存原始文件 */
+    private DocumentUploadResponse convertDocx(MultipartFile file, boolean convertToMarkdown) {
         List<String> images = new ArrayList<>();
+        String originalName = file.getOriginalFilename();
 
         try (InputStream is = file.getInputStream(); XWPFDocument doc = new XWPFDocument(is)) {
-            // 提取并保存嵌入图片
             Map<String, String> imageMapping = extractAndSaveImages(doc, images);
 
             String content;
             String title;
+            String storedFileName = null;
+
             if (convertToMarkdown) {
                 StringBuilder sb = new StringBuilder();
                 for (IBodyElement element : doc.getBodyElements()) {
@@ -115,7 +129,8 @@ public class DocumentConversionService {
                 content = sb.toString().trim();
                 title = extractFirstHeading(content);
             } else {
-                // 不转换：提取纯文本
+                // 不转换：保存原始文件，提取纯文本用于参数替换
+                storedFileName = saveOriginalFile(file);
                 BodyContentHandler handler = new BodyContentHandler(BODY_CONTENT_HANDLER_UNLIMITED);
                 Metadata metadata = new Metadata();
                 tikaParser.parse(file.getInputStream(), handler, metadata);
@@ -123,26 +138,37 @@ public class DocumentConversionService {
                 title = content.length() > MAX_TITLE_LENGTH ? content.substring(0, MAX_TITLE_LENGTH).trim() : content;
             }
 
-            log.info("DOCX 文件已转换 fileName={}, convertToMarkdown={}, images={}",
-                    file.getOriginalFilename(), convertToMarkdown, images.size());
-            return buildResult(content, title, images);
+            log.info("DOCX 文件已处理 fileName={}, convertToMarkdown={}, images={}", originalName, convertToMarkdown, images.size());
+            return new DocumentUploadResponse(content, title, images, storedFileName, originalName);
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("DOCX 文件处理失败 fileName={}", originalName, e);
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, ErrorMessages.DOCUMENT_PARSE_FAILED);
         }
     }
 
-    /** .doc 转换：使用 Tika 提取纯文本（旧格式不支持富文本转换） */
-    private DocumentUploadResponse convertDoc(MultipartFile file, boolean convertToMarkdown) throws Exception {
+    /** .doc 处理：保存原始文件，提取纯文本用于参数替换 */
+    private DocumentUploadResponse convertDoc(MultipartFile file) {
         List<String> images = new ArrayList<>();
+        String originalName = file.getOriginalFilename();
+
+        // 始终保存原始文件（.doc 格式无法在前端编辑）
+        String storedFileName = saveOriginalFile(file);
 
         BodyContentHandler handler = new BodyContentHandler(BODY_CONTENT_HANDLER_UNLIMITED);
         Metadata metadata = new Metadata();
         try (InputStream is = file.getInputStream()) {
             tikaParser.parse(is, handler, metadata);
+        } catch (Exception e) {
+            log.error("DOC 文件解析失败 fileName={}", originalName, e);
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "文档解析失败");
         }
         String content = handler.toString();
         String title = content.length() > MAX_TITLE_LENGTH ? content.substring(0, MAX_TITLE_LENGTH).trim() : content;
 
-        log.info("DOC 文件已读取 fileName={}, length={}", file.getOriginalFilename(), content.length());
-        return buildResult(content, title, images);
+        log.info("DOC 文件已处理 fileName={}, length={}", originalName, content.length());
+        return new DocumentUploadResponse(content, title, images, storedFileName, originalName);
     }
 
     /** 从 DOCX 提取并保存图片，返回 oldRId → newUrl 映射 */
@@ -296,14 +322,14 @@ public class DocumentConversionService {
 
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID, "请选择要上传的文件");
+            throw new BusinessException(ErrorCode.PARAM_INVALID, ErrorMessages.DOCUMENT_FILE_REQUIRED);
         }
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new BusinessException(ErrorCode.FILE_TOO_LARGE, "文件大小不能超过 20MB");
+            throw new BusinessException(ErrorCode.FILE_TOO_LARGE, ErrorMessages.DOCUMENT_FILE_TOO_LARGE);
         }
         String ext = getExtension(file.getOriginalFilename());
         if (!WORD_EXTENSIONS.contains(ext) && !MARKDOWN_EXTENSIONS.contains(ext)) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID, "仅支持 .doc、.docx、.md 格式的文件");
+            throw new BusinessException(ErrorCode.PARAM_INVALID, ErrorMessages.DOCUMENT_FORMAT_NOT_SUPPORTED);
         }
     }
 
@@ -311,6 +337,20 @@ public class DocumentConversionService {
         if (fileName == null) return "";
         int dot = fileName.lastIndexOf('.');
         return dot >= 0 ? fileName.substring(dot).toLowerCase() : "";
+    }
+
+    /** 保存原始文件到 documents 目录，返回存储文件名 */
+    private String saveOriginalFile(MultipartFile file) {
+        String ext = getExtension(file.getOriginalFilename());
+        String storedName = UUID.randomUUID() + ext;
+        Path target = documentsStoragePath.resolve(storedName);
+        try (InputStream is = file.getInputStream()) {
+            Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            log.error("保存原始文件失败 fileName={}", file.getOriginalFilename(), e);
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, ErrorMessages.FILE_UPLOAD_FAILED);
+        }
+        return storedName;
     }
 
     private DocumentUploadResponse buildResult(String content, String title, List<String> images) {

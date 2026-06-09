@@ -54,6 +54,8 @@ export function useAdmin(auth, notify, confirm) {
   const uploadFile = ref(null)
   const uploadConverting = ref(true)
   const uploadLoading = ref(false)
+  const uploadResult = ref(null)
+  let onUploadedCallback = null
 
   // 审核管理
   const selectedReview = ref(null)
@@ -443,7 +445,7 @@ export function useAdmin(auth, notify, confirm) {
   function applyMaintenanceDocumentFilters() { maintenanceDocumentFilters.page = 0 }
 
   // ── 文档上传 ──
-  function openUploadDialog() { uploadFile.value = null; uploadConverting.value = true; showUploadDialog.value = true }
+  function openUploadDialog(onUploaded) { uploadFile.value = null; uploadConverting.value = true; showUploadDialog.value = true; onUploadedCallback = onUploaded || null }
   function closeUploadDialog() { showUploadDialog.value = false; uploadFile.value = null }
   function handleUploadFileChange(e) { uploadFile.value = e.target.files[0] || null }
   async function uploadDocument() {
@@ -461,14 +463,11 @@ export function useAdmin(auth, notify, confirm) {
       fd.append('file', uploadFile.value)
       fd.append('convertToMarkdown', uploadConverting.value)
       const result = await request('/api/admin/standard-documents/upload', { method: 'POST', body: fd })
-      // 将上传结果填充到标准表单
-      Object.assign(standardForm, {
-        content: result.content || '',
-        title: result.title || ''
-      })
+      uploadResult.value = result
       showUploadDialog.value = false
-      showStandardDialog.value = true
       notify('文档已上传，请完善文档信息后保存', 'success')
+      if (onUploadedCallback) onUploadedCallback(result)
+      return result
     } catch (e) { notify(e.message || '上传失败', 'error') }
     finally { uploadLoading.value = false }
   }
@@ -789,7 +788,7 @@ export function useAdmin(auth, notify, confirm) {
     showTypeDialog, showCategoryDialog, softwareCategories, softwareTypes,
     showStandardDialog, showParameterDialog, showParamImportDialog, paramImporting, paramImportResult, paramImportFile,
     allParameterStandards, standardDocuments, standardParameters, selectedStandard,
-    showUploadDialog, uploadFile, uploadConverting, uploadLoading,
+    showUploadDialog, uploadFile, uploadConverting, uploadLoading, uploadResult,
     selectedReview, selectedReviewDiff, reviewComment, allReviews, showRevisionModal, revisionList, revisionDocTitle,
     showUserDialog, showRoleDialog, userFormTarget, userList, allRoles, systemSettings,
     adminFilters, typeFilters, standardFilters, parameterFilters, maintenanceDocumentFilters, reviewFilters, reviewPage,

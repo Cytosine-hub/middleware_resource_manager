@@ -79,6 +79,13 @@ public final class ErrorMessages {
     public static final String IMAGE_FILE_REQUIRED = "请选择图片文件";
     public static final String IMAGE_TYPE_NOT_SUPPORTED = "仅支持图片文件上传";
 
+    // 文档上传相关
+    public static final String DOCUMENT_FILE_REQUIRED = "请选择要上传的文件";
+    public static final String DOCUMENT_FILE_TOO_LARGE = "文件大小不能超过 20MB";
+    public static final String DOCUMENT_FORMAT_NOT_SUPPORTED = "仅支持 .doc、.docx、.md 格式的文件";
+    public static final String DOCUMENT_PARSE_FAILED = "文档解析失败";
+    public static final String DOCUMENT_CONVERT_FAILED = "文档转换失败";
+
     // 基础设施
     public static final String SHA256_UNAVAILABLE = "SHA-256 算法不可用";
     public static final String LLM_AUTH_FAILED = "模型服务认证失败，请检查 API Key 配置";

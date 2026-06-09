@@ -39,6 +39,7 @@
         :standard-document-options="allParameterStandards"
         :markdown="markdown"
         :document-id="route.documentId"
+        :initial-upload="uploadResult"
         :notify="notify"
         @saved="onDocumentEditorSaved"
         @cancel="onDocumentEditorCancel"
@@ -210,7 +211,7 @@
                 @startModify="startModify" @cancelModify="cancelModify"
                 @revisionHistory="(doc) => openRevisionHistory(doc, doc.documentType || 'MANUAL')"
                 @delete="confirmDeleteDoc" @changePage="changeMaintenanceDocumentPage"
-                @uploadDoc="openUploadDialog"
+                @uploadDoc="openUploadAndEdit"
               >
                 <template #actions>
                   <button class="ghost" @click="loadStandardDocuments()">刷新</button>
@@ -298,7 +299,7 @@ const {
   startCreate, startEdit, togglePublish, openDeleteReleaseDialog, regeneratePackage,
   openImportPage, openCreateCategoryDialog, openCreateTypeDialog, openEditTypeDialog, deleteType,
   openCreateStandardDialog, openEditStandardDialog,
-  submitForReview, startModify, cancelModify, confirmDeleteDoc, openUploadDialog,
+  submitForReview, startModify, cancelModify, confirmDeleteDoc, openUploadDialog, uploadResult,
   openCreateParameterDialog, openEditParameterDialog, downloadParameterTemplate, copyParameter,
   openReviewDetail, openRevisionHistory,
   openCreateUserDialog, changeUserRole, deleteUserAccount, resetUserPassword, openChangeRoleDialog,
@@ -451,6 +452,11 @@ function onDocumentEditorSaved() {
 function onDocumentEditorCancel() {
   window.location.hash = '#/admin'; setTimeout(() => { adminSection.value = 'documentMaintenance' }, 0)
 }
+
+function openUploadAndEdit() {
+  openUploadDialog(() => goDocumentEditor())
+}
+
 
 function previewDocument(document) {
   selectedPreviewDocument.value = document
