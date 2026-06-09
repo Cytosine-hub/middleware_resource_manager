@@ -16,11 +16,11 @@ public interface StandardParameterMapper {
             @Param("category") String category,
             @Param("active") Boolean active);
 
-    List<StandardParameter> findByActiveTrueOrderByCategoryAscCodeAsc();
+    List<StandardParameter> findByActiveTrueOrderByParamTypeAscCodeAsc();
 
-    List<StandardParameter> findByStandardDocumentIdAndActiveTrueOrderByCategoryAscCodeAsc(Long standardDocumentId);
+    List<StandardParameter> findByStandardDocumentIdAndActiveTrueOrderByParamTypeAscCodeAsc(Long standardDocumentId);
 
-    List<StandardParameter> findByParameterStandardIdAndActiveTrueOrderByCategoryAscCodeAsc(Long parameterStandardId);
+    List<StandardParameter> findByParameterStandardIdAndActiveTrueOrderByParamTypeAscCodeAsc(Long parameterStandardId);
 
     StandardParameter findById(Long id);
 

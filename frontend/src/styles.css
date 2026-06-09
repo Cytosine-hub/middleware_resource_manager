@@ -2536,8 +2536,10 @@ td.row-actions {
   color: var(--color-text-secondary);
   border-bottom: 1px solid var(--color-border);
 }
-.public-param-thead .col-name { flex: 0 0 180px; }
-.public-param-thead .col-value { flex: 0 0 260px; }
+.public-param-thead .col-name { flex: 0 0 150px; }
+.public-param-thead .col-value { flex: 0 0 200px; }
+.public-param-thead .col-type { flex: 0 0 100px; }
+.public-param-thead .col-range { flex: 0 0 120px; }
 .public-param-thead .col-desc { flex: 1; }
 .public-param-item {
   background: var(--color-bg);
@@ -2551,15 +2553,25 @@ td.row-actions {
   gap: 10px;
 }
 .public-param-name {
-  flex: 0 0 180px;
+  flex: 0 0 150px;
   font-size: 14px;
   font-weight: 500;
   color: var(--color-text);
 }
 .public-param-value {
-  flex: 0 0 260px;
+  flex: 0 0 200px;
   font-size: 13px;
   color: #3730a3;
+}
+.public-param-type {
+  flex: 0 0 100px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.public-param-range {
+  flex: 0 0 120px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
 }
 .public-param-desc {
   font-size: 12px;

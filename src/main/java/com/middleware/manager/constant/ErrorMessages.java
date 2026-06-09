@@ -44,6 +44,7 @@ public final class ErrorMessages {
     public static final String PARAMETER_STANDARD_PUBLISHED = "已发布的参数标准不能删除";
     public static final String PARAMETER_STANDARD_STATUS_CONFLICT = "当前状态不可编辑";
     public static final String PARAMETER_STANDARD_UNDER_REVIEW = "该标准已在审核中";
+    public static final String PARAMETER_STANDARD_HAS_REFERENCES = "该参数标准已被标准文档或发布资源引用，无法删除";
 
     // 标准参数相关
     public static final String STANDARD_PARAMETER_NOT_FOUND = "标准参数不存在";
@@ -55,6 +56,8 @@ public final class ErrorMessages {
     public static final String PARAMETER_NAME_REQUIRED = "标准参数名称不能为空";
     public static final String PARAMETER_VALUE_REQUIRED = "标准参数值不能为空";
     public static final String PARAMETER_CODE_REQUIRED = "标准参数编码不能为空";
+    public static final String PARAMETER_TYPE_REQUIRED = "参数类型不能为空";
+    public static final String PARAMETER_VALUE_RANGE_REQUIRED = "取值范围不能为空";
 
     // 审核相关
     public static final String REVIEW_NOT_FOUND = "审核记录不存在";

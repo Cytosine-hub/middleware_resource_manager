@@ -72,7 +72,8 @@
                 <th>参数编码</th>
                 <th>参数名称</th>
                 <th>参数值</th>
-                <th>分类</th>
+                <th>参数类型</th>
+                <th>取值范围</th>
                 <th>说明</th>
                 <th>操作</th>
               </tr>
@@ -85,7 +86,8 @@
                 </td>
                 <td>{{ param.name }}</td>
                 <td>{{ param.value }}</td>
-                <td>{{ param.category || '-' }}</td>
+                <td>{{ param.paramType || '-' }}</td>
+                <td>{{ param.valueRange || '-' }}</td>
                 <td>{{ param.description || '-' }}</td>
                 <td class="row-actions">
                   <button class="ghost" @click="$emit('copyParam', param)">复制占位符</button>
@@ -93,7 +95,7 @@
                 </td>
               </tr>
               <tr v-if="parameters.length === 0">
-                <td colspan="6" class="empty-state">该标准暂未配置参数</td>
+                <td colspan="7" class="empty-state">该标准暂未配置参数</td>
               </tr>
             </tbody>
           </table>

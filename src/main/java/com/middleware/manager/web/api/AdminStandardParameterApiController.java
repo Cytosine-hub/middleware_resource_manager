@@ -61,7 +61,7 @@ public class AdminStandardParameterApiController {
 
             // 表头
             Row header = sheet.createRow(0);
-            String[] columns = {"参数编码", "参数名称", "参数值", "分类", "说明", "是否启用", "是否部署标准"};
+            String[] columns = {"参数编码", "参数名称", "参数值", "参数类型", "取值范围", "说明", "是否启用", "是否部署标准"};
             CellStyle headerStyle = workbook.createCellStyle();
             Font headerFont = workbook.createFont();
             headerFont.setBold(true);
@@ -80,10 +80,11 @@ public class AdminStandardParameterApiController {
             example.createCell(0).setCellValue("JDK_VERSION");
             example.createCell(1).setCellValue("JDK版本");
             example.createCell(2).setCellValue("1.8_8u392");
-            example.createCell(3).setCellValue("运行环境");
-            example.createCell(4).setCellValue("推荐使用的JDK版本");
-            example.createCell(5).setCellValue("是");
-            example.createCell(6).setCellValue("否");
+            example.createCell(3).setCellValue("文本值");
+            example.createCell(4).setCellValue("1.8、11、17");
+            example.createCell(5).setCellValue("推荐使用的JDK版本");
+            example.createCell(6).setCellValue("是");
+            example.createCell(7).setCellValue("否");
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             workbook.write(out);
@@ -116,10 +117,11 @@ public class AdminStandardParameterApiController {
                 String code = getCellString(row.getCell(0)).trim();
                 String name = getCellString(row.getCell(1)).trim();
                 String value = getCellString(row.getCell(2)).trim();
-                String category = getCellString(row.getCell(3)).trim();
-                String description = getCellString(row.getCell(4)).trim();
-                String activeStr = getCellString(row.getCell(5)).trim();
-                String deployStr = getCellString(row.getCell(6)).trim();
+                String paramType = getCellString(row.getCell(3)).trim();
+                String valueRange = getCellString(row.getCell(4)).trim();
+                String description = getCellString(row.getCell(5)).trim();
+                String activeStr = getCellString(row.getCell(6)).trim();
+                String deployStr = getCellString(row.getCell(7)).trim();
 
                 if (code.isEmpty() && name.isEmpty() && value.isEmpty()) {
                     continue; // 跳过空行
@@ -140,13 +142,24 @@ public class AdminStandardParameterApiController {
                     skipped++;
                     continue;
                 }
+                if (paramType.isEmpty()) {
+                    errors.add("第" + (i + 1) + "行: 参数类型不能为空");
+                    skipped++;
+                    continue;
+                }
+                if (valueRange.isEmpty()) {
+                    errors.add("第" + (i + 1) + "行: 取值范围不能为空");
+                    skipped++;
+                    continue;
+                }
 
                 StandardParameterRequest request = new StandardParameterRequest();
                 request.setParameterStandardId(parameterStandardId);
                 request.setCode(code);
                 request.setName(name);
                 request.setValue(value);
-                request.setCategory(category.isEmpty() ? null : category);
+                request.setParamType(paramType.isEmpty() ? null : paramType);
+                request.setValueRange(valueRange.isEmpty() ? null : valueRange);
                 request.setDescription(description.isEmpty() ? null : description);
                 request.setActive("是".equals(activeStr) || "true".equalsIgnoreCase(activeStr) || "1".equals(activeStr));
                 request.setDeploymentStandard("是".equals(deployStr) || "true".equalsIgnoreCase(deployStr) || "1".equals(deployStr));

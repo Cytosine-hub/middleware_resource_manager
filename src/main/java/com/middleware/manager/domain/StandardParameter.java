@@ -16,7 +16,8 @@ public class StandardParameter {
     private String code;
     private String name;
     private String value;
-    private String category;
+    private String paramType;
+    private String valueRange;
     private String description;
     private boolean active;
     private boolean deploymentStandard;

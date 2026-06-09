@@ -110,7 +110,7 @@ public class StandardPackageService {
                     throw new BusinessException(ErrorCode.PARAMETER_BINDING_INVALID, ErrorMessages.PARAMETER_BINDING_INVALID);
                 }
                 List<StandardParameter> params = standardParameterMapper
-                        .findByParameterStandardIdAndActiveTrueOrderByCategoryAscCodeAsc(asset.getParameterStandardId());
+                        .findByParameterStandardIdAndActiveTrueOrderByParamTypeAscCodeAsc(asset.getParameterStandardId());
                 Map<String, String> paramMap = params.stream()
                         .collect(Collectors.toMap(StandardParameter::getCode, StandardParameter::getValue, (a, b) -> b));
 

@@ -104,7 +104,7 @@ public class ReviewService {
             }
             publishedVersion = ps.getVersion();
             // 序列化参数列表
-            List<StandardParameter> params = parameterMapper.findByParameterStandardIdAndActiveTrueOrderByCategoryAscCodeAsc(ps.getId());
+            List<StandardParameter> params = parameterMapper.findByParameterStandardIdAndActiveTrueOrderByParamTypeAscCodeAsc(ps.getId());
             content = serializeParameters(ps, params);
             renderedContent = ps.getRenderedContent();
             ps.setPreviousContent(null);
@@ -237,8 +237,11 @@ public class ReviewService {
                 if (p.getName() != null && !p.getName().equals(p.getCode())) {
                     sb.append(" （").append(p.getName()).append("）");
                 }
-                if (p.getCategory() != null) {
-                    sb.append(" [").append(p.getCategory()).append("]");
+                if (p.getParamType() != null) {
+                    sb.append(" [").append(p.getParamType()).append("]");
+                }
+                if (p.getValueRange() != null) {
+                    sb.append(" {").append(p.getValueRange()).append("}");
                 }
                 if (p.isDeploymentStandard()) {
                     sb.append(" *部署标准*");

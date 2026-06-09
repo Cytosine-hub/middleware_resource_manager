@@ -5,12 +5,16 @@ import com.github.pagehelper.PageInfo;
 import com.middleware.manager.constant.ErrorCode;
 import com.middleware.manager.constant.ErrorMessages;
 import com.middleware.manager.domain.ParameterStandard;
+import com.middleware.manager.domain.ReleaseAsset;
 import com.middleware.manager.domain.ReviewRecord;
+import com.middleware.manager.domain.StandardDocument;
 import com.middleware.manager.domain.StandardParameter;
 import com.middleware.manager.exception.BusinessException;
 import com.middleware.manager.exception.NotFoundException;
 import com.middleware.manager.repository.ParameterStandardMapper;
+import com.middleware.manager.repository.ReleaseAssetMapper;
 import com.middleware.manager.repository.ReviewRecordMapper;
+import com.middleware.manager.repository.StandardDocumentMapper;
 import com.middleware.manager.repository.StandardParameterMapper;
 import com.middleware.manager.web.api.dto.ParameterStandardRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -35,15 +39,21 @@ public class ParameterStandardService {
     private final ParameterStandardMapper parameterStandardMapper;
     private final StandardParameterMapper standardParameterMapper;
     private final ReviewRecordMapper reviewRecordMapper;
+    private final StandardDocumentMapper standardDocumentMapper;
+    private final ReleaseAssetMapper releaseAssetMapper;
     private final SoftwareTypeService softwareTypeService;
 
     public ParameterStandardService(ParameterStandardMapper parameterStandardMapper,
                                     StandardParameterMapper standardParameterMapper,
                                     ReviewRecordMapper reviewRecordMapper,
+                                    StandardDocumentMapper standardDocumentMapper,
+                                    ReleaseAssetMapper releaseAssetMapper,
                                     SoftwareTypeService softwareTypeService) {
         this.parameterStandardMapper = parameterStandardMapper;
         this.standardParameterMapper = standardParameterMapper;
         this.reviewRecordMapper = reviewRecordMapper;
+        this.standardDocumentMapper = standardDocumentMapper;
+        this.releaseAssetMapper = releaseAssetMapper;
         this.softwareTypeService = softwareTypeService;
     }
 
@@ -117,6 +127,16 @@ public class ParameterStandardService {
         ParameterStandard standard = get(id);
         if (STATUS_PUBLISHED.equals(standard.getStatus())) {
             throw new BusinessException(ErrorCode.PARAMETER_STANDARD_PUBLISHED, ErrorMessages.PARAMETER_STANDARD_PUBLISHED);
+        }
+        // 检查是否有标准文档引用此参数标准
+        List<StandardDocument> relatedDocs = standardDocumentMapper.findByRelatedStandardDocumentId(id);
+        if (!relatedDocs.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAMETER_STANDARD_HAS_REFERENCES, ErrorMessages.PARAMETER_STANDARD_HAS_REFERENCES);
+        }
+        // 检查是否有发布资源引用此参数标准
+        List<ReleaseAsset> relatedAssets = releaseAssetMapper.findByParameterStandardId(id);
+        if (!relatedAssets.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAMETER_STANDARD_HAS_REFERENCES, ErrorMessages.PARAMETER_STANDARD_HAS_REFERENCES);
         }
         parameterStandardMapper.deleteById(id);
         log.info("参数标准已删除 id={}", id);
@@ -230,7 +250,7 @@ public class ParameterStandardService {
         }
         String rendered = standard.getContent();
         for (StandardParameter parameter : standardParameterMapper
-                .findByParameterStandardIdAndActiveTrueOrderByCategoryAscCodeAsc(standard.getId())) {
+                .findByParameterStandardIdAndActiveTrueOrderByParamTypeAscCodeAsc(standard.getId())) {
             rendered = rendered.replace("{{" + parameter.getCode() + "}}", parameter.getValue());
         }
         standard.setRenderedContent(rendered);
@@ -241,14 +261,15 @@ public class ParameterStandardService {
         StringBuilder sb = new StringBuilder();
         sb.append(render(standard));
         List<StandardParameter> params = standardParameterMapper
-                .findByParameterStandardIdAndActiveTrueOrderByCategoryAscCodeAsc(standard.getId());
+                .findByParameterStandardIdAndActiveTrueOrderByParamTypeAscCodeAsc(standard.getId());
         if (!params.isEmpty()) {
             sb.append("\n\n---\n## 标准参数\n\n");
-            sb.append("| 参数编码 | 参数值 | 分类 |\n|---|---|---|\n");
+            sb.append("| 参数编码 | 参数值 | 参数类型 | 取值范围 |\n|---|---|---|---|\n");
             for (StandardParameter p : params) {
                 sb.append("| ").append(p.getCode())
                   .append(" | ").append(p.getValue())
-                  .append(" | ").append(p.getCategory() != null ? p.getCategory() : "-")
+                  .append(" | ").append(p.getParamType() != null ? p.getParamType() : "-")
+                  .append(" | ").append(p.getValueRange() != null ? p.getValueRange() : "-")
                   .append(" |\n");
             }
         }
@@ -259,7 +280,7 @@ public class ParameterStandardService {
     public void refreshRenderedContent(ParameterStandard standard) {
         String rendered = standard.getContent();
         for (StandardParameter parameter : standardParameterMapper
-                .findByParameterStandardIdAndActiveTrueOrderByCategoryAscCodeAsc(standard.getId())) {
+                .findByParameterStandardIdAndActiveTrueOrderByParamTypeAscCodeAsc(standard.getId())) {
             rendered = rendered.replace("{{" + parameter.getCode() + "}}", parameter.getValue());
         }
         standard.setRenderedContent(rendered);

@@ -2,9 +2,9 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.middleware.manager.repository.StandardParameterMapper">
     <select id="findById" resultType="StandardParameter">SELECT * FROM standard_parameters WHERE id = #{id}</select>
-    <select id="findByActiveTrueOrderByCategoryAscCodeAsc" resultType="StandardParameter">SELECT * FROM standard_parameters WHERE active = true ORDER BY category ASC, code ASC</select>
-    <select id="findByStandardDocumentIdAndActiveTrueOrderByCategoryAscCodeAsc" resultType="StandardParameter">SELECT * FROM standard_parameters WHERE standard_document_id = #{standardDocumentId} AND active = true ORDER BY category ASC, code ASC</select>
-    <select id="findByParameterStandardIdAndActiveTrueOrderByCategoryAscCodeAsc" resultType="StandardParameter">SELECT * FROM standard_parameters WHERE parameter_standard_id = #{parameterStandardId} AND active = true ORDER BY category ASC, code ASC</select>
+    <select id="findByActiveTrueOrderByParamTypeAscCodeAsc" resultType="StandardParameter">SELECT * FROM standard_parameters WHERE active = true ORDER BY param_type ASC, code ASC</select>
+    <select id="findByStandardDocumentIdAndActiveTrueOrderByParamTypeAscCodeAsc" resultType="StandardParameter">SELECT * FROM standard_parameters WHERE standard_document_id = #{standardDocumentId} AND active = true ORDER BY param_type ASC, code ASC</select>
+    <select id="findByParameterStandardIdAndActiveTrueOrderByParamTypeAscCodeAsc" resultType="StandardParameter">SELECT * FROM standard_parameters WHERE parameter_standard_id = #{parameterStandardId} AND active = true ORDER BY param_type ASC, code ASC</select>
     <select id="existsByStandardDocumentIdAndCodeIgnoreCase" resultType="boolean">SELECT COUNT(*) > 0 FROM standard_parameters WHERE standard_document_id = #{standardDocumentId} AND LOWER(code) = LOWER(#{code})</select>
     <select id="existsByParameterStandardIdAndCodeIgnoreCase" resultType="boolean">SELECT COUNT(*) > 0 FROM standard_parameters WHERE parameter_standard_id = #{parameterStandardId} AND LOWER(code) = LOWER(#{code})</select>
     <select id="findByStandardDocumentIdAndCodeIgnoreCase" resultType="StandardParameter">SELECT * FROM standard_parameters WHERE standard_document_id = #{standardDocumentId} AND LOWER(code) = LOWER(#{code})</select>
@@ -15,17 +15,17 @@
             <if test="standardDocumentId != null">AND standard_document_id = #{standardDocumentId}</if>
             <if test="parameterStandardId != null">AND parameter_standard_id = #{parameterStandardId}</if>
             <if test="active != null">AND active = #{active}</if>
-            <if test="keyword != null and keyword != ''">AND (code LIKE CONCAT('%',#{keyword},'%') OR name LIKE CONCAT('%',#{keyword},'%') OR value LIKE CONCAT('%',#{keyword},'%') OR description LIKE CONCAT('%',#{keyword},'%'))</if>
-            <if test="category != null and category != ''">AND category = #{category}</if>
+            <if test="keyword != null and keyword != ''">AND (code LIKE CONCAT('%',#{keyword},'%') OR name LIKE CONCAT('%',#{keyword},'%') OR value LIKE CONCAT('%',#{keyword},'%') OR param_type LIKE CONCAT('%',#{keyword},'%') OR value_range LIKE CONCAT('%',#{keyword},'%') OR description LIKE CONCAT('%',#{keyword},'%'))</if>
+            <if test="category != null and category != ''">AND param_type = #{category}</if>
         </where>
-        ORDER BY category ASC, code ASC
+        ORDER BY param_type ASC, code ASC
     </select>
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO standard_parameters (standard_document_id, parameter_standard_id, code, name, value, category, description, active, deployment_standard, created_at, updated_at)
-        VALUES (#{standardDocumentId}, #{parameterStandardId}, #{code}, #{name}, #{value}, #{category}, #{description}, #{active}, #{deploymentStandard}, #{createdAt}, #{updatedAt})
+        INSERT INTO standard_parameters (standard_document_id, parameter_standard_id, code, name, value, param_type, value_range, description, active, deployment_standard, created_at, updated_at)
+        VALUES (#{standardDocumentId}, #{parameterStandardId}, #{code}, #{name}, #{value}, #{paramType}, #{valueRange}, #{description}, #{active}, #{deploymentStandard}, #{createdAt}, #{updatedAt})
     </insert>
     <update id="update">
-        UPDATE standard_parameters SET standard_document_id=#{standardDocumentId}, parameter_standard_id=#{parameterStandardId}, code=#{code}, name=#{name}, value=#{value}, category=#{category}, description=#{description}, active=#{active}, deployment_standard=#{deploymentStandard}, updated_at=#{updatedAt} WHERE id=#{id}
+        UPDATE standard_parameters SET standard_document_id=#{standardDocumentId}, parameter_standard_id=#{parameterStandardId}, code=#{code}, name=#{name}, value=#{value}, param_type=#{paramType}, value_range=#{valueRange}, description=#{description}, active=#{active}, deployment_standard=#{deploymentStandard}, updated_at=#{updatedAt} WHERE id=#{id}
     </update>
     <delete id="deleteById">DELETE FROM standard_parameters WHERE id=#{id}</delete>
 </mapper>

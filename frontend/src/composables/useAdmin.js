@@ -104,7 +104,7 @@ export function useAdmin(auth, notify, confirm) {
   function defaultImportForm() { return { sourceDirectory: '', category: '', softwareTypeId: '', middlewareName: '', platform: '', description: '', published: false, recursive: true } }
   function defaultTypeForm() { return { id: null, category: '中间件', name: '', description: '', active: true } }
   function defaultStandardForm() { return { id: null, category: '', softwareTypeId: '', softwareVersion: '', code: '', summary: '', content: '# 参数标准\n\n' } }
-  function defaultParameterForm() { return { id: null, standardDocumentId: null, parameterStandardId: null, code: '', name: '', value: '', category: '', description: '', active: true, deploymentStandard: false } }
+  function defaultParameterForm() { return { id: null, standardDocumentId: null, parameterStandardId: null, code: '', name: '', value: '', paramType: '', valueRange: '', description: '', active: true, deploymentStandard: false } }
   function applyPage(target, source) { Object.assign(target, source) }
   function findSoftwareType(id) { return softwareTypes.value.find(t => String(t.id) === String(id)) }
 
@@ -455,12 +455,14 @@ export function useAdmin(auth, notify, confirm) {
   // ── 参数管理 ──
   function openCreateParameterDialog() { Object.assign(parameterForm, defaultParameterForm()); showParameterDialog.value = true }
   function openEditParameterDialog(param) {
-    Object.assign(parameterForm, { id: param.id, standardDocumentId: param.standardDocumentId, parameterStandardId: param.parameterStandardId, code: param.code, name: param.name, value: param.value, category: param.category || '', description: param.description || '', active: param.active !== false, deploymentStandard: param.deploymentStandard || false })
+    Object.assign(parameterForm, { id: param.id, standardDocumentId: param.standardDocumentId, parameterStandardId: param.parameterStandardId, code: param.code, name: param.name, value: param.value, paramType: param.paramType || '', valueRange: param.valueRange || '', description: param.description || '', active: param.active !== false, deploymentStandard: param.deploymentStandard || false })
     showParameterDialog.value = true
   }
   function closeParameterDialog() { showParameterDialog.value = false }
   async function saveParameter() {
     if (!parameterForm.code.trim() || !parameterForm.name.trim()) { notify('编码和名称必填', 'error'); return }
+    if (!parameterForm.paramType) { notify('请选择参数类型', 'error'); return }
+    if (!parameterForm.valueRange.trim()) { notify('请填写取值范围', 'error'); return }
     try {
       const url = parameterForm.id ? `/api/admin/standard-parameters/${parameterForm.id}` : '/api/admin/standard-parameters'
       const body = { ...parameterForm }

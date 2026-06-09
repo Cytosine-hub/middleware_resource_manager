@@ -20,8 +20,13 @@ public class StandardParameterRequest {
     @Size(max = 500)
     private String value;
 
+    @NotBlank
     @Size(max = 60)
-    private String category;
+    private String paramType;
+
+    @NotBlank
+    @Size(max = 200)
+    private String valueRange;
 
     @Size(max = 500)
     private String description;
@@ -70,12 +75,20 @@ public class StandardParameterRequest {
         this.value = value;
     }
 
-    public String getCategory() {
-        return category;
+    public String getParamType() {
+        return paramType;
     }
 
-    public void setCategory(String category) {
-        this.category = category;
+    public void setParamType(String paramType) {
+        this.paramType = paramType;
+    }
+
+    public String getValueRange() {
+        return valueRange;
+    }
+
+    public void setValueRange(String valueRange) {
+        this.valueRange = valueRange;
     }
 
     public String getDescription() {

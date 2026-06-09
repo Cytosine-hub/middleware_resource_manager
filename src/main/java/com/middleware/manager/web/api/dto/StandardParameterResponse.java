@@ -11,7 +11,8 @@ public class StandardParameterResponse {
     private String code;
     private String name;
     private String value;
-    private String category;
+    private String paramType;
+    private String valueRange;
     private String description;
     private boolean active;
     private boolean deploymentStandard;
@@ -26,7 +27,8 @@ public class StandardParameterResponse {
         response.setCode(parameter.getCode());
         response.setName(parameter.getName());
         response.setValue(parameter.getValue());
-        response.setCategory(parameter.getCategory());
+        response.setParamType(parameter.getParamType());
+        response.setValueRange(parameter.getValueRange());
         response.setDescription(parameter.getDescription());
         response.setActive(parameter.isActive());
         response.setDeploymentStandard(parameter.isDeploymentStandard());
@@ -47,8 +49,10 @@ public class StandardParameterResponse {
     public void setName(String name) { this.name = name; }
     public String getValue() { return value; }
     public void setValue(String value) { this.value = value; }
-    public String getCategory() { return category; }
-    public void setCategory(String category) { this.category = category; }
+    public String getParamType() { return paramType; }
+    public void setParamType(String paramType) { this.paramType = paramType; }
+    public String getValueRange() { return valueRange; }
+    public void setValueRange(String valueRange) { this.valueRange = valueRange; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
     public boolean isActive() { return active; }

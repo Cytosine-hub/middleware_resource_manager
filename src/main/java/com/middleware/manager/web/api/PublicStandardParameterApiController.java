@@ -39,13 +39,20 @@ public class PublicStandardParameterApiController {
     private boolean matchKeyword(com.middleware.manager.domain.StandardParameter p, String keyword) {
         if (keyword == null || keyword.isBlank()) return true;
         String q = keyword.toLowerCase();
-        return (p.getCode() != null && p.getCode().toLowerCase().contains(q))
-                || (p.getName() != null && p.getName().toLowerCase().contains(q))
-                || (p.getDescription() != null && p.getDescription().toLowerCase().contains(q));
+        return containsIgnoreCase(p.getCode(), q)
+                || containsIgnoreCase(p.getName(), q)
+                || containsIgnoreCase(p.getValue(), q)
+                || containsIgnoreCase(p.getParamType(), q)
+                || containsIgnoreCase(p.getValueRange(), q)
+                || containsIgnoreCase(p.getDescription(), q);
+    }
+
+    private boolean containsIgnoreCase(String field, String query) {
+        return field != null && field.toLowerCase().contains(query);
     }
 
     private boolean matchCategory(com.middleware.manager.domain.StandardParameter p, String category) {
         if (category == null || category.isBlank()) return true;
-        return category.equalsIgnoreCase(p.getCategory());
+        return category.equalsIgnoreCase(p.getParamType());
     }
 }

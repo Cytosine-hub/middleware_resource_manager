@@ -64,12 +64,16 @@
               <div class="public-param-thead">
                 <span class="col-name">参数名称</span>
                 <span class="col-value">参数值</span>
+                <span class="col-type">参数类型</span>
+                <span class="col-range">取值范围</span>
                 <span class="col-desc">说明</span>
               </div>
               <article v-for="param in pagedParams" :key="param.id" class="public-param-item">
                 <div class="public-param-row">
                   <span class="public-param-name">{{ param.name }}</span>
                   <span class="public-param-value">{{ param.value }}</span>
+                  <span class="public-param-type">{{ param.paramType || '-' }}</span>
+                  <span class="public-param-range">{{ param.valueRange || '-' }}</span>
                   <span class="public-param-desc-cell">
                     {{ param.description || '-' }}
                     <span v-if="param.deploymentStandard" class="status ok" style="font-size:11px;padding:1px 6px;margin-left:6px">部署标准</span>

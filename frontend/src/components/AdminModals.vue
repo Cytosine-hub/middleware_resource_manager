@@ -131,7 +131,15 @@
       <label>参数编码<input v-model.trim="admin.parameterForm.code" required maxlength="80" placeholder="例如 JDK_VERSION" /></label>
       <label>参数名称<input v-model.trim="admin.parameterForm.name" required maxlength="120" /></label>
       <label>参数值<input v-model.trim="admin.parameterForm.value" required maxlength="500" /></label>
-      <label>分类<input v-model.trim="admin.parameterForm.category" maxlength="60" /></label>
+      <label>参数类型
+        <select v-model="admin.parameterForm.paramType" required>
+          <option value="">请选择参数类型</option>
+          <option value="文本值">文本值</option>
+          <option value="布尔值">布尔值</option>
+          <option value="数值">数值</option>
+        </select>
+      </label>
+      <label>取值范围<input v-model.trim="admin.parameterForm.valueRange" required maxlength="200" placeholder="例如 1.8、2048、true/false" /></label>
       <label>说明<textarea v-model.trim="admin.parameterForm.description" maxlength="500" /></label>
       <label class="checkline"><input v-model="admin.parameterForm.active" type="checkbox" />启用</label>
       <label class="checkline"><input v-model="admin.parameterForm.deploymentStandard" type="checkbox" />是否为部署标准</label>
@@ -140,7 +148,7 @@
 
   <FormModal v-model="admin.showParamImportDialog.value" title="批量导入参数" submitText="开始导入" @submit="admin.importParameters">
     <div class="form-grid single">
-      <p class="muted" style="margin:0 0 12px">请先下载模板，按格式填写后上传 Excel 文件。支持的列：参数编码、参数名称、参数值、分类、说明、是否启用（是/否）、是否部署标准（是/否）。</p>
+      <p class="muted" style="margin:0 0 12px">请先下载模板，按格式填写后上传 Excel 文件。支持的列：参数编码、参数名称、参数值、参数类型（文本值/布尔值/数值）、取值范围、说明、是否启用（是/否）、是否部署标准（是/否）。</p>
       <label class="file-field">选择 Excel 文件
         <span class="file-control">
           <input type="file" accept=".xlsx,.xls" @change="admin.handleParamImportFileChange" required />

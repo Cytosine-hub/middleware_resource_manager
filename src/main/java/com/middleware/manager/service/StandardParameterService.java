@@ -42,21 +42,21 @@ public class StandardParameterService {
     }
 
     public List<StandardParameter> listActive() {
-        return standardParameterMapper.findByActiveTrueOrderByCategoryAscCodeAsc();
+        return standardParameterMapper.findByActiveTrueOrderByParamTypeAscCodeAsc();
     }
 
     public List<StandardParameter> listActiveByStandardDocumentId(Long standardDocumentId) {
         if (standardDocumentId == null) {
             return Collections.emptyList();
         }
-        return standardParameterMapper.findByStandardDocumentIdAndActiveTrueOrderByCategoryAscCodeAsc(standardDocumentId);
+        return standardParameterMapper.findByStandardDocumentIdAndActiveTrueOrderByParamTypeAscCodeAsc(standardDocumentId);
     }
 
     public List<StandardParameter> listActiveByParameterStandardId(Long parameterStandardId) {
         if (parameterStandardId == null) {
             return Collections.emptyList();
         }
-        return standardParameterMapper.findByParameterStandardIdAndActiveTrueOrderByCategoryAscCodeAsc(parameterStandardId);
+        return standardParameterMapper.findByParameterStandardIdAndActiveTrueOrderByParamTypeAscCodeAsc(parameterStandardId);
     }
 
     public StandardParameter get(Long id) {
@@ -172,7 +172,8 @@ public class StandardParameterService {
         parameter.setCode(code);
         parameter.setName(requireText(request.getName(), ErrorMessages.PARAMETER_NAME_REQUIRED));
         parameter.setValue(requireText(request.getValue(), ErrorMessages.PARAMETER_VALUE_REQUIRED));
-        parameter.setCategory(trimToNull(request.getCategory()));
+        parameter.setParamType(requireText(request.getParamType(), ErrorMessages.PARAMETER_TYPE_REQUIRED));
+        parameter.setValueRange(requireText(request.getValueRange(), ErrorMessages.PARAMETER_VALUE_RANGE_REQUIRED));
         parameter.setDescription(trimToNull(request.getDescription()));
         parameter.setActive(request.isActive());
         parameter.setDeploymentStandard(request.isDeploymentStandard());
