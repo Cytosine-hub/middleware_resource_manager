@@ -496,6 +496,10 @@ function onWordPreviewReplaced({ storedFileName, originalFileName }) {
 
 
 function previewDocument(document) {
+  if (document?.storedFileName) {
+    previewWordDocument(document)
+    return
+  }
   selectedPreviewDocument.value = document
   if (document.relatedStandardDocumentId) {
     loadStandardParameters(document.relatedStandardDocumentId)
@@ -504,6 +508,7 @@ function previewDocument(document) {
   }
 }
 function previewWordDocument(doc) {
+  selectedPreviewDocument.value = null
   uploadResult.value = {
     storedFileName: doc.storedFileName,
     docId: doc.id,
