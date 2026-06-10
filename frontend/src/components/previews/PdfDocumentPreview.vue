@@ -73,14 +73,64 @@ function onRenderFailed(e) {
   error.value = e?.message || '加载 PDF 预览失败'
 }
 
-function applyParams(text, params) {
-  let result = text || ''
-  for (const p of params) {
-    if (p?.active !== false && p?.code) {
-      result = result.split(`{{${p.code}}}`).join(p.value || '')
+function getActiveReplacements() {
+  return props.parameters
+    .filter(p => p?.active !== false && p?.code)
+    .map(p => ({ placeholder: `{{${p.code}}}`, value: p.value || '' }))
+}
+
+function resetTextLayer(textLayer) {
+  textLayer.querySelectorAll('.pdf-placeholder-cover').forEach(el => el.remove())
+  textLayer.querySelectorAll('span').forEach(span => {
+    if (span.dataset.originalText) {
+      span.textContent = span.dataset.originalText
+    } else {
+      span.dataset.originalText = span.textContent || ''
+    }
+    span.classList.remove('pdf-placeholder-hidden')
+  })
+}
+
+function findMatches(text, replacements) {
+  const matches = []
+  for (const replacement of replacements) {
+    let fromIndex = 0
+    while (fromIndex < text.length) {
+      const start = text.indexOf(replacement.placeholder, fromIndex)
+      if (start === -1) break
+      const end = start + replacement.placeholder.length
+      matches.push({ start, end, value: replacement.value })
+      fromIndex = end
     }
   }
-  return result
+  return matches.sort((a, b) => a.start - b.start)
+}
+
+function createReplacementCover(textLayer, spans, value) {
+  const layerRect = textLayer.getBoundingClientRect()
+  const rects = spans
+    .map(span => span.getBoundingClientRect())
+    .filter(rect => rect.width > 0 && rect.height > 0)
+  if (!rects.length) return
+
+  const left = Math.min(...rects.map(rect => rect.left)) - layerRect.left
+  const top = Math.min(...rects.map(rect => rect.top)) - layerRect.top
+  const right = Math.max(...rects.map(rect => rect.right)) - layerRect.left
+  const bottom = Math.max(...rects.map(rect => rect.bottom)) - layerRect.top
+  const firstStyle = window.getComputedStyle(spans[0])
+  const cover = document.createElement('span')
+
+  cover.className = 'pdf-placeholder-cover'
+  cover.textContent = value
+  cover.style.left = `${left}px`
+  cover.style.top = `${top}px`
+  cover.style.width = `${Math.max(right - left, 1)}px`
+  cover.style.height = `${Math.max(bottom - top, 1)}px`
+  cover.style.fontFamily = firstStyle.fontFamily
+  cover.style.fontSize = firstStyle.fontSize
+  cover.style.fontWeight = firstStyle.fontWeight
+  cover.style.letterSpacing = firstStyle.letterSpacing
+  textLayer.appendChild(cover)
 }
 
 async function applyParamReplacements() {
@@ -88,16 +138,31 @@ async function applyParamReplacements() {
   const root = previewRoot.value
   if (!root) return
 
-  const spans = root.querySelectorAll('.textLayer span')
-  for (const span of spans) {
-    const originalText = span.dataset.originalText || span.textContent || ''
-    if (!span.dataset.originalText) {
-      span.dataset.originalText = originalText
-    }
+  const replacements = getActiveReplacements()
+  for (const textLayer of root.querySelectorAll('.textLayer')) {
+    resetTextLayer(textLayer)
+    if (!replacements.length) continue
 
-    const replacedText = applyParams(originalText, props.parameters)
-    span.textContent = replacedText
-    span.classList.toggle('pdf-placeholder-replacement', replacedText !== originalText)
+    let pageText = ''
+    const tokens = Array.from(textLayer.querySelectorAll('span'))
+      .filter(span => !span.classList.contains('pdf-placeholder-cover'))
+      .map(span => {
+        const text = span.dataset.originalText || span.textContent || ''
+        const token = { span, start: pageText.length, end: pageText.length + text.length }
+        pageText += text
+        return token
+      })
+
+    for (const match of findMatches(pageText, replacements)) {
+      const matchedTokens = tokens.filter(token => token.start < match.end && token.end > match.start)
+      if (!matchedTokens.length) continue
+
+      const matchedSpans = matchedTokens.map(token => token.span)
+      createReplacementCover(textLayer, matchedSpans, match.value)
+      for (const span of matchedSpans) {
+        span.classList.add('pdf-placeholder-hidden')
+      }
+    }
   }
 }
 
@@ -146,12 +211,20 @@ onBeforeUnmount(revokeObjectUrl)
   height: auto !important;
 }
 
-.pdf-preview-document :deep(.textLayer .pdf-placeholder-replacement) {
+.pdf-preview-document :deep(.textLayer .pdf-placeholder-hidden) {
+  visibility: hidden;
+}
+
+.pdf-preview-document :deep(.textLayer .pdf-placeholder-cover) {
+  position: absolute;
+  display: flex;
+  align-items: center;
   color: var(--color-text) !important;
   background: var(--color-bg);
   opacity: 1;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
+  white-space: pre;
+  z-index: 2;
+  pointer-events: none;
 }
 
 .preview-state {
