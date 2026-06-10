@@ -33,6 +33,7 @@
           v-if="isPdf"
           class="preview-body"
           :src="rawPreviewUrl"
+          :parameters="parameters"
           fetch-blob
         />
         <WordDocumentPreview

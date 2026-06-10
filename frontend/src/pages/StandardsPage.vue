@@ -91,7 +91,7 @@
         <template v-else>
           <!-- PDF 文档 -->
           <template v-if="isPdfDoc">
-            <PdfDocumentPreview class="public-document-preview" :src="rawPublicUrl" />
+            <PdfDocumentPreview class="public-document-preview" :src="rawPublicUrl" :parameters="params" />
           </template>
           <!-- Word 文档 -->
           <template v-else-if="selectedDoc.storedFileName">
