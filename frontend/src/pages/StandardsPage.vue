@@ -91,21 +91,21 @@
         <template v-else>
           <!-- PDF 文档 -->
           <template v-if="isPdfDoc">
-            <div v-if="wordLoading" class="loading-panel"><div class="spinner"></div><p>加载中...</p></div>
-            <div v-else-if="wordError" class="error-hint muted">{{ wordError }}</div>
-            <iframe v-else :src="pdfPublicUrl" class="public-pdf-frame" />
+            <PdfDocumentPreview class="public-document-preview" :src="rawPublicUrl" />
           </template>
           <!-- Word 文档 -->
           <template v-else-if="selectedDoc.storedFileName">
-            <div v-if="wordLoading" class="loading-panel"><div class="spinner"></div><p>加载中...</p></div>
-            <div v-else-if="wordError" class="error-hint muted">{{ wordError }}</div>
-            <template v-else>
-              <div v-if="isDocxDoc" ref="wordContainer" class="public-word-container"></div>
-              <div v-else class="markdown-preview public-document" v-html="docWordHtml"></div>
-            </template>
+            <WordDocumentPreview
+              class="public-document-preview"
+              :file-name="selectedDoc.storedFileName"
+              :raw-url="rawPublicUrl"
+              :preview-url="htmlPublicUrl"
+              :parameters="params"
+              :request-options="{ token: null }"
+            />
           </template>
           <!-- Markdown 文档 -->
-          <div v-else class="markdown-preview public-document" v-html="docHtml"></div>
+          <MarkdownDocumentPreview v-else class="markdown-preview public-document" :html="docHtml" />
         </template>
       </article>
 
@@ -154,16 +154,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { request } from '../api'
-import { formatDate, renderMarkdown } from '../utils'
 import MarkdownIt from 'markdown-it'
 import Pagination from '../components/Pagination.vue'
-
-const DOCX_RENDER_OPTIONS = {
-  className: 'docx-render', inWrapper: false, ignoreWidth: false,
-  ignoreHeight: false, breakPages: true, useBase64URL: true
-}
+import PdfDocumentPreview from '../components/previews/PdfDocumentPreview.vue'
+import WordDocumentPreview from '../components/previews/WordDocumentPreview.vue'
+import MarkdownDocumentPreview from '../components/previews/MarkdownDocumentPreview.vue'
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
 
@@ -178,20 +175,18 @@ const paramPage = reactive({ page: 0, size: 10, totalPages: 0, totalElements: 0,
 const loading = ref(false)
 const expanded = reactive({})
 
-// Word 文档渲染状态
-const wordContainer = ref(null)
-const wordLoading = ref(false)
-const wordError = ref('')
-const docWordHtml = ref('')
-
-const isDocxDoc = computed(() =>
-  selectedDoc.value?.storedFileName?.toLowerCase().endsWith('.docx') ?? false
-)
 const isPdfDoc = computed(() =>
   selectedDoc.value?.storedFileName?.toLowerCase().endsWith('.pdf') ?? false
 )
-const pdfPublicUrl = computed(() =>
-  isPdfDoc.value ? `/api/public/standards/raw?storedFileName=${encodeURIComponent(selectedDoc.value.storedFileName)}` : ''
+const rawPublicUrl = computed(() =>
+  selectedDoc.value?.storedFileName
+    ? `/api/public/standards/raw?storedFileName=${encodeURIComponent(selectedDoc.value.storedFileName)}`
+    : ''
+)
+const htmlPublicUrl = computed(() =>
+  selectedDoc.value?.storedFileName
+    ? `/api/public/standards/preview?storedFileName=${encodeURIComponent(selectedDoc.value.storedFileName)}`
+    : ''
 )
 
 let scrollHandler = null
@@ -283,8 +278,13 @@ async function openStandardDetail(id) {
 async function openDocDetail(id) {
   loading.value = true
   try {
-    selectedDoc.value = await request(`/api/public/standards/${id}`, { token: null })
-    params.value = []
+    const doc = await request(`/api/public/standards/${id}`, { token: null })
+    if (doc?.relatedStandardDocumentId) {
+      params.value = await request(`/api/public/standard-parameters?parameterStandardId=${doc.relatedStandardDocumentId}`, { token: null }) || []
+    } else {
+      params.value = []
+    }
+    selectedDoc.value = doc
     await nextTick()
     initScrollSpy()
   } catch { /* ignore */ }
@@ -325,37 +325,6 @@ async function openDocFromList(standard, docId) {
   expanded[standard.id] = true
   await openDocDetail(docId)
 }
-
-// Watch selectedDoc: 当切换到 Word/PDF 文档时渲染
-watch(selectedDoc, async (doc) => {
-  wordLoading.value = false
-  wordError.value = ''
-  docWordHtml.value = ''
-  if (!doc?.storedFileName) return
-  // PDF 由 iframe :src 直接加载，无需预取
-  if (doc.storedFileName.toLowerCase().endsWith('.pdf')) return
-  wordLoading.value = true
-  try {
-    if (doc.storedFileName.toLowerCase().endsWith('.docx')) {
-      const { renderAsync } = await import('docx-preview')
-      const resp = await fetch(`/api/public/standards/raw?storedFileName=${encodeURIComponent(doc.storedFileName)}`)
-      if (!resp.ok) throw new Error('加载文档失败')
-      const buf = await resp.arrayBuffer()
-      wordLoading.value = false
-      await nextTick()
-      if (wordContainer.value) {
-        await renderAsync(buf, wordContainer.value, null, DOCX_RENDER_OPTIONS)
-      }
-    } else {
-      const result = await request(`/api/public/standards/preview?storedFileName=${encodeURIComponent(doc.storedFileName)}`, { token: null })
-      docWordHtml.value = result?.html || ''
-    }
-  } catch (e) {
-    wordError.value = e.message || '加载失败'
-  } finally {
-    wordLoading.value = false
-  }
-})
 
 onMounted(loadStandards)
 onBeforeUnmount(destroyScrollSpy)
@@ -416,16 +385,13 @@ onBeforeUnmount(destroyScrollSpy)
 .doc-card-title { font-size: var(--text-base); font-weight: 500; color: var(--color-primary); }
 .doc-card-meta { font-size: var(--text-xs); color: var(--color-text-tertiary); }
 .doc-empty-hint { padding: var(--space-md) 0; }
-.public-word-container {
+.public-document-preview {
+  width: 100%;
+  height: calc(100vh - 220px);
+  min-height: 500px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
   background: var(--color-bg-secondary);
-  border-radius: var(--radius-md); min-height: 400px;
-}
-.public-pdf-frame {
-  width: 100%; height: calc(100vh - 220px); min-height: 500px; border: none;
-  border-radius: var(--radius-md); background: var(--color-bg-secondary);
-}
-.public-word-container :deep(.docx-render) {
-  background: #fff; margin: 0 auto; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 .error-hint { padding: var(--space-md) 0; color: var(--color-danger); font-size: var(--text-sm); }
 </style>

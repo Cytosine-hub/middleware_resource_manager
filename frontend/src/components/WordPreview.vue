@@ -13,16 +13,21 @@
       </div>
     </div>
 
-    <div v-if="loading" class="preview-loading">加载中...</div>
-    <div v-else-if="error" class="preview-error">{{ error }}</div>
-    <template v-else>
-      <!-- pdf: iframe 渲染 -->
-      <iframe v-if="isPdf" :src="pdfBlobUrl" class="preview-body pdf-frame" />
-      <!-- docx: docx-preview 渲染 -->
-      <div v-else-if="isDocx" ref="docxContainer" class="preview-body docx-container"></div>
-      <!-- doc: Tika HTML 渲染 -->
-      <div v-else class="preview-body word-html-content" v-html="htmlContent"></div>
-    </template>
+    <PdfDocumentPreview
+      v-if="isPdf"
+      class="preview-body"
+      :src="rawPreviewUrl"
+      fetch-blob
+    />
+    <WordDocumentPreview
+      v-else
+      class="preview-body"
+      :file-name="effectiveStoredFileName"
+      :raw-url="rawPreviewUrl"
+      :preview-url="htmlPreviewUrl"
+      :parameters="parameters"
+      fetch-blob
+    />
 
     <!-- 文档信息弹窗 -->
     <div v-if="showInfoDialog" class="meta-dialog-backdrop" @click.self="onBackdropClick">
@@ -70,20 +75,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount, reactive, ref, nextTick } from 'vue'
-import { request, fetchBinary } from '../api'
-
-const DOCX_RENDER_OPTIONS = {
-  className: 'docx-render',
-  inWrapper: false,
-  ignoreWidth: false,
-  ignoreHeight: false,
-  ignoreFonts: false,
-  breakPages: true,
-  useBase64URL: true
-}
-const MSG_EMPTY_DOC = '文档内容为空'
-const MSG_LOAD_FAILED = '加载文档预览失败'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { request } from '../api'
+import PdfDocumentPreview from './previews/PdfDocumentPreview.vue'
+import WordDocumentPreview from './previews/WordDocumentPreview.vue'
 
 const props = defineProps({
   storedFileName: { type: String, required: true },
@@ -102,10 +97,6 @@ const props = defineProps({
 
 const emit = defineEmits(['back', 'saved', 'replaced'])
 
-const docxContainer = ref(null)
-const htmlContent = ref('')
-const loading = ref(true)
-const error = ref('')
 const saving = ref(false)
 const saveError = ref('')
 const showInfoDialog = ref(false)
@@ -124,9 +115,13 @@ const infoForm = reactive({
   category: '', software: '', relatedStandardDocumentId: ''
 })
 
-const isDocx = computed(() => effectiveStoredFileName.value.toLowerCase().endsWith('.docx'))
 const isPdf = computed(() => effectiveStoredFileName.value.toLowerCase().endsWith('.pdf'))
-const pdfBlobUrl = ref('')
+const rawPreviewUrl = computed(() =>
+  `/api/admin/standard-documents/raw?storedFileName=${encodeURIComponent(effectiveStoredFileName.value)}`
+)
+const htmlPreviewUrl = computed(() =>
+  `/api/admin/standard-documents/preview?storedFileName=${encodeURIComponent(effectiveStoredFileName.value)}`
+)
 
 const softwareOptions = computed(() => {
   if (!infoForm.category) return []
@@ -218,23 +213,6 @@ async function saveInfo() {
   }
 }
 
-function applyParams(text, params) {
-  let result = text
-  for (const p of params) {
-    if (p.active !== false) result = result.split(`{{${p.code}}}`).join(p.value || '')
-  }
-  return result
-}
-
-function applyParamsToDOM(container, params) {
-  if (!container || !params.length) return
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
-  let node
-  while ((node = walker.nextNode())) {
-    node.textContent = applyParams(node.textContent, params)
-  }
-}
-
 async function loadParameters() {
   if (!props.relatedStandardDocumentId) return
   try {
@@ -243,36 +221,6 @@ async function loadParameters() {
     )
   } catch {
     parameters.value = []
-  }
-}
-
-async function loadPreview() {
-  loading.value = true
-  error.value = ''
-  try {
-    if (isPdf.value) {
-      const blob = await fetchBinary(`/api/admin/standard-documents/raw?storedFileName=${encodeURIComponent(effectiveStoredFileName.value)}`)
-      if (pdfBlobUrl.value) URL.revokeObjectURL(pdfBlobUrl.value)
-      pdfBlobUrl.value = URL.createObjectURL(blob)
-    } else if (isDocx.value) {
-      const { renderAsync } = await import('docx-preview')
-      const blob = await fetchBinary(`/api/admin/standard-documents/raw?storedFileName=${encodeURIComponent(effectiveStoredFileName.value)}`)
-      // 先关 loading 让容器 DOM 渲染出来，再调 renderAsync
-      loading.value = false
-      await nextTick()
-      if (docxContainer.value) {
-        await renderAsync(blob, docxContainer.value, null, DOCX_RENDER_OPTIONS)
-        applyParamsToDOM(docxContainer.value, parameters.value)
-      }
-    } else {
-      const result = await request(`/api/admin/standard-documents/preview?storedFileName=${encodeURIComponent(effectiveStoredFileName.value)}`)
-      htmlContent.value = applyParams(result.html || `<p>${MSG_EMPTY_DOC}</p>`, parameters.value)
-    }
-  } catch (e) {
-    error.value = e.message || MSG_LOAD_FAILED
-    props.notify(error.value, 'error')
-  } finally {
-    loading.value = false
   }
 }
 
@@ -306,7 +254,6 @@ async function replaceDocument(event) {
     }
     emit('replaced', { storedFileName: result.storedFileName, originalFileName: result.originalFileName || file.name })
     props.notify('文档已替换，正在刷新预览...', 'success')
-    await loadPreview()
   } catch (e) {
     props.notify(e.message || '替换失败', 'error')
   } finally {
@@ -315,13 +262,8 @@ async function replaceDocument(event) {
   }
 }
 
-onBeforeUnmount(() => {
-  if (pdfBlobUrl.value) URL.revokeObjectURL(pdfBlobUrl.value)
-})
-
 onMounted(async () => {
   await loadParameters()
-  await loadPreview()
   if (props.canManage && props.isNewDoc) {
     infoForm.title = props.initialTitle || ''
     infoForm.documentType = 'MANUAL'
@@ -341,7 +283,9 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   height: calc(100vh - 88px);
+  min-height: 0;
   background: var(--color-bg);
+  overflow: hidden;
 }
 .word-preview-toolbar {
   display: flex;
@@ -356,33 +300,11 @@ onMounted(async () => {
 .preview-file-name { font-size: var(--text-sm); }
 .toolbar-actions { display: flex; gap: 8px; }
 .toolbar-actions button { font-size: var(--text-sm); min-height: 32px; padding: 0 14px; }
-.preview-loading, .preview-error {
-  display: flex; align-items: center; justify-content: center;
-  flex: 1; font-size: var(--text-base); color: var(--color-text-secondary);
-}
-.preview-error { color: var(--color-danger); }
 .preview-body {
-  flex: 1; overflow-y: auto; padding: 24px 32px;
-  line-height: 1.85; font-size: var(--text-base);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
-.pdf-frame {
-  flex: 1; border: none; background: var(--color-bg-secondary);
-}
-.docx-container {
-  flex: 1; overflow-y: auto; padding: 0;
-  background: var(--color-bg-secondary);
-}
-.docx-container :deep(.docx-render) { background: #fff; margin: 0 auto; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-.word-html-content :deep(h1) { font-size: var(--text-2xl); font-weight: 700; margin: var(--space-lg) 0 var(--space-sm); color: var(--color-text); }
-.word-html-content :deep(h2) { font-size: var(--text-xl); font-weight: 700; margin: var(--space-lg) 0 var(--space-sm); color: var(--color-text); }
-.word-html-content :deep(h3) { font-size: var(--text-lg); font-weight: 600; margin: var(--space-md) 0 var(--space-sm); color: var(--color-text); }
-.word-html-content :deep(p) { margin: var(--space-sm) 0; }
-.word-html-content :deep(table) { border-collapse: collapse; margin: var(--space-md) 0; width: 100%; }
-.word-html-content :deep(th), .word-html-content :deep(td) { border: 1px solid var(--color-border); padding: var(--space-sm) var(--space-md); text-align: left; font-size: var(--text-sm); }
-.word-html-content :deep(th) { background: var(--color-bg-secondary); font-weight: 600; }
-.word-html-content :deep(img) { max-width: 100%; height: auto; margin: var(--space-sm) 0; }
-.word-html-content :deep(ul), .word-html-content :deep(ol) { padding-left: var(--space-xl); margin: var(--space-sm) 0; }
-.word-html-content :deep(li) { margin: var(--space-xs) 0; }
 /* 文档信息弹窗 */
 .meta-dialog-backdrop {
   position: fixed; inset: 0; background: var(--color-overlay, rgba(0,0,0,0.4));

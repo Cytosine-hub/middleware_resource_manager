@@ -19,7 +19,7 @@
             >{{ displayTitle(doc) }}</button>
           </div>
         </aside>
-        <article class="doc-preview-main">
+        <article ref="previewMain" class="doc-preview-main">
           <div class="post-article">
             <h1 class="post-title">{{ displayTitle(document) }}</h1>
             <div class="post-author-line">
@@ -28,7 +28,7 @@
               <span class="post-date">{{ formatDate(document.updatedAt) }}</span>
             </div>
             <p v-if="document.summary" class="description" style="margin-bottom:16px">{{ document.summary }}</p>
-            <div class="post-body markdown-preview" v-html="renderedHtml"></div>
+            <MarkdownDocumentPreview class="post-body markdown-preview" variant="article" :html="renderedHtml" />
           </div>
         </article>
         <aside class="post-toc-panel" v-if="tocItems.length">
@@ -49,6 +49,7 @@
 <script setup>
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { formatDate, renderMarkdown, documentTypeLabel } from '../utils'
+import MarkdownDocumentPreview from './previews/MarkdownDocumentPreview.vue'
 
 const props = defineProps({
   document: { type: Object, default: null },
@@ -58,6 +59,7 @@ const props = defineProps({
 defineEmits(['close', 'preview'])
 
 const activeTocId = ref('')
+const previewMain = ref(null)
 let scrollHandler = null
 
 const renderedHtml = computed(() => {
@@ -95,7 +97,13 @@ function displayTitle(doc) {
 }
 
 function scrollTo(id) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
+  const target = document.getElementById(id)
+  const container = previewMain.value
+  if (!target || !container) return
+  container.scrollTo({
+    top: target.offsetTop - container.offsetTop - 16,
+    behavior: 'smooth'
+  })
 }
 
 function initScrollSpy() {
@@ -106,15 +114,18 @@ function initScrollSpy() {
     let current = ''
     for (const item of items) {
       const el = document.getElementById(item.id)
-      if (el && el.getBoundingClientRect().top <= 120) current = item.id
+      if (el && previewMain.value && el.offsetTop - previewMain.value.scrollTop <= 160) current = item.id
     }
     activeTocId.value = current
   }
-  window.addEventListener('scroll', scrollHandler, { passive: true })
+  previewMain.value?.addEventListener('scroll', scrollHandler, { passive: true })
 }
 
 function destroyScrollSpy() {
-  if (scrollHandler) { window.removeEventListener('scroll', scrollHandler); scrollHandler = null }
+  if (scrollHandler) {
+    previewMain.value?.removeEventListener('scroll', scrollHandler)
+    scrollHandler = null
+  }
 }
 
 watch(() => props.document, (newDoc) => {
