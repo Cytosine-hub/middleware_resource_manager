@@ -57,8 +57,10 @@
         :software-type-categories="softwareTypeCategories"
         :software-types="softwareTypes"
         :standard-document-options="allParameterStandards"
+        :documents="maintenanceDocumentsComputed"
         :notify="notify"
         @back="onDocumentEditorCancel"
+        @preview="previewWordDocument"
         @saved="onWordPreviewSaved"
         @replaced="onWordPreviewReplaced"
       />

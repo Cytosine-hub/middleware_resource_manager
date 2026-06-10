@@ -13,21 +13,39 @@
       </div>
     </div>
 
-    <PdfDocumentPreview
-      v-if="isPdf"
-      class="preview-body"
-      :src="rawPreviewUrl"
-      fetch-blob
-    />
-    <WordDocumentPreview
-      v-else
-      class="preview-body"
-      :file-name="effectiveStoredFileName"
-      :raw-url="rawPreviewUrl"
-      :preview-url="htmlPreviewUrl"
-      :parameters="parameters"
-      fetch-blob
-    />
+    <div class="word-preview-layout">
+      <aside v-if="documents.length" class="word-preview-dir post-dir-panel">
+        <div class="post-dir-header">
+          <h3>文档列表</h3>
+        </div>
+        <div class="post-dir-list">
+          <button
+            v-for="doc in documents"
+            :key="doc.id"
+            :class="['post-dir-item', { active: String(doc.id) === String(docInfo.id) }]"
+            @click="$emit('preview', doc)"
+          >{{ displayTitle(doc) }}</button>
+        </div>
+      </aside>
+
+      <div class="preview-workspace">
+        <PdfDocumentPreview
+          v-if="isPdf"
+          class="preview-body"
+          :src="rawPreviewUrl"
+          fetch-blob
+        />
+        <WordDocumentPreview
+          v-else
+          class="preview-body"
+          :file-name="effectiveStoredFileName"
+          :raw-url="rawPreviewUrl"
+          :preview-url="htmlPreviewUrl"
+          :parameters="parameters"
+          fetch-blob
+        />
+      </div>
+    </div>
 
     <!-- 文档信息弹窗 -->
     <div v-if="showInfoDialog" class="meta-dialog-backdrop" @click.self="onBackdropClick">
@@ -75,7 +93,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { request } from '../api'
 import PdfDocumentPreview from './previews/PdfDocumentPreview.vue'
 import WordDocumentPreview from './previews/WordDocumentPreview.vue'
@@ -92,10 +110,11 @@ const props = defineProps({
   softwareTypeCategories: { type: Array, default: () => [] },
   softwareTypes: { type: Array, default: () => [] },
   standardDocumentOptions: { type: Array, default: () => [] },
+  documents: { type: Array, default: () => [] },
   notify: { type: Function, default: (msg, type) => type === 'error' ? alert(msg) : null }
 })
 
-const emit = defineEmits(['back', 'saved', 'replaced'])
+const emit = defineEmits(['back', 'preview', 'saved', 'replaced'])
 
 const saving = ref(false)
 const saveError = ref('')
@@ -131,6 +150,11 @@ const softwareOptions = computed(() => {
 const standardOptions = computed(() =>
   props.standardDocumentOptions.filter(s => s.category === infoForm.category && s.software === infoForm.software)
 )
+
+function displayTitle(doc) {
+  if (!doc) return ''
+  return doc.title || [doc.category, doc.software, doc.softwareVersion].filter(Boolean).join(' / ') || '未命名'
+}
 
 function onCategoryChange() {
   infoForm.software = ''
@@ -214,7 +238,10 @@ async function saveInfo() {
 }
 
 async function loadParameters() {
-  if (!props.relatedStandardDocumentId) return
+  if (!props.relatedStandardDocumentId) {
+    parameters.value = []
+    return
+  }
   try {
     parameters.value = await request(
       `/api/admin/standard-parameters?parameterStandardId=${props.relatedStandardDocumentId}`
@@ -222,6 +249,13 @@ async function loadParameters() {
   } catch {
     parameters.value = []
   }
+}
+
+function syncPreviewState() {
+  effectiveStoredFileName.value = props.storedFileName
+  effectiveOriginalFileName.value = props.originalFileName
+  docInfo.id = props.docId || null
+  docInfo.title = props.initialTitle || ''
 }
 
 async function replaceDocument(event) {
@@ -263,6 +297,7 @@ async function replaceDocument(event) {
 }
 
 onMounted(async () => {
+  syncPreviewState()
   await loadParameters()
   if (props.canManage && props.isNewDoc) {
     infoForm.title = props.initialTitle || ''
@@ -276,6 +311,20 @@ onMounted(async () => {
     }
   }
 })
+
+watch(
+  () => [
+    props.storedFileName,
+    props.originalFileName,
+    props.docId,
+    props.initialTitle,
+    props.relatedStandardDocumentId
+  ],
+  async () => {
+    syncPreviewState()
+    await loadParameters()
+  }
+)
 </script>
 
 <style scoped>
@@ -300,10 +349,40 @@ onMounted(async () => {
 .preview-file-name { font-size: var(--text-sm); }
 .toolbar-actions { display: flex; gap: 8px; }
 .toolbar-actions button { font-size: var(--text-sm); min-height: 32px; padding: 0 14px; }
+.word-preview-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--space-lg);
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--space-lg) clamp(18px, 4vw, 48px) var(--space-xl);
+  background: var(--color-bg-page);
+  overflow: hidden;
+}
+.word-preview-dir {
+  position: static;
+  max-height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+}
+.preview-workspace {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
 .preview-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+}
+@media (max-width: 900px) {
+  .word-preview-layout {
+    grid-template-columns: 1fr;
+  }
+  .word-preview-dir {
+    display: none;
+  }
 }
 /* 文档信息弹窗 */
 .meta-dialog-backdrop {
