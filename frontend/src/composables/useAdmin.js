@@ -70,6 +70,7 @@ export function useAdmin(auth, notify, confirm) {
   // 用户管理
   const showUserDialog = ref(false)
   const showRoleDialog = ref(false)
+  const showResetPasswordDialog = ref(false)
   const userFormTarget = ref(null)
   const userList = ref([])
   const allRoles = ref([])
@@ -77,6 +78,7 @@ export function useAdmin(auth, notify, confirm) {
   const userImporting = ref(false)
   const userImportResult = ref(null)
   const userImportFile = ref(null)
+  const resetPasswordForm = reactive({ newPassword: '', confirmPassword: '' })
 
   // 系统设置
   const systemSettings = reactive({ 'knowledge-enabled': 'true', 'diagnostics-enabled': 'true' })
@@ -679,6 +681,22 @@ export function useAdmin(auth, notify, confirm) {
     })
   }
 
+  function openResetPasswordDialog(user) {
+    userFormTarget.value = user
+    Object.assign(resetPasswordForm, { newPassword: '', confirmPassword: '' })
+    showResetPasswordDialog.value = true
+  }
+  function closeResetPasswordDialog() { showResetPasswordDialog.value = false }
+  async function resetUserPassword() {
+    if (!resetPasswordForm.newPassword) { notify('请输入新密码', 'error'); return }
+    if (resetPasswordForm.newPassword !== resetPasswordForm.confirmPassword) { notify('两次密码不一致', 'error'); return }
+    if (resetPasswordForm.newPassword.length < 6) { notify('密码至少6位', 'error'); return }
+    try {
+      await request(`/api/admin/users/${userFormTarget.value.id}/reset-password`, { method: 'POST', body: { newPassword: resetPasswordForm.newPassword } })
+      notify('密码已重置', 'success'); closeResetPasswordDialog()
+    } catch (e) { notify(e.message || '重置失败', 'error') }
+  }
+
   function handleUserImportFileChange(e) { userImportFile.value = e.target.files[0] || null }
 
   async function importUsers() {
@@ -864,8 +882,8 @@ export function useAdmin(auth, notify, confirm) {
     allParameterStandards, standardDocuments, standardParameters, selectedStandard,
     showUploadDialog, uploadFile, uploadConverting, uploadLoading, uploadResult,
     selectedReview, selectedReviewDiff, reviewComment, allReviews, showRevisionModal, revisionList, revisionDocTitle,
-    showUserDialog, showRoleDialog, userFormTarget, userList, allRoles, systemSettings,
-    showUserImportDialog, userImporting, userImportResult, userImportFile,
+    showUserDialog, showRoleDialog, showResetPasswordDialog, userFormTarget, userList, allRoles, systemSettings,
+    showUserImportDialog, userImporting, userImportResult, userImportFile, resetPasswordForm,
     adminFilters, typeFilters, standardFilters, parameterFilters, maintenanceDocumentFilters, reviewFilters, reviewPage,
     adminPage, typePage, standardPage, parameterPage, maintenanceDocumentPage, reviewListPage,
     releaseForm, importForm, passwordForm, categoryForm, typeForm, standardForm, parameterForm, userForm,
@@ -889,6 +907,7 @@ export function useAdmin(auth, notify, confirm) {
     openCreateStandardDialog, openEditStandardDialog, closeStandardDialog, saveStandard,
     openCreateParameterDialog, openEditParameterDialog, closeParameterDialog, saveParameter, handleParamImportFileChange, importParameters, downloadParameterTemplate,
     handleUserImportFileChange, importUsers, downloadUserTemplate,
+    openResetPasswordDialog, closeResetPasswordDialog, resetUserPassword,
     submitForReview, startModify, cancelModify, confirmDeleteDoc,
     openUploadDialog, closeUploadDialog, handleUploadFileChange, uploadDocument,
     loadReviews, openReviewDetail, closeReviewDetail, previewWordDocFromReview, reviewApprove, reviewReject,

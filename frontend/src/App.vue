@@ -216,7 +216,7 @@
               />
               <UsersSection v-else-if="adminSection === 'users'"
                 :users="userList"
-                @changeRole="openChangeRoleDialog" @resetPassword="resetUserPassword"
+                @changeRole="openChangeRoleDialog" @resetPassword="openResetPasswordDialog"
                 @deleteUser="deleteUserAccount"
               >
                 <template #actions>
@@ -325,7 +325,7 @@ const {
   submitForReview, startModify, cancelModify, confirmDeleteDoc, openUploadDialog, uploadResult,
   openCreateParameterDialog, openEditParameterDialog, downloadParameterTemplate, copyParameter,
   openReviewDetail, openRevisionHistory,
-  openCreateUserDialog, changeUserRole, deleteUserAccount, resetUserPassword, openChangeRoleDialog,
+  openCreateUserDialog, changeUserRole, deleteUserAccount, resetUserPassword, openChangeRoleDialog, openResetPasswordDialog,
   changePassword,
   softwareTypeCategories, filteredStandardDocuments, pagedSoftwareTypes, typePageComputed, standardPageComputed,
   selectedStandardParameters, pagedStandardParameters, paramPageComputed,

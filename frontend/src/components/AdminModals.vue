@@ -211,6 +211,17 @@
     </label>
   </FormModal>
 
+  <FormModal v-model="admin.showResetPasswordDialog.value" :title="'重置密码 — ' + (admin.userFormTarget.value?.username || '')">
+    <div class="form-grid single">
+      <label>新密码<input v-model="admin.resetPasswordForm.newPassword" type="password" required minlength="6" maxlength="64" placeholder="至少6位" /></label>
+      <label>确认密码<input v-model="admin.resetPasswordForm.confirmPassword" type="password" required minlength="6" maxlength="64" placeholder="再次输入密码" /></label>
+    </div>
+    <template #actions>
+      <BaseButton variant="primary" @click="admin.resetUserPassword()">确认重置</BaseButton>
+      <BaseButton variant="ghost" @click="admin.closeResetPasswordDialog()">取消</BaseButton>
+    </template>
+  </FormModal>
+
   <FormModal v-model="admin.showUserImportDialog.value" title="批量导入用户">
     <div class="form-grid single">
       <p class="muted" style="margin:0 0 12px">请先下载模板，按格式填写后上传 Excel 文件。支持的列：账号、用户名、角色。密码默认为 admin123。</p>
