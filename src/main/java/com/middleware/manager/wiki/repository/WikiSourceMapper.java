@@ -13,6 +13,8 @@ public interface WikiSourceMapper {
 
     WikiSource findByContentHash(@Param("contentHash") String contentHash);
 
+    WikiSource findByTitleAndType(@Param("title") String title, @Param("sourceType") String sourceType);
+
     List<WikiSource> findAll();
 
     List<WikiSource> findByIngested(@Param("ingested") boolean ingested);

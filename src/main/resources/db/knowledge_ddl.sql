@@ -144,6 +144,3 @@ CREATE TABLE IF NOT EXISTS document_revisions (
     software VARCHAR(120),
     INDEX idx_doc (document_id, document_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文档修订记录';
-
--- 知识库原文件存储路径（如已存在会报 Duplicate column 可忽略）
-ALTER TABLE knowledge_chunks ADD COLUMN stored_file_name VARCHAR(500) DEFAULT NULL COMMENT '原文件存储路径';

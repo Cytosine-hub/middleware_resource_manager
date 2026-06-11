@@ -1,6 +1,7 @@
 package com.middleware.manager.wiki.service;
 
 import com.middleware.manager.knowledge.loader.DocumentLoader;
+import com.middleware.manager.service.StorageService;
 import com.middleware.manager.wiki.entity.IngestTask;
 import com.middleware.manager.wiki.entity.WikiSource;
 import com.middleware.manager.wiki.repository.IngestTaskMapper;
@@ -22,6 +23,7 @@ class IngestTaskServiceTest {
     private IngestTaskMapper taskMapper;
     private WikiSourceMapper sourceMapper;
     private IngestAgent ingestAgent;
+    private StorageService storageService;
     private IngestTaskService service;
 
     @BeforeEach
@@ -29,8 +31,9 @@ class IngestTaskServiceTest {
         taskMapper = mock(IngestTaskMapper.class);
         sourceMapper = mock(WikiSourceMapper.class);
         ingestAgent = mock(IngestAgent.class);
+        storageService = mock(StorageService.class);
         List<DocumentLoader> loaders = Collections.emptyList();
-        service = new IngestTaskService(taskMapper, sourceMapper, ingestAgent, loaders);
+        service = new IngestTaskService(taskMapper, sourceMapper, ingestAgent, loaders, storageService);
         setField(service, "maxContentChars", 20);
         setField(service, "chunkOverlap", 5);
         setField(service, "maxConcurrent", 1);

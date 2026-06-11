@@ -1,9 +1,8 @@
 package com.middleware.manager.knowledge.web;
 
-import com.middleware.manager.knowledge.entity.KnowledgeChunk;
-import com.middleware.manager.knowledge.repository.KnowledgeChunkMapper;
 import com.middleware.manager.knowledge.service.KnowledgeService;
 import com.middleware.manager.knowledge.service.KnowledgeService.ImportResult;
+import com.middleware.manager.knowledge.service.KnowledgeService.PreviewDocument;
 import com.middleware.manager.knowledge.service.KnowledgeService.SearchResult;
 import com.middleware.manager.service.StorageService;
 import org.apache.tika.metadata.Metadata;
@@ -28,16 +27,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequestMapping("/api/knowledge")
+@Slf4j
 public class KnowledgeController {
 
     @Autowired
     private KnowledgeService knowledgeService;
-
-    @Autowired
-    private KnowledgeChunkMapper chunkMapper;
 
     @Autowired
     private StorageService storageService;
@@ -52,8 +50,9 @@ public class KnowledgeController {
             ImportResult result = knowledgeService.importFile(file);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
+            log.warn("Knowledge upload failed: {}", e.getMessage());
             Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
+            error.put("error", "知识库文档上传失败，请查看后台日志");
             return ResponseEntity.badRequest().body(error);
         }
     }
@@ -79,8 +78,9 @@ public class KnowledgeController {
                 item.put("chunkCount", result.getChunkCount());
                 item.put("sourceTitle", result.getSourceTitle());
             } catch (Exception e) {
+                log.warn("Knowledge batch upload failed file={}: {}", file.getOriginalFilename(), e.getMessage());
                 item.put("status", "error");
-                item.put("error", e.getMessage());
+                item.put("error", "知识库文档上传失败，请查看后台日志");
             }
             results.add(item);
         }
@@ -100,8 +100,9 @@ public class KnowledgeController {
             ImportResult result = knowledgeService.importStandardDocument(docId);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
+            log.warn("Knowledge standard document import failed docId={}: {}", docId, e.getMessage());
             Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
+            error.put("error", "知识库文档导入失败，请查看后台日志");
             return ResponseEntity.badRequest().body(error);
         }
     }
@@ -130,7 +131,7 @@ public class KnowledgeController {
      */
     @GetMapping("/docs")
     public ResponseEntity<List<Map<String, Object>>> listDocs() {
-        return ResponseEntity.ok(chunkMapper.findDistinctSources());
+        return ResponseEntity.ok(knowledgeService.listDocuments());
     }
 
     /**
@@ -139,8 +140,8 @@ public class KnowledgeController {
      */
     @GetMapping("/docs/preview")
     public ResponseEntity<?> previewDoc(@RequestParam String title, @RequestParam String sourceType) {
-        List<KnowledgeChunk> chunks = chunkMapper.findBySourceTitleAndSourceType(title, sourceType);
-        List<Map<String, Object>> result = chunks.stream().map(c -> {
+        PreviewDocument preview = knowledgeService.previewDocument(title, sourceType);
+        List<Map<String, Object>> result = preview.getChunks().stream().map(c -> {
             Map<String, Object> m = new HashMap<>();
             m.put("chunkIndex", c.getChunkIndex());
             m.put("content", c.getContent());
@@ -151,7 +152,7 @@ public class KnowledgeController {
         resp.put("sourceType", sourceType);
         resp.put("chunks", result);
         resp.put("totalChunks", result.size());
-        resp.put("storedFileName", chunks.isEmpty() ? null : chunks.get(0).getStoredFileName());
+        resp.put("storedFileName", preview.getStoredFileName());
         return ResponseEntity.ok(resp);
     }
 
@@ -161,13 +162,7 @@ public class KnowledgeController {
      */
     @GetMapping("/docs/file")
     public ResponseEntity<?> serveFile(@RequestParam String title, @RequestParam String sourceType) {
-        List<KnowledgeChunk> chunks = chunkMapper.findBySourceTitleAndSourceType(title, sourceType);
-        if (chunks.isEmpty() || chunks.get(0).getStoredFileName() == null) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "未找到原文件");
-            return ResponseEntity.notFound().build();
-        }
-        String storedFileName = chunks.get(0).getStoredFileName();
+        String storedFileName = knowledgeService.getSourceFilePath(title, sourceType);
         Resource resource = storageService.loadAsResource(storedFileName);
 
         String contentType = "application/octet-stream";
@@ -189,11 +184,7 @@ public class KnowledgeController {
      */
     @GetMapping("/docs/html")
     public ResponseEntity<?> serveHtml(@RequestParam String title, @RequestParam String sourceType) {
-        List<KnowledgeChunk> chunks = chunkMapper.findBySourceTitleAndSourceType(title, sourceType);
-        if (chunks.isEmpty() || chunks.get(0).getStoredFileName() == null) {
-            return ResponseEntity.notFound().build();
-        }
-        String storedFileName = chunks.get(0).getStoredFileName();
+        String storedFileName = knowledgeService.getSourceFilePath(title, sourceType);
         String lower = storedFileName.toLowerCase();
 
         // 只处理 Word 文档，PDF 和 Markdown 前端直接渲染

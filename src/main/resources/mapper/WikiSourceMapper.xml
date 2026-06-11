@@ -25,6 +25,10 @@
         SELECT * FROM wiki_sources WHERE content_hash = #{contentHash}
     </select>
 
+    <select id="findByTitleAndType" resultMap="wikiSourceResultMap">
+        SELECT * FROM wiki_sources WHERE title = #{title} AND source_type = #{sourceType} ORDER BY created_at DESC LIMIT 1
+    </select>
+
     <select id="findAll" resultMap="wikiSourceResultMap">
         SELECT * FROM wiki_sources ORDER BY created_at DESC
     </select>

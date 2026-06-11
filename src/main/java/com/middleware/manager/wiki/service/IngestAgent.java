@@ -205,23 +205,7 @@ public class IngestAgent {
 
             int linksCreated = linkResolver.resolveLinks(savedPages);
 
-            if ("milvus".equals(vectorType)) {
-                try {
-                    for (WikiPage page : savedPages) {
-                        String text = page.getTitle() + "\n" + (page.getSummary() != null ? page.getSummary() : "");
-                        float[] vector = embeddingService.embed(text);
-                        String vectorId = "wiki_" + page.getId();
-                        Map<String, String> metadata = new HashMap<>();
-                        metadata.put("source", "wiki");
-                        metadata.put("pageId", String.valueOf(page.getId()));
-                        metadata.put("title", page.getTitle());
-                        metadata.put("pageType", page.getPageType());
-                        vectorStore.add(vectorId, vector, metadata);
-                    }
-                } catch (Exception e) {
-                    log.warn("Vectorization failed: {}", e.getMessage());
-                }
-            }
+            vectorizePages(savedPages);
 
             source.setContentHash(hash);
             source.setIngested(true);
@@ -430,6 +414,37 @@ public class IngestAgent {
     private String getAsString(JsonObject obj, String key) {
         JsonElement elem = obj.get(key);
         return elem != null && !elem.isJsonNull() ? elem.getAsString() : null;
+    }
+
+    public void vectorizePages(List<WikiPage> pages) {
+        if (!"milvus".equals(vectorType) || pages == null) {
+            return;
+        }
+        for (WikiPage page : pages) {
+            if (page == null || page.getId() == null) {
+                continue;
+            }
+            try {
+                String text = page.getTitle() + "\n" + (page.getSummary() != null ? page.getSummary() : "");
+                float[] vector = embeddingService.embed(text);
+                String vectorId = "wiki_" + page.getId();
+                Map<String, String> metadata = new HashMap<>();
+                metadata.put("source", "wiki");
+                metadata.put("pageId", String.valueOf(page.getId()));
+                metadata.put("title", page.getTitle());
+                metadata.put("pageType", page.getPageType());
+                metadata.put("content", text);
+                metadata.put("sourceTitle", page.getTitle());
+                try {
+                    vectorStore.delete(vectorId);
+                } catch (Exception e) {
+                    log.debug("Vector delete before wiki upsert ignored pageId={}: {}", page.getId(), e.getMessage());
+                }
+                vectorStore.add(vectorId, vector, metadata);
+            } catch (Exception e) {
+                log.warn("Vectorization failed pageId={}: {}", page.getId(), e.getMessage());
+            }
+        }
     }
 
     private void validateGeneratedPages(JsonArray pages) {

@@ -285,7 +285,7 @@ public class WikiController {
                                                     Authentication authentication) {
         try {
             Long operatorId = resolveActorId(authentication);
-            IngestTask task = taskService.createTask(file.getBytes(), file.getOriginalFilename(), category, software, operatorId);
+            IngestTask task = taskService.createTask(file, category, software, operatorId);
             taskService.executeTask(task.getId());
             return ResponseEntity.ok(task);
         } catch (Exception e) {

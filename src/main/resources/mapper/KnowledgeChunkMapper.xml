@@ -12,7 +12,6 @@
         <result property="software" column="software"/>
         <result property="chunkIndex" column="chunk_index"/>
         <result property="vectorId" column="vector_id"/>
-        <result property="storedFileName" column="stored_file_name"/>
         <result property="createdAt" column="created_at"/>
     </resultMap>
 
@@ -53,8 +52,7 @@
 
     <select id="findDistinctSources" resultType="map">
         SELECT source_type, source_title, source_id, COUNT(*) as chunk_count,
-        GROUP_CONCAT(vector_id) as vector_ids,
-        MIN(stored_file_name) as stored_file_name
+        GROUP_CONCAT(vector_id) as vector_ids
         FROM knowledge_chunks
         GROUP BY source_type, source_title, source_id
         ORDER BY MAX(created_at) DESC
@@ -65,8 +63,8 @@
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO knowledge_chunks (content, source_title, source_type, source_id, category, software, chunk_index, vector_id, stored_file_name, created_at)
-        VALUES (#{content}, #{sourceTitle}, #{sourceType}, #{sourceId}, #{category}, #{software}, #{chunkIndex}, #{vectorId}, #{storedFileName}, #{createdAt})
+        INSERT INTO knowledge_chunks (content, source_title, source_type, source_id, category, software, chunk_index, vector_id, created_at)
+        VALUES (#{content}, #{sourceTitle}, #{sourceType}, #{sourceId}, #{category}, #{software}, #{chunkIndex}, #{vectorId}, #{createdAt})
     </insert>
 
     <delete id="deleteBySourceIdAndSourceType">

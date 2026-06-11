@@ -19,6 +19,5 @@ public class KnowledgeChunk {
     private String software;
     private Integer chunkIndex;
     private String vectorId;
-    private String storedFileName;
     private LocalDateTime createdAt;
 }

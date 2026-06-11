@@ -1,6 +1,7 @@
 package com.middleware.manager.wiki.service;
 
 import com.middleware.manager.knowledge.loader.DocumentLoader;
+import com.middleware.manager.service.StorageService;
 import com.middleware.manager.wiki.entity.IngestTask;
 import com.middleware.manager.wiki.entity.WikiSource;
 import com.middleware.manager.wiki.repository.IngestTaskMapper;
@@ -9,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.annotation.PostConstruct;
 import java.io.InputStream;
@@ -27,6 +29,7 @@ public class IngestTaskService {
     private final WikiSourceMapper sourceMapper;
     private final IngestAgent ingestAgent;
     private final List<DocumentLoader> documentLoaders;
+    private final StorageService storageService;
 
     @Value("${app.wiki.ingest.max-content-chars:20000}")
     private int maxContentChars;
@@ -40,11 +43,13 @@ public class IngestTaskService {
     private Semaphore compileSemaphore;
 
     public IngestTaskService(IngestTaskMapper taskMapper, WikiSourceMapper sourceMapper,
-                             IngestAgent ingestAgent, List<DocumentLoader> documentLoaders) {
+                             IngestAgent ingestAgent, List<DocumentLoader> documentLoaders,
+                             StorageService storageService) {
         this.taskMapper = taskMapper;
         this.sourceMapper = sourceMapper;
         this.ingestAgent = ingestAgent;
         this.documentLoaders = documentLoaders;
+        this.storageService = storageService;
     }
 
     @PostConstruct
@@ -55,14 +60,45 @@ public class IngestTaskService {
     /**
      * 创建文件上传任务
      */
+    @Transactional
+    public IngestTask createTask(MultipartFile file, String category, String software, Long operatorId) {
+        try {
+            String fileName = file.getOriginalFilename();
+            byte[] fileBytes = file.getBytes();
+            DocumentLoader loader = resolveLoader(fileName);
+            String content;
+            try (InputStream is = new java.io.ByteArrayInputStream(fileBytes)) {
+                content = loader.load(is, fileName);
+            }
+            WikiSource existing = sourceMapper.findByContentHash(sha256(content));
+            String filePath = existing != null ? existing.getFilePath() : null;
+            if (filePath == null || filePath.isBlank()) {
+                StorageService.StoredFile storedFile = storageService.store(file, "wiki");
+                filePath = storedFile.storedFileName();
+            }
+            return createTaskFromContent(fileName, content, category, software, operatorId,
+                    "UPLOAD", filePath);
+        } catch (Exception e) {
+            log.error("Failed to create ingest task: {}", e.getMessage(), e);
+            throw new com.middleware.manager.exception.BusinessException(
+                    com.middleware.manager.constant.ErrorCode.UNKNOWN_ERROR, "创建任务失败");
+        }
+    }
+
+    @Transactional
     public IngestTask createTask(byte[] fileBytes, String fileName, String category, String software, Long operatorId) {
+        return createTask(fileBytes, fileName, category, software, operatorId, null);
+    }
+
+    private IngestTask createTask(byte[] fileBytes, String fileName, String category, String software,
+                                  Long operatorId, String filePath) {
         try {
             DocumentLoader loader = resolveLoader(fileName);
             String content;
             try (InputStream is = new java.io.ByteArrayInputStream(fileBytes)) {
                 content = loader.load(is, fileName);
             }
-            return createTaskFromContent(fileName, content, category, software, operatorId, "UPLOAD");
+            return createTaskFromContent(fileName, content, category, software, operatorId, "UPLOAD", filePath);
         } catch (Exception e) {
             log.error("Failed to create ingest task: {}", e.getMessage(), e);
             throw new com.middleware.manager.exception.BusinessException(com.middleware.manager.constant.ErrorCode.UNKNOWN_ERROR, "创建任务失败");
@@ -72,13 +108,15 @@ public class IngestTaskService {
     /**
      * 创建文本录入任务
      */
+    @Transactional
     public IngestTask createTextTask(String title, String content, String category, String software, Long operatorId) {
-        return createTaskFromContent(title, content, category, software, operatorId, "MANUAL");
+        return createTaskFromContent(title, content, category, software, operatorId, "MANUAL", null);
     }
 
     /**
      * 为已有来源创建编译任务
      */
+    @Transactional
     public IngestTask createReingestTask(Long sourceId, Long operatorId) {
         WikiSource source = sourceMapper.findById(sourceId);
         if (source == null) throw new com.middleware.manager.exception.NotFoundException(com.middleware.manager.constant.ErrorCode.DOCUMENT_NOT_FOUND, com.middleware.manager.constant.ErrorMessages.DOCUMENT_NOT_FOUND);
@@ -88,9 +126,8 @@ public class IngestTaskService {
         return task;
     }
 
-    @Transactional
     private IngestTask createTaskFromContent(String title, String content, String category, String software,
-                                              Long operatorId, String sourceType) {
+                                              Long operatorId, String sourceType, String filePath) {
         String hash = sha256(content);
 
         WikiSource source = sourceMapper.findByContentHash(hash);
@@ -100,13 +137,17 @@ public class IngestTaskService {
             source.setSourceType(sourceType);
             source.setContent(content);
             source.setContentHash(hash);
+            source.setFilePath(filePath);
             source.setCategory(category);
             source.setSoftware(software);
             source.setCreatedBy(operatorId);
             sourceMapper.insert(source);
-        } else if ((source.getCategory() == null && category != null) || (source.getSoftware() == null && software != null)) {
+        } else if ((source.getCategory() == null && category != null)
+                || (source.getSoftware() == null && software != null)
+                || (source.getFilePath() == null && filePath != null)) {
             if (source.getCategory() == null && category != null) source.setCategory(category);
             if (source.getSoftware() == null && software != null) source.setSoftware(software);
+            if (source.getFilePath() == null && filePath != null) source.setFilePath(filePath);
             sourceMapper.update(source);
         }
 
