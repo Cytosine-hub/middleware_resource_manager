@@ -1,11 +1,17 @@
 ---
 name: "source-command-restart"
-description: "重启本项目后端、前端和必要依赖服务；用户提到 restart、/restart、重启服务、重启前后端、看不到改动需要重启时使用。"
+description: "按需重启本项目后端、前端和必要依赖服务；用户提到 restart、/restart、重启服务、重启前后端、看不到改动需要重启时使用。"
 ---
 
 # source-command-restart
 
 Use this skill when the user asks for `/restart`, restart, 重启服务, or repository instructions require service restart after code changes.
+
+Default behavior is change-aware:
+
+- If no application code/config/assets changed since the last successful verification, do not restart backend or frontend. Only check that existing services are healthy and report their status.
+- Restart only the service affected by the change when the scope is clear.
+- Restart both backend and frontend only when the change crosses the API/UI boundary, changes shared configuration, or when the affected scope is ambiguous.
 
 ## Project Paths
 
@@ -17,20 +23,27 @@ Use this skill when the user asks for `/restart`, restart, 重启服务, or repo
 
 ## Workflow
 
-1. Check dependency services.
+1. Determine whether a restart is needed.
+   - Inspect changed files with `git status --short` and, when needed, the latest relevant commit with `git diff --name-only HEAD~1 HEAD`.
+   - Ignore unrelated local noise such as `.DS_Store`, screenshots, release notes, or documentation-only changes unless they directly affect runtime behavior.
+   - Backend restart is needed for changes under `src/main/`, `pom.xml`, backend config, database migrations used at runtime, or backend resources.
+   - Frontend restart is needed for changes under `frontend/src/`, `frontend/public/`, `frontend/package*.json`, `frontend/vite.config.*`, or frontend env/config files.
+   - If neither backend nor frontend restart is needed, skip stop/start steps and perform only the verification checks in step 6.
+2. Check dependency services.
    - If Colima is not running, start it.
    - If Milvus containers are not running, start `milvus_etcd` and `milvus_standalone`.
-2. Stop only project dev processes.
+3. Stop only affected project dev processes.
    - Prefer port/process-targeted commands for backend Spring Boot and Vite.
    - Do not stop unrelated Docker containers.
-3. Compile backend before starting.
+4. Compile backend before starting when backend restart is needed.
    - Run `mvn compile -q` from the project root.
    - If compile fails, report the compiler errors and stop.
-4. Start backend.
+5. Start affected services.
+   - Start backend only when backend restart is needed.
    - Truncate `/tmp/backend.log`.
    - Run `nohup mvn spring-boot:run -DskipTests >> /tmp/backend.log 2>&1 &`.
    - Wait and check `Started`, `APPLICATION FAILED`, `BUILD FAILURE`, and `ERROR`.
-5. Start frontend.
+   - Start frontend only when frontend restart is needed.
    - Run from `frontend`: `nohup npx vite --host 0.0.0.0 > /tmp/frontend.log 2>&1 &`.
    - Wait and check for `ready` or `Local`.
 6. Verify.
