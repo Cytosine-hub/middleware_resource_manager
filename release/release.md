@@ -1,3 +1,24 @@
+# Release v1.2.1-20260611
+
+**日期**: 2026-06-11
+**分支**: feature/ops-agent
+**发布范围**: frontend + backend
+**类型**: 增量发布
+
+## 自 v1.2.0-20260611 以来的变更
+
+- 82d1dd7 fix: stabilize wiki import signature errors
+
+## 包内容
+
+| 文件 | 说明 |
+|------|------|
+| backend/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar | 可执行 JAR |
+| backend/application.yml.example | 配置示例 |
+| frontend/ | 前端静态资源 |
+
+---
+
 # Release v1.2.0-20260611
 
 **日期**: 2026-06-11
