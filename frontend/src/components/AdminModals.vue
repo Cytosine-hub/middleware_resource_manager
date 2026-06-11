@@ -211,6 +211,30 @@
     </label>
   </FormModal>
 
+  <FormModal v-model="admin.showUserImportDialog.value" title="批量导入用户" submitText="开始导入" @submit="admin.importUsers">
+    <div class="form-grid single">
+      <p class="muted" style="margin:0 0 12px">请先下载模板，按格式填写后上传 Excel 文件。支持的列：账号、用户名、角色。密码默认为 admin123。</p>
+      <label class="file-field">选择 Excel 文件
+        <span class="file-control">
+          <input type="file" accept=".xlsx,.xls" @change="admin.handleUserImportFileChange" required />
+          <span class="file-button">选择文件</span>
+          <span class="file-name">{{ admin.userImportFile.value?.name || '未选择文件' }}</span>
+        </span>
+      </label>
+    </div>
+    <div v-if="admin.userImportResult.value" class="import-result">
+      <p>导入完成：成功 <strong>{{ admin.userImportResult.value.imported }}</strong> 条，跳过 <strong>{{ admin.userImportResult.value.skipped }}</strong> 条</p>
+      <ul v-if="admin.userImportResult.value.errors.length > 0">
+        <li v-for="(err, idx) in admin.userImportResult.value.errors" :key="idx" class="import-error">{{ err }}</li>
+      </ul>
+    </div>
+    <template #actions>
+      <BaseButton variant="ghost" @click="admin.downloadUserTemplate()">下载模板</BaseButton>
+      <BaseButton type="submit" :loading="admin.userImporting.value">{{ admin.userImporting.value ? '导入中...' : '开始导入' }}</BaseButton>
+      <BaseButton variant="ghost" @click="admin.showUserImportDialog.value = false; admin.userImportResult.value = null">关闭</BaseButton>
+    </template>
+  </FormModal>
+
   <BaseModal v-model="admin.showImportResultDialog.value" title="导入结果">
     <div class="result-grid">
       <div><span>扫描文件</span><strong>{{ admin.importResult.value?.scannedCount ?? 0 }}</strong></div>

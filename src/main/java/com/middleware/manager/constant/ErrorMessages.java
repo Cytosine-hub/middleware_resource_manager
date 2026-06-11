@@ -23,6 +23,7 @@ public final class ErrorMessages {
     // 文件操作
     public static final String FILE_TOO_LARGE = "上传文件超过大小限制";
     public static final String FILE_UPLOAD_FAILED = "文件上传失败";
+    public static final String FILE_READ_FAILED = "文件读取失败";
 
     // 用户相关
     public static final String USER_NOT_FOUND = "用户不存在";

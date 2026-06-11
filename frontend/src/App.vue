@@ -220,6 +220,7 @@
                 @deleteUser="deleteUserAccount"
               >
                 <template #actions>
+                  <button @click="admin.showUserImportDialog.value = true">批量导入</button>
                   <button @click="openCreateUserDialog()">新增用户</button>
                 </template>
               </UsersSection>

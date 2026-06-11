@@ -73,6 +73,10 @@ export function useAdmin(auth, notify, confirm) {
   const userFormTarget = ref(null)
   const userList = ref([])
   const allRoles = ref([])
+  const showUserImportDialog = ref(false)
+  const userImporting = ref(false)
+  const userImportResult = ref(null)
+  const userImportFile = ref(null)
 
   // 系统设置
   const systemSettings = reactive({ 'knowledge-enabled': 'true', 'diagnostics-enabled': 'true' })
@@ -675,6 +679,34 @@ export function useAdmin(auth, notify, confirm) {
     })
   }
 
+  function handleUserImportFileChange(e) { userImportFile.value = e.target.files[0] || null }
+
+  async function importUsers() {
+    if (!userImportFile.value) { notify('请选择文件', 'error'); return }
+    userImporting.value = true
+    try {
+      const fd = new FormData(); fd.append('file', userImportFile.value)
+      const result = await request('/api/admin/users/import', { method: 'POST', body: fd })
+      userImportResult.value = result
+      await loadUsers()
+      notify('导入完成', 'success')
+    } catch (e) { notify(e.message || '导入失败', 'error') }
+    finally { userImporting.value = false }
+  }
+
+  async function downloadUserTemplate() {
+    try {
+      const token = localStorage.getItem('mrm.token')
+      const resp = await fetch('/api/admin/users/template', { headers: { Authorization: `Bearer ${token}` } })
+      if (!resp.ok) throw new Error('下载失败')
+      const blob = await resp.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download = '用户导入模板.xlsx'
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) { notify(e.message || '下载失败', 'error') }
+  }
+
   function switchAdminSection(s) {
     adminSection.value = s
     showImport.value = false
@@ -832,6 +864,7 @@ export function useAdmin(auth, notify, confirm) {
     showUploadDialog, uploadFile, uploadConverting, uploadLoading, uploadResult,
     selectedReview, selectedReviewDiff, reviewComment, allReviews, showRevisionModal, revisionList, revisionDocTitle,
     showUserDialog, showRoleDialog, userFormTarget, userList, allRoles, systemSettings,
+    showUserImportDialog, userImporting, userImportResult, userImportFile,
     adminFilters, typeFilters, standardFilters, parameterFilters, maintenanceDocumentFilters, reviewFilters, reviewPage,
     adminPage, typePage, standardPage, parameterPage, maintenanceDocumentPage, reviewListPage,
     releaseForm, importForm, passwordForm, categoryForm, typeForm, standardForm, parameterForm, userForm,
@@ -854,6 +887,7 @@ export function useAdmin(auth, notify, confirm) {
     openCreateTypeDialog, openEditTypeDialog, closeTypeDialog, saveType, deleteType,
     openCreateStandardDialog, openEditStandardDialog, closeStandardDialog, saveStandard,
     openCreateParameterDialog, openEditParameterDialog, closeParameterDialog, saveParameter, handleParamImportFileChange, importParameters, downloadParameterTemplate,
+    handleUserImportFileChange, importUsers, downloadUserTemplate,
     submitForReview, startModify, cancelModify, confirmDeleteDoc,
     openUploadDialog, closeUploadDialog, handleUploadFileChange, uploadDocument,
     loadReviews, openReviewDetail, closeReviewDetail, previewWordDocFromReview, reviewApprove, reviewReject,

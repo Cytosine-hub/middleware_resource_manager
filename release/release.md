@@ -1,20 +1,79 @@
-# Release v1.1.0-20260608
+# Release v1.1.2-20260610
 
-**日期**: 2026-06-08
+**日期**: 2026-06-10
+**分支**: feature/ops-agent
+**发布范围**: frontend + backend + db
+**类型**: 增量发布
+
+## 自 v1.1.1-20260610 以来的变更
+
+- 76883e9 add frontend browser version gate
+- 067c8db fix word preview document navigation
+- fb04d7c fix frontend pdf preview scrolling
+
+## 包内容
+
+| 文件 | 说明 |
+|------|------|
+| backend/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar | 可执行 JAR |
+| backend/application.yml.example | 配置示例 |
+| frontend/ | 前端静态资源 |
+| db/full_schema.sql | 完整表结构（DDL） |
+| db/seed_data.sql | 种子数据（DML） |
+
+---
+
+# Release v1.1.1-20260610
+
+**日期**: 2026-06-10
 **分支**: feature/ops-agent
 **发布范围**: full（前端 + 后端 + 数据库 + 文档）
-**类型**: 全量发布（基线版本）
+**类型**: 全量发布
 
-**主要变更**:
-- feat: Agent 工具列表增加 description 字段
-- feat: Wiki 搜索工具集成到 Agent
-- feat: Wiki 知识图谱导出
-- feat: 常用命令模块（Kafka/RabbitMQ/Zookeeper/RocketMQ/Java容器）
-- fix: 智能排查 SSE 错误处理和加载状态
-- fix: Agent 会话 created_by 硬化
-- fix: Wiki 导出源引用修复
-- refactor: Wiki Ingest/Lint Agent 生产化加固
-- refactor: 数据库表结构完善（32 张表）
+## 主要变更
+
+### 新功能
+- feat: 标准文档增加 PDF 格式支持
+- feat: Word 文档支持"开始修改"流程（替换文档 + 编辑元数据）
+- feat: Word 预览支持参数占位符替换
+- feat: Word 文档上传完整流程 + docx-preview 源文档渲染
+- feat: 标准详情页关联手册改为标准文档，卡片流式布局
+- feat: 论坛列表无限滚动懒加载
+
+### 修复
+- fix: split document preview components
+- fix: align document upload preview flow
+- fix: 精准修复标准页粘性侧边栏，不影响管理后台固定布局
+- fix: 将 .workspace height:100% 改为 min-height:100% 修复粘性侧边栏
+- fix: 修复标准页 Word 文档长时左侧目录不粘性的问题
+- fix: Word 文档不显示文档大纲
+- fix: 标准发布页文档点击无响应 + Word 文档预览支持
+- fix: 补充 .status.warn 样式定义，修复待审核状态显示异常
+- fix: 修复 Word 文档审核流程中的多个问题
+- fix: StandardDocumentResponse 添加 storedFileName，Word 预览样式
+- fix word preview document navigation
+- fix frontend pdf preview scrolling
+
+### 优化
+- chore: 优化 code-review hook 和 skill，减少误报
+- chore: 新增 db 目录存储初始化 SQL 和种子数据
+
+## 包内容
+
+```
+middleware-resource-manager-v1.1.1-20260610/
+├── backend/
+│   ├── middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar  # 可执行 JAR
+│   └── application.yml.example                             # 配置示例
+├── frontend/
+│   ├── index.html
+│   ├── favicon.svg
+│   └── assets/                                             # 前端静态资源
+├── db/
+│   ├── full_schema.sql                                     # 完整表结构（DDL）
+│   └── seed_data.sql                                       # 种子数据（DML）
+└── release.md                                              # 本文件
+```
 
 ## 部署说明
 
@@ -35,29 +94,43 @@ mysql -u root middleware_resource_manager < db/full_schema.sql
 mysql -u root middleware_resource_manager < db/seed_data.sql
 ```
 
-4. 部署后端和前端（参见 docs/production-deploy.md）
+4. 复制并修改配置：
+```bash
+cp backend/application.yml.example backend/application.yml
+# 编辑 application.yml，配置数据库连接、AI API Key 等
+```
 
-### 存量环境升级
+5. 启动后端：
+```bash
+java -jar backend/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar
+```
+
+6. 部署前端：
+将 `frontend/` 目录部署到 Nginx 或其他 Web 服务器。
+
+### 从旧版本升级
 
 1. 备份数据库：
 ```sql
-mysqldump -u root middleware_resource_manager > backup_20260608.sql
+mysqldump -u root middleware_resource_manager > backup_20260610.sql
 ```
 
 2. 对比表结构差异，手动添加缺失列
 
+3. 替换后端 JAR 和前端文件
+
+4. 重启服务
+
 ## 文件清单
 
-| 文件 | 大小 |
+| 文件 | 说明 |
 |------|------|
-| backend/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar | 107M |
-| backend/application.yml.example | 2.9 KB |
-| frontend/index.html | 4.0K |
-| frontend/assets/ | 756K |
-| db/full_schema.sql |  24K |
-| db/seed_data.sql |  32K |
-| docs/startup-manual.md | 8.0K |
-| docs/production-deploy.md |  12K |
+| backend/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar | 可执行 JAR（约 107M） |
+| backend/application.yml.example | 配置示例文件 |
+| frontend/index.html | 前端入口 |
+| frontend/assets/ | 前端静态资源（JS/CSS） |
+| db/full_schema.sql | 完整表结构（DDL） |
+| db/seed_data.sql | 种子数据（DML） |
 
 ## 数据库表清单（32 张）
 
@@ -94,3 +167,46 @@ mysqldump -u root middleware_resource_manager > backup_20260608.sql
 | Wiki | wiki_audit_log | Wiki 操作审计 |
 | Wiki | wiki_page_permissions | Wiki 页面权限 |
 | Wiki | wiki_access_requests | Wiki 访问申请 |
+
+## 环境要求
+
+- Java 17+
+- MySQL 8.0+
+- Node.js 18+（仅开发环境）
+
+## 默认账号
+
+| 用户名 | 密码 | 角色 |
+|--------|------|------|
+| sysadmin | sysadmin123 | 系统管理员 |
+| mwadmin | mwadmin123 | 中间件管理岗 |
+| dbadmin | dbadmin123 | 数据库管理岗 |
+| hostadmin | hostadmin123 | 主机管理岗 |
+| netadmin | netadmin123 | 网络管理岗 |
+| secadmin | secadmin123 | 安全管理岗 |
+| devmgr | devmgr123 | 开发经理 |
+| opsmgr | opsmgr123 | 运维经理 |
+
+## 配置说明
+
+主要配置项（在 `application.yml` 中）：
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/middleware_resource_manager
+    username: root
+    password: your_password
+
+langchain4j:
+  open-ai:
+    chat-model:
+      api-key: your_ai_api_key
+      base-url: https://your_ai_endpoint/v1
+```
+
+## 相关文档
+
+- 开发规范：`docs/development-standards.md`
+- Zabbix 集成：`docs/zabbix-integration-guide.md`
+- 知识库 DDL：`src/main/resources/db/knowledge_ddl.sql`
