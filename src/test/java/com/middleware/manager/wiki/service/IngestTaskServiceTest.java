@@ -1,5 +1,6 @@
 package com.middleware.manager.wiki.service;
 
+import com.middleware.manager.constant.ErrorMessages;
 import com.middleware.manager.knowledge.loader.DocumentLoader;
 import com.middleware.manager.service.StorageService;
 import com.middleware.manager.wiki.entity.IngestTask;
@@ -35,7 +36,6 @@ class IngestTaskServiceTest {
         List<DocumentLoader> loaders = Collections.emptyList();
         service = new IngestTaskService(taskMapper, sourceMapper, ingestAgent, loaders, storageService);
         setField(service, "maxContentChars", 20);
-        setField(service, "chunkOverlap", 5);
         setField(service, "maxConcurrent", 1);
         service.init();
     }
@@ -56,7 +56,7 @@ class IngestTaskServiceTest {
 
         IngestAgent.IngestResult failed = new IngestAgent.IngestResult();
         failed.setStatus("FAILED");
-        failed.setErrorMessage("Failed to parse pages JSON");
+        failed.setErrorMessage(ErrorMessages.WIKI_PAGE_PLAN_FAILED);
 
         when(taskMapper.findById(9L)).thenReturn(task);
         when(sourceMapper.findById(3L)).thenReturn(source);
@@ -66,7 +66,7 @@ class IngestTaskServiceTest {
         service.executeTask(9L);
 
         verify(taskMapper, never()).updateResult(eq(9L), anyInt(), anyInt());
-        verify(taskMapper).updateStatus(eq(9L), eq("FAILED"), contains("Failed to parse pages JSON"));
+        verify(taskMapper).updateStatus(eq(9L), eq("FAILED"), eq(ErrorMessages.WIKI_PAGE_PLAN_FAILED));
         ArgumentCaptor<WikiSource> sourceCaptor = ArgumentCaptor.forClass(WikiSource.class);
         verify(sourceMapper).update(sourceCaptor.capture());
         assertFalse(Boolean.TRUE.equals(sourceCaptor.getValue().getIngested()));

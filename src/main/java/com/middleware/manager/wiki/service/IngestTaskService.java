@@ -34,9 +34,6 @@ public class IngestTaskService {
     @Value("${app.wiki.ingest.max-content-chars:20000}")
     private int maxContentChars;
 
-    @Value("${app.wiki.ingest.chunk-overlap:500}")
-    private int chunkOverlap;
-
     @Value("${app.wiki.ingest.max-concurrent:2}")
     private int maxConcurrent;
 
@@ -175,7 +172,7 @@ public class IngestTaskService {
 
     private int calcChunks(int contentLength) {
         if (contentLength <= maxContentChars) return 1;
-        return (int) Math.ceil((double) contentLength / (maxContentChars - chunkOverlap));
+        return (int) Math.ceil((double) contentLength / maxContentChars);
     }
 
     /**
