@@ -95,4 +95,5 @@ public final class ErrorMessages {
     public static final String LLM_AUTH_FAILED = "模型服务认证失败，请检查 API Key 配置";
     public static final String LLM_SERVICE_BUSY = "模型服务繁忙，请稍后再试";
     public static final String LLM_RESPONSE_TIMEOUT = "模型响应超时，请稍后再试";
+    public static final String LLM_STREAM_UNAVAILABLE = "流式响应不可用，已切换为普通响应";
 }

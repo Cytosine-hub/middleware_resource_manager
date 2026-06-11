@@ -69,8 +69,12 @@ public class AgentController {
                 }
 
                 Long finalSessionId = sessionId;
-                AgentResponse response = agent.chat(sessionId, message, retryMsg -> {
+                AgentResponse response = agent.chatStream(sessionId, message, retryMsg -> {
                     safeSend(emitter, clientOpen, "retry", Map.of("message", retryMsg));
+                }, delta -> {
+                    if (!safeSend(emitter, clientOpen, "delta", Map.of("content", delta))) {
+                        throw new IllegalStateException("client disconnected");
+                    }
                 }, authentication);
 
                 Map<String, Object> result = new HashMap<>();
@@ -141,7 +145,8 @@ public class AgentController {
         return lower.contains("broken pipe")
                 || lower.contains("connection reset")
                 || lower.contains("response body has already been written")
-                || lower.contains("async request");
+                || lower.contains("async request")
+                || lower.contains("client disconnected");
     }
 
     @GetMapping("/sessions")

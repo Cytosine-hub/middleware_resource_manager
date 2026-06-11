@@ -26,7 +26,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
@@ -34,27 +36,24 @@ import lombok.extern.slf4j.Slf4j;
 public class TroubleshootAgent {
 
     private static final String SYSTEM_PROMPT =
-            "你是一个中间件故障排查专家。用户会描述遇到的问题，你需要：\n" +
-            "1. 分析问题描述\n" +
-            "2. 根据提供的知识库内容给出诊断\n" +
-            "3. 给出具体的排查步骤和解决方案\n" +
-            "4. 如果知识库中没有相关信息，明确说明未找到，不要编造内部标准、参数或流程\n\n" +
-            "回答格式要求：\n" +
-            "- 先给出问题诊断\n" +
-            "- 再给出排查步骤\n" +
-            "- 最后给出解决方案\n\n" +
-            "信息来源标注规则（必须严格遵守）：\n" +
-            "- 如果上下文来自 Wiki 知识库，引用时标注【Wiki：页面标题】\n" +
-            "- 如果上下文来自知识库文档，引用时标注【知识库：来源标题】\n" +
-            "- 不要使用未提供的内部知识；如确需通用排查方向，只能写成'通用排查建议'并明确非知识库依据\n" +
-            "- 如果知识库中完全没有相关信息，明确告知用户：'知识库中未找到相关内容，无法给出基于内部知识库的结论'";
+            "你是企业内部中间件知识库问答助手。你会收到用户问题以及系统检索到的 Wiki 和向量/关键词知识库内容。\n" +
+            "必须遵守：\n" +
+            "1. 优先基于提供的内部知识库内容回答，不要编造内部标准、参数、流程或版本信息。\n" +
+            "2. 如果上下文来自 Wiki，引用时标注【Wiki：页面标题】；如果上下文来自知识库文档，引用时标注【知识库：来源标题】。\n" +
+            "3. 如果知识库中完全没有相关信息，明确告知用户：'知识库中未找到相关内容，无法给出基于内部知识库的结论'。\n" +
+            "4. 只有用户问题明显是故障、告警或线上异常排查时，才使用'问题诊断、排查步骤、解决方案'结构。\n" +
+            "5. 对介绍、说明、是什么、有哪些、如何配置、使用场景等知识问答类问题，按'概述、关键能力/配置要点、适用场景、参考来源'组织，不要输出问题诊断。\n" +
+            "6. 如果确需补充通用知识，只能放在'通用补充'中，并明确不是内部知识库依据。";
 
     private static final int MAX_HISTORY_MESSAGES = 10;
     private static final int DEFAULT_SEARCH_TOP_K = 5;
     private static final int MAX_RETRIES = 5;
     private static final int MAX_CONTEXT_CHARS = 6000;
+    private static final Pattern TROUBLESHOOTING_INTENT = Pattern.compile(
+            ".*(故障|报错|错误|异常|失败|超时|无法|不能|卡顿|变慢|宕机|不可用|告警|报警|排查|诊断|根因|恢复|重启|连接池|CPU|cpu|内存|OOM|oom|磁盘|日志).*");
 
     private final ChatModel chatModel;
+    private final OpenAiStreamClient streamClient;
 
     @Autowired
     private KnowledgeService knowledgeService;
@@ -70,8 +69,9 @@ public class TroubleshootAgent {
 
     private final Gson gson = new Gson();
 
-    public TroubleshootAgent(ChatModel chatModel) {
+    public TroubleshootAgent(ChatModel chatModel, OpenAiStreamClient streamClient) {
         this.chatModel = chatModel;
+        this.streamClient = streamClient;
     }
 
     /**
@@ -105,88 +105,15 @@ public class TroubleshootAgent {
     @Transactional
     public AgentResponse chat(Long sessionId, String userMessage, Consumer<String> onRetry,
                               Authentication authentication) {
-        // 1. Save user message
-        com.middleware.manager.knowledge.agent.ChatMessage userMsg = new com.middleware.manager.knowledge.agent.ChatMessage();
-        userMsg.setSessionId(sessionId);
-        userMsg.setRole("user");
-        userMsg.setContent(userMessage);
-        chatMessageMapper.insert(userMsg);
-
-        // Update session title from first message
-        ChatSession session = chatSessionMapper.findById(sessionId);
-        if (session == null) {
-            throw new com.middleware.manager.exception.NotFoundException(ErrorCode.NOT_FOUND, "会话不存在");
-        }
-        if ("新会话".equals(session.getTitle())) {
-            String title = userMessage.length() > 50 ? userMessage.substring(0, 50) + "..." : userMessage;
-            session.setTitle(title);
-            chatSessionMapper.update(session);
-        }
-
-        // 2. Retrieve relevant knowledge — Wiki and vector/keyword knowledge are both used.
-        List<Map<String, Object>> references = new ArrayList<>();
-
-        List<WikiSearchService.WikiSearchResult> wikiResults = Collections.emptyList();
-        if (wikiSearchService != null) {
-            try {
-                wikiResults = wikiSearchService.search(userMessage, DEFAULT_SEARCH_TOP_K, authentication);
-            } catch (Exception e) {
-                log.warn("Wiki search failed: {}", e.getMessage());
-            }
-        }
-
-        List<SearchResult> searchResults = knowledgeService.search(userMessage, DEFAULT_SEARCH_TOP_K);
-        String contextMessage = buildHybridContextMessage(userMessage, wikiResults, searchResults);
-        for (WikiSearchService.WikiSearchResult r : wikiResults) {
-            Map<String, Object> ref = new HashMap<>();
-            ref.put("title", r.getPage().getTitle());
-            ref.put("wikiPageId", r.getPage().getId());
-            ref.put("source", "wiki");
-            references.add(ref);
-        }
-        for (SearchResult r : searchResults) {
-            if (r.getSourceTitle() != null) {
-                Map<String, Object> ref = new HashMap<>();
-                ref.put("title", r.getSourceTitle());
-                ref.put("source", r.getSource());
-                references.add(ref);
-            }
-        }
-
-        // 3. Build messages list for LLM (LangChain4j messages)
-        List<ChatMessage> messages = new ArrayList<>();
-
-        // System prompt
-        messages.add(new SystemMessage(SYSTEM_PROMPT));
-
-        // History messages (up to MAX_HISTORY_MESSAGES)
-        List<com.middleware.manager.knowledge.agent.ChatMessage> history =
-                chatMessageMapper.findBySessionIdOrderByCreatedAtAsc(sessionId);
-        int start = Math.max(0, history.size() - MAX_HISTORY_MESSAGES);
-        for (int i = start; i < history.size(); i++) {
-            com.middleware.manager.knowledge.agent.ChatMessage h = history.get(i);
-            if ("user".equals(h.getRole())) {
-                messages.add(new UserMessage(h.getContent()));
-            } else if ("assistant".equals(h.getRole())) {
-                messages.add(new AiMessage(h.getContent()));
-            }
-        }
-
-        // Current question with knowledge context
-        // Replace the last user message with the context-enriched version
-        if (!messages.isEmpty() && messages.get(messages.size() - 1) instanceof UserMessage) {
-            messages.set(messages.size() - 1, new UserMessage(contextMessage));
-        } else {
-            messages.add(new UserMessage(contextMessage));
-        }
+        ChatContext context = prepareChatContext(sessionId, userMessage, authentication);
 
         // 4. Call LLM (with retry)
-        log.info("Calling LLM for session {}, message count: {}", sessionId, messages.size());
+        log.info("Calling LLM for session {}, message count: {}", sessionId, context.messages().size());
         ChatResponse response = null;
         Exception lastException = null;
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
-                response = chatModel.chat(messages);
+                response = chatModel.chat(context.messages());
                 break;
             } catch (Exception e) {
                 log.error("LLM call failed (attempt {}/{}): {}", attempt, MAX_RETRIES, e.getMessage());
@@ -210,17 +137,85 @@ public class TroubleshootAgent {
         }
 
         String answer = response.aiMessage() != null ? response.aiMessage().text() : "";
+        saveAssistantMessage(sessionId, answer, context.references());
 
-        // 5. Save assistant message
+        // 6. Return response
+        return new AgentResponse(answer, context.references());
+    }
+
+    @Transactional
+    public AgentResponse chatStream(Long sessionId, String userMessage, Consumer<String> onRetry,
+                                    Consumer<String> onDelta, Authentication authentication) {
+        ChatContext context = prepareChatContext(sessionId, userMessage, authentication);
+        AtomicBoolean deltaSent = new AtomicBoolean(false);
+        try {
+            log.info("Calling streaming LLM for session {}, message count: {}", sessionId, context.messages().size());
+            String answer = streamClient.stream(context.messages(), delta -> {
+                deltaSent.set(true);
+                onDelta.accept(delta);
+            });
+            if (answer.isBlank()) {
+                throw new BusinessException(ErrorCode.UNKNOWN_ERROR, ErrorMessages.LLM_RESPONSE_TIMEOUT);
+            }
+            saveAssistantMessage(sessionId, answer, context.references());
+            return new AgentResponse(answer, context.references());
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            if (isClientDisconnect(e)) {
+                throw new IllegalStateException("client disconnected", e);
+            }
+            if (deltaSent.get()) {
+                log.warn("Streaming LLM failed after partial response sessionId={} error={}", sessionId, e.getMessage());
+                throw new BusinessException(ErrorCode.UNKNOWN_ERROR, ErrorMessages.LLM_RESPONSE_TIMEOUT);
+            }
+            log.warn("Streaming LLM failed, fallback to non-streaming chat sessionId={} error={}", sessionId, e.getMessage());
+            if (onRetry != null) {
+                onRetry.accept(ErrorMessages.LLM_STREAM_UNAVAILABLE);
+            }
+            return chatWithoutSavingUserMessage(sessionId, context, onRetry);
+        }
+    }
+
+    private AgentResponse chatWithoutSavingUserMessage(Long sessionId, ChatContext context, Consumer<String> onRetry) {
+        ChatResponse response = null;
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                response = chatModel.chat(context.messages());
+                break;
+            } catch (Exception e) {
+                log.error("LLM fallback call failed (attempt {}/{}): {}", attempt, MAX_RETRIES, e.getMessage());
+                if (isNonRetryableLlmFailure(e)) {
+                    throw new BusinessException(ErrorCode.UNKNOWN_ERROR, ErrorMessages.LLM_AUTH_FAILED);
+                }
+                lastException = e;
+                if (attempt < MAX_RETRIES) {
+                    if (onRetry != null) {
+                        onRetry.accept("模型响应超时，正在重试（" + attempt + "/" + MAX_RETRIES + "）...");
+                    }
+                    try { Thread.sleep(attempt * 2000L); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                }
+            }
+        }
+        if (response == null) {
+            if (lastException != null) {
+                log.error("LLM fallback call exhausted retries", lastException);
+            }
+            throw new BusinessException(ErrorCode.UNKNOWN_ERROR, ErrorMessages.LLM_RESPONSE_TIMEOUT);
+        }
+        String answer = response.aiMessage() != null ? response.aiMessage().text() : "";
+        saveAssistantMessage(sessionId, answer, context.references());
+        return new AgentResponse(answer, context.references());
+    }
+
+    private void saveAssistantMessage(Long sessionId, String answer, List<Map<String, Object>> references) {
         com.middleware.manager.knowledge.agent.ChatMessage assistantMsg = new com.middleware.manager.knowledge.agent.ChatMessage();
         assistantMsg.setSessionId(sessionId);
         assistantMsg.setRole("assistant");
         assistantMsg.setContent(answer);
         assistantMsg.setReferencesText(gson.toJson(references));
         chatMessageMapper.insert(assistantMsg);
-
-        // 6. Return response
-        return new AgentResponse(answer, references);
     }
 
     /**
@@ -242,6 +237,11 @@ public class TroubleshootAgent {
                 || lower.contains("api key");
     }
 
+    private boolean isClientDisconnect(Exception e) {
+        String message = e.getMessage();
+        return message != null && message.toLowerCase().contains("client disconnected");
+    }
+
     /**
      * Get all sessions ordered by last update.
      */
@@ -249,11 +249,91 @@ public class TroubleshootAgent {
         return chatSessionMapper.findAllByOrderByUpdatedAtDesc();
     }
 
+    private ChatContext prepareChatContext(Long sessionId, String userMessage, Authentication authentication) {
+        com.middleware.manager.knowledge.agent.ChatMessage userMsg = new com.middleware.manager.knowledge.agent.ChatMessage();
+        userMsg.setSessionId(sessionId);
+        userMsg.setRole("user");
+        userMsg.setContent(userMessage);
+        chatMessageMapper.insert(userMsg);
+
+        ChatSession session = chatSessionMapper.findById(sessionId);
+        if (session == null) {
+            throw new NotFoundException(ErrorCode.NOT_FOUND, "会话不存在");
+        }
+        if ("新会话".equals(session.getTitle()) || session.getTitle() == null || session.getTitle().isBlank()) {
+            String title = userMessage.length() > 50 ? userMessage.substring(0, 50) + "..." : userMessage;
+            session.setTitle(title);
+            chatSessionMapper.update(session);
+        }
+
+        List<WikiSearchService.WikiSearchResult> wikiResults = Collections.emptyList();
+        if (wikiSearchService != null) {
+            try {
+                wikiResults = wikiSearchService.search(userMessage, DEFAULT_SEARCH_TOP_K, authentication);
+            } catch (Exception e) {
+                log.warn("Wiki search failed: {}", e.getMessage());
+            }
+        }
+
+        List<SearchResult> searchResults = knowledgeService.search(userMessage, DEFAULT_SEARCH_TOP_K);
+        List<Map<String, Object>> references = buildReferences(wikiResults, searchResults);
+        String contextMessage = buildHybridContextMessage(userMessage, wikiResults, searchResults);
+        List<ChatMessage> messages = buildMessages(sessionId, contextMessage);
+        return new ChatContext(messages, references);
+    }
+
+    private List<Map<String, Object>> buildReferences(List<WikiSearchService.WikiSearchResult> wikiResults,
+                                                      List<SearchResult> searchResults) {
+        List<Map<String, Object>> references = new ArrayList<>();
+        for (WikiSearchService.WikiSearchResult r : wikiResults) {
+            Map<String, Object> ref = new HashMap<>();
+            ref.put("title", r.getPage().getTitle());
+            ref.put("wikiPageId", r.getPage().getId());
+            ref.put("source", "wiki");
+            references.add(ref);
+        }
+        for (SearchResult r : searchResults) {
+            if (r.getSourceTitle() != null) {
+                Map<String, Object> ref = new HashMap<>();
+                ref.put("title", r.getSourceTitle());
+                ref.put("source", r.getSource());
+                references.add(ref);
+            }
+        }
+        return references;
+    }
+
+    private List<ChatMessage> buildMessages(Long sessionId, String contextMessage) {
+        List<ChatMessage> messages = new ArrayList<>();
+        messages.add(new SystemMessage(SYSTEM_PROMPT));
+
+        List<com.middleware.manager.knowledge.agent.ChatMessage> history =
+                chatMessageMapper.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        int start = Math.max(0, history.size() - MAX_HISTORY_MESSAGES);
+        for (int i = start; i < history.size(); i++) {
+            com.middleware.manager.knowledge.agent.ChatMessage h = history.get(i);
+            if ("user".equals(h.getRole())) {
+                messages.add(new UserMessage(h.getContent()));
+            } else if ("assistant".equals(h.getRole())) {
+                messages.add(new AiMessage(h.getContent()));
+            }
+        }
+
+        if (!messages.isEmpty() && messages.get(messages.size() - 1) instanceof UserMessage) {
+            messages.set(messages.size() - 1, new UserMessage(contextMessage));
+        } else {
+            messages.add(new UserMessage(contextMessage));
+        }
+        return messages;
+    }
+
     private String buildHybridContextMessage(String userMessage,
             List<WikiSearchService.WikiSearchResult> wikiResults,
             List<SearchResult> knowledgeResults) {
         StringBuilder sb = new StringBuilder();
         sb.append("用户问题：").append(userMessage).append("\n\n");
+        sb.append("用户意图：").append(isTroubleshootingIntent(userMessage) ? "故障排查" : "知识问答").append("\n");
+        sb.append("请按用户意图选择回答结构。\n\n");
         if (!wikiResults.isEmpty()) {
             sb.append("以下是 Wiki 知识库中的相关页面：\n\n");
             appendWikiContext(sb, wikiResults);
@@ -270,6 +350,10 @@ public class TroubleshootAgent {
             sb.append("知识库中未找到相关内容。\n");
         }
         return sb.toString();
+    }
+
+    private boolean isTroubleshootingIntent(String userMessage) {
+        return userMessage != null && TROUBLESHOOTING_INTENT.matcher(userMessage).matches();
     }
 
     private void appendWikiContext(StringBuilder sb, List<WikiSearchService.WikiSearchResult> results) {
@@ -335,5 +419,8 @@ public class TroubleshootAgent {
         public void setReferences(List<Map<String, Object>> references) {
             this.references = references;
         }
+    }
+
+    private record ChatContext(List<ChatMessage> messages, List<Map<String, Object>> references) {
     }
 }

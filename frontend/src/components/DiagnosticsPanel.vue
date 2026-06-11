@@ -524,6 +524,7 @@ async function sendMessage() {
     const decoder = new TextDecoder()
     let buffer = ''
     let currentEvent = { type: '', data: '' }
+    let assistantStreamIdx = -1
 
     while (true) {
       const { done, value } = await reader.read()
@@ -553,6 +554,18 @@ async function sendMessage() {
             const status = data.success === false ? '失败' : '完成'
             const summary = data.summary ? ` - ${compactText(data.summary)}` : ''
             upsertProgress(`${status}：${data.stepName || data.toolName || '工具调用'}${summary}`)
+          } else if (eventType === 'delta') {
+            clearProgress()
+            if (retryMsgIdx >= 0) {
+              messages.value.splice(retryMsgIdx, 1)
+              retryMsgIdx = -1
+            }
+            if (assistantStreamIdx < 0) {
+              assistantStreamIdx = messages.value.length
+              messages.value.push({ role: 'assistant', content: '', references: [] })
+            }
+            messages.value[assistantStreamIdx].content += data.content || ''
+            scrollToBottom()
           } else if (eventType === 'completed') {
             clearProgress()
             await loadSessions()
@@ -571,6 +584,8 @@ async function sendMessage() {
               messages.value[retryMsgIdx].content = data.retryFailed
                 ? `⚠️ ${data.error}`
                 : `请求失败：${data.error}`
+            } else if (assistantStreamIdx >= 0) {
+              messages.value[assistantStreamIdx].content += `\n\n请求失败：${data.error}`
             } else {
               messages.value.push({
                 role: 'assistant',
@@ -592,6 +607,13 @@ async function sendMessage() {
                 skill: data.skill || null,
                 tools: data.toolsUsed || []
               })
+            } else if (assistantStreamIdx >= 0) {
+              messages.value[assistantStreamIdx] = {
+                ...messages.value[assistantStreamIdx],
+                role: 'assistant',
+                content: data.answer || data.content || messages.value[assistantStreamIdx].content,
+                references: data.references || []
+              }
             } else {
               messages.value.push({
                 role: 'assistant',
