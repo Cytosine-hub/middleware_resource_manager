@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.middleware.manager.repository.ApiAuditLogMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO api_audit_log (username, method, path, query_string, status_code,
+                                   ip_address, user_agent, duration_ms)
+        VALUES (#{username}, #{method}, #{path}, #{queryString}, #{statusCode},
+                #{ipAddress}, #{userAgent}, #{durationMs})
+    </insert>
+
+</mapper>
