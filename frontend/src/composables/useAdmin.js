@@ -690,6 +690,7 @@ export function useAdmin(auth, notify, confirm) {
       userImportResult.value = result
       await loadUsers()
       notify('导入完成', 'success')
+      showUserImportDialog.value = false; userImportResult.value = null; userImportFile.value = null
     } catch (e) { notify(e.message || '导入失败', 'error') }
     finally { userImporting.value = false }
   }

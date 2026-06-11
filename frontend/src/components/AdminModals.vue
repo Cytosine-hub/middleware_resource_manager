@@ -185,7 +185,7 @@
     </div>
     <template #actions>
       <BaseButton variant="ghost" @click="admin.downloadParameterTemplate()">下载模板</BaseButton>
-      <BaseButton type="submit" :loading="admin.paramImporting.value">{{ admin.paramImporting.value ? '导入中...' : '开始导入' }}</BaseButton>
+      <BaseButton variant="primary" type="submit" :loading="admin.paramImporting.value">{{ admin.paramImporting.value ? '导入中...' : '开始导入' }}</BaseButton>
       <BaseButton variant="ghost" @click="admin.showParamImportDialog.value = false; admin.paramImportResult.value = null">关闭</BaseButton>
     </template>
   </FormModal>
@@ -230,7 +230,7 @@
     </div>
     <template #actions>
       <BaseButton variant="ghost" @click="admin.downloadUserTemplate()">下载模板</BaseButton>
-      <BaseButton type="submit" :loading="admin.userImporting.value">{{ admin.userImporting.value ? '导入中...' : '开始导入' }}</BaseButton>
+      <BaseButton variant="primary" type="submit" :loading="admin.userImporting.value">{{ admin.userImporting.value ? '导入中...' : '开始导入' }}</BaseButton>
       <BaseButton variant="ghost" @click="admin.showUserImportDialog.value = false; admin.userImportResult.value = null">关闭</BaseButton>
     </template>
   </FormModal>
