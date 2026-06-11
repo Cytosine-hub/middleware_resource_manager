@@ -20,7 +20,8 @@ public class PublicConfigController {
     public Map<String, Object> config() {
         return Map.of(
                 "knowledgeEnabled", settingService.getBoolean("knowledge-enabled", true),
-                "diagnosticsEnabled", settingService.getBoolean("diagnostics-enabled", true)
+                "diagnosticsEnabled", settingService.getBoolean("diagnostics-enabled", true),
+                "wikiEnabled", settingService.getBoolean("wiki-enabled", true)
         );
     }
 }

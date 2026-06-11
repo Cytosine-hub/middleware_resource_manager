@@ -12,7 +12,7 @@
           <button v-if="auth.token" :class="{ active: route.name === 'public' }" @click="navigate('downloads')">下载中心</button>
           <button v-if="auth.token" :class="{ active: route.name?.startsWith('forum') }" @click="navigate('forum')">论坛</button>
           <button v-if="auth.token && siteConfig.knowledgeEnabled" :class="{ active: route.name === 'knowledge' }" @click="navigate('knowledge')">知识库</button>
-          <button v-if="auth.token" :class="{ active: route.name === 'wiki' }" @click="navigate('wiki')">Wiki</button>
+          <button v-if="auth.token && siteConfig.wikiEnabled" :class="{ active: route.name === 'wiki' }" @click="navigate('wiki')">Wiki</button>
           <button v-if="auth.token && siteConfig.diagnosticsEnabled" :class="{ active: route.name === 'diagnostics' }" @click="navigate('diagnostics')">智能排查</button>
           <button v-if="canAccessAdmin" :class="{ active: route.name === 'admin' || route.name === 'documentEditor' }" @click="navigate('admin')">管理后台</button>
         </nav>
@@ -116,7 +116,7 @@
       </section>
 
       <KnowledgePanel v-else-if="route.name === 'knowledge' && siteConfig.knowledgeEnabled" :auth="auth" :notify="notify" />
-      <WikiPanel v-else-if="route.name === 'wiki'" :auth="auth" :notify="notify" />
+      <WikiPanel v-else-if="route.name === 'wiki' && siteConfig.wikiEnabled" :auth="auth" :notify="notify" />
       <DiagnosticsPanel v-else-if="route.name === 'diagnostics' && siteConfig.diagnosticsEnabled" :auth="auth" :notify="notify" />
 
       <CommandsPage
@@ -310,7 +310,7 @@ const { auth, login: authLogin, logout: authLogout, restoreAuth,
 const { notice, notify, confirmDialog, confirm: confirmAction } = useNotify()
 const { route, navigate } = useRoute()
 
-const admin = useAdmin(auth, notify, confirmAction)
+const admin = useAdmin(auth, notify, confirmAction, loadSiteConfig)
 const {
   adminSection, showPassword, editing, uploading, softwareTypes,
   showParamImportDialog, allParameterStandards, standardDocuments, standardParameters, selectedStandard,
@@ -339,7 +339,7 @@ const {
 } = admin
 
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true })
-const siteConfig = reactive({ knowledgeEnabled: true, diagnosticsEnabled: true })
+const siteConfig = reactive({ knowledgeEnabled: true, diagnosticsEnabled: true, wikiEnabled: true })
 const loginForm = reactive({ username: '', password: '' })
 const selectedPreviewDocument = ref(null)
 
@@ -531,6 +531,7 @@ async function loadSiteConfig() {
     const cfg = await request('/api/public/config', { token: null })
     siteConfig.knowledgeEnabled = cfg.knowledgeEnabled !== false
     siteConfig.diagnosticsEnabled = cfg.diagnosticsEnabled !== false
+    siteConfig.wikiEnabled = cfg.wikiEnabled !== false
   } catch { /* use defaults */ }
 }
 

@@ -19,7 +19,7 @@ async function sha256Hash(str) {
   } catch { return str }
 }
 
-export function useAdmin(auth, notify, confirm) {
+export function useAdmin(auth, notify, confirm, onSettingsSaved) {
   // ── 管理后台状态 ──
   const adminSection = ref('files')
   const showPassword = ref(false)
@@ -207,7 +207,11 @@ export function useAdmin(auth, notify, confirm) {
   }
 
   async function saveSystemSettings() {
-    try { await request('/api/admin/settings', { method: 'PUT', body: systemSettings }); notify('设置已保存', 'success') } catch { notify('保存失败', 'error') }
+    try {
+      await request('/api/admin/settings', { method: 'PUT', body: systemSettings })
+      notify('设置已保存', 'success')
+      if (onSettingsSaved) onSettingsSaved()
+    } catch { notify('保存失败', 'error') }
   }
 
   async function loadUsers() { try { userList.value = await request('/api/admin/users') } catch { userList.value = [] } }
