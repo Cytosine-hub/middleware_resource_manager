@@ -89,6 +89,14 @@ public final class ErrorMessages {
 
     // Wiki 导入导出
     public static final String WIKI_IMPORT_SIGNATURE_INVALID = "导入包签名校验失败，请确认导出端和导入端使用相同的 WIKI_EXPORT_SIGNATURE_SECRET，且导入包未被修改";
+    public static final String WIKI_INGEST_FAILED = "LLM 编译失败";
+    public static final String WIKI_INGEST_TASK_FAILED = "Wiki 编译失败，请稍后重试";
+    public static final String WIKI_INGEST_EMPTY_RESULT = "LLM 未生成任何 Wiki 页面";
+    public static final String WIKI_SECTION_FACTS_FAILED = "章节事实抽取失败";
+    public static final String WIKI_PAGE_PLAN_FAILED = "页面计划生成失败";
+    public static final String WIKI_PAGE_GENERATION_FAILED = "页面生成失败";
+    public static final String WIKI_QUALITY_GATE_FAILED = "质量门禁失败";
+    public static final String WIKI_QUALITY_GATE_PARTIAL = "质量门禁部分通过";
 
     // 基础设施
     public static final String SHA256_UNAVAILABLE = "SHA-256 算法不可用";

@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.middleware.manager.knowledge.embedding.EmbeddingService;
 import com.middleware.manager.knowledge.store.VectorStore;
+import com.middleware.manager.constant.ErrorMessages;
 import com.middleware.manager.domain.SoftwareType;
 import com.middleware.manager.repository.SoftwareTypeMapper;
 import com.middleware.manager.wiki.entity.WikiIngestLog;
@@ -282,7 +283,7 @@ public class IngestAgent {
             String sectionFactsJson = callLlm(IngestPromptTemplates.buildSectionFactsPrompt(outlineJson));
             JsonObject sectionFacts = parseJson(sectionFactsJson);
             if (sectionFacts == null || !sectionFacts.has("section_facts")) {
-                return failPlanned(result, ingestLog, startTime, "章节事实抽取失败");
+                return failPlanned(result, ingestLog, startTime, ErrorMessages.WIKI_SECTION_FACTS_FAILED);
             }
 
             log.info("Planned ingest Step 2: Planning pages for source '{}'", source.getTitle());
@@ -292,7 +293,7 @@ public class IngestAgent {
                     outlineJson, sectionFactsJson, existingSummary, softwareRef));
             JsonObject pagePlan = parseJson(pagePlanJson);
             if (pagePlan == null || !pagePlan.has("pages")) {
-                return failPlanned(result, ingestLog, startTime, "页面计划生成失败");
+                return failPlanned(result, ingestLog, startTime, ErrorMessages.WIKI_PAGE_PLAN_FAILED);
             }
 
             log.info("Planned ingest Step 3: Generating planned pages for source '{}'", source.getTitle());
@@ -301,7 +302,7 @@ public class IngestAgent {
                     outlineJson, sectionFactsJson, pagePlanJson, sourceMetaJson));
             JsonObject pagesResult = parseJson(pagesJson);
             if (pagesResult == null || !pagesResult.has("pages")) {
-                return failPlanned(result, ingestLog, startTime, "页面生成失败");
+                return failPlanned(result, ingestLog, startTime, ErrorMessages.WIKI_PAGE_GENERATION_FAILED);
             }
 
             JsonArray pages = pagesResult.getAsJsonArray("pages");
@@ -310,7 +311,8 @@ public class IngestAgent {
             WikiIngestQualityGate.QualityReport report = qualityGate.evaluate(outline, pages);
             result.setQualityReport(gson.toJson(report));
             if ("FAILED".equals(report.getStatus())) {
-                return failPlanned(result, ingestLog, startTime, "质量门禁失败：" + summarizeQuality(report));
+                return failPlanned(result, ingestLog, startTime,
+                        ErrorMessages.WIKI_QUALITY_GATE_FAILED + "：" + summarizeQuality(report));
             }
 
             SaveStats stats = savePages(pages, source);
@@ -328,7 +330,7 @@ public class IngestAgent {
             result.setLinksCreated(linksCreated);
             result.setStatus(report.getStatus());
             if ("PARTIAL".equals(report.getStatus())) {
-                result.setErrorMessage("质量门禁部分通过：" + summarizeQuality(report));
+                result.setErrorMessage(ErrorMessages.WIKI_QUALITY_GATE_PARTIAL + "：" + summarizeQuality(report));
             }
 
             ingestLog.setPagesCreated(stats.created());
@@ -345,9 +347,9 @@ public class IngestAgent {
         } catch (Exception e) {
             log.error("Planned ingest failed for source '{}': {}", source.getTitle(), e.getMessage(), e);
             result.setStatus("FAILED");
-            result.setErrorMessage(e.getMessage());
+            result.setErrorMessage(ErrorMessages.WIKI_INGEST_TASK_FAILED);
             ingestLog.setStatus("FAILED");
-            ingestLog.setErrorDetail(e.getMessage());
+            ingestLog.setErrorDetail(ErrorMessages.WIKI_INGEST_TASK_FAILED);
             ingestLog.setDurationMs((int)(System.currentTimeMillis() - startTime));
             logMapper.insert(ingestLog);
         }

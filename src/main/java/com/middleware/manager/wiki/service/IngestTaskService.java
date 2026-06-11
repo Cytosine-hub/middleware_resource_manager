@@ -1,5 +1,6 @@
 package com.middleware.manager.wiki.service;
 
+import com.middleware.manager.constant.ErrorMessages;
 import com.middleware.manager.knowledge.loader.DocumentLoader;
 import com.middleware.manager.service.StorageService;
 import com.middleware.manager.wiki.entity.IngestTask;
@@ -217,20 +218,21 @@ public class IngestTaskService {
                 source.setIngested(false);
                 source.setIngestedAt(null);
                 sourceMapper.update(source);
-                taskMapper.updateStatus(taskId, "FAILED", failureMessage(result, "LLM 编译失败"));
+                taskMapper.updateStatus(taskId, "FAILED", failureMessage(result, ErrorMessages.WIKI_INGEST_FAILED));
                 return;
             }
             if (result.getPagesCreated() + result.getPagesUpdated() <= 0 && !"SKIPPED".equals(result.getStatus())) {
                 source.setIngested(false);
                 source.setIngestedAt(null);
                 sourceMapper.update(source);
-                taskMapper.updateStatus(taskId, "FAILED", "LLM 未生成任何 Wiki 页面");
+                taskMapper.updateStatus(taskId, "FAILED", ErrorMessages.WIKI_INGEST_EMPTY_RESULT);
                 return;
             }
             taskMapper.updateProgress(taskId, 90, "正在解析交叉引用并执行质量门禁...", totalChunks);
             taskMapper.updateResult(taskId, result.getPagesCreated(), result.getPagesUpdated());
             if ("PARTIAL".equals(result.getStatus())) {
-                taskMapper.updateStatus(taskId, "PARTIAL", failureMessage(result, "质量门禁部分通过"));
+                taskMapper.updateStatus(taskId, "PARTIAL",
+                        failureMessage(result, ErrorMessages.WIKI_QUALITY_GATE_PARTIAL));
             }
 
             // 标记 source 已编译
@@ -243,7 +245,7 @@ public class IngestTaskService {
 
         } catch (Exception e) {
             log.error("Ingest task {} failed: {}", taskId, e.getMessage(), e);
-            taskMapper.updateStatus(taskId, "FAILED", e.getMessage());
+            taskMapper.updateStatus(taskId, "FAILED", ErrorMessages.WIKI_INGEST_TASK_FAILED);
             // 恢复原始 ingested 状态
             source.setIngested(originalIngested);
             source.setIngestedAt(originalIngestedAt);
