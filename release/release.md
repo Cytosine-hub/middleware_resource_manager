@@ -1,3 +1,30 @@
+# Release v1.2.0-20260611
+
+**日期**: 2026-06-11
+**分支**: feature/ops-agent
+**发布范围**: frontend + backend
+**类型**: 增量发布
+
+## 自 v1.1.2-20260610 以来的变更
+
+- 135ce55 fix: 编辑资源信息时不再显示上传中状态
+- ba1928f fix: 修复系统设置开关不生效 + 新增 Wiki 开关
+- ed563b8 feat: 用户管理增加重置密码功能
+- 634e511 fix: 修复导入弹窗按钮点击无响应
+- 6d29c13 fix: 修复批量导入用户按钮无响应和样式问题
+- 8363312 feat: 批量导入用户功能
+- 654f341 fix: 新增用户对话框加载角色列表
+
+## 包内容
+
+| 文件 | 说明 |
+|------|------|
+| backend/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar | 可执行 JAR |
+| backend/application.yml.example | 配置示例 |
+| frontend/ | 前端静态资源 |
+
+---
+
 # Release v1.1.2-20260610
 
 **日期**: 2026-06-10
