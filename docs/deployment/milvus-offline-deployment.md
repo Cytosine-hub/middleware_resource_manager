@@ -125,13 +125,26 @@ vi .env
 
 ```bash
 MILVUS_DATA_DIR=/data/milvus
-MINIO_ROOT_USER=milvus
-MINIO_ROOT_PASSWORD=修改为强密码
 MILVUS_PORT=19530
 MILVUS_WEBUI_PORT=9091
 ```
 
-`start.sh` 会检查默认密码。如果没有修改 `MINIO_ROOT_PASSWORD`，启动会直接失败。
+默认保留：
+
+```bash
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin
+```
+
+原因：Milvus `v2.3.x` Standalone 默认会按 `minioadmin/minioadmin` 访问 MinIO；如果只改 MinIO 账号而 Milvus 配置没有同步生效，会出现 `Access Key Id you provided does not exist`，随后 datacoord/querycoord 无法注册，`/healthz` 返回 500。
+
+安全边界：本套 `docker-compose.yml` 默认将 MinIO `9000/9001` 绑定到 `127.0.0.1`，不要改成 `0.0.0.0` 对外暴露。应用只需要访问 Milvus `19530`。
+
+如果必须改 MinIO 账号密码：
+
+1. 在首次启动前修改 `.env`。
+2. 确认 `docker compose config | grep -A8 -E 'MINIO|standalone'` 中 MinIO 和 standalone 的账号一致。
+3. 如果已经启动过，必须先停止并清理旧的 MinIO 数据目录，否则 MinIO 会继续使用首次初始化的账号。
 
 创建数据目录并启动：
 
@@ -237,7 +250,47 @@ docker logs -f milvus-minio --tail 200
 
 ## 11. 常见问题
 
-### 11.1 应用启动时报 Milvus 连接失败
+### 11.1 `/healthz` 返回 500，日志提示 no available datacoord/querycoord
+
+先找根因日志：
+
+```bash
+docker logs milvus-standalone --tail 500 | grep -Ei 'Access Key|bucket|datacoord|querycoord|failed'
+```
+
+如果看到：
+
+```text
+The Access Key Id you provided does not exist in our records.
+find no available datacoord
+find no available querycoord
+```
+
+说明是 Milvus 连接 MinIO 的账号不匹配。新部署环境按下面步骤恢复：
+
+```bash
+docker compose down
+sudo rm -rf /data/milvus/etcd /data/milvus/minio /data/milvus/milvus
+vi .env
+```
+
+确保 `.env` 中是：
+
+```bash
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin
+```
+
+然后重启：
+
+```bash
+./scripts/start.sh
+./scripts/healthcheck.sh
+```
+
+如果环境里已经有正式数据，不要直接删除 `/data/milvus`，先备份并确认是否需要迁移对象存储账号。
+
+### 11.2 应用启动时报 Milvus 连接失败
 
 检查：
 
@@ -254,7 +307,7 @@ VECTOR_HOST=实际 Milvus 地址
 VECTOR_PORT=19530
 ```
 
-### 11.2 内存不足
+### 11.3 内存不足
 
 Milvus Standalone 生产建议至少：
 
@@ -272,7 +325,7 @@ CPU: 4 核
 磁盘: SSD 200 GB 起
 ```
 
-### 11.3 需要临时关闭向量库
+### 11.4 需要临时关闭向量库
 
 可以临时切回内存模式：
 

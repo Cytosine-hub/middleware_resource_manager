@@ -12,9 +12,8 @@ if [[ -f "${BASE_DIR}/.env" ]]; then
 fi
 
 DATA_DIR="${MILVUS_DATA_DIR:-/data/milvus}"
-if [[ "${MINIO_ROOT_PASSWORD:-}" == "ChangeThisMinioPassword_2026" ]]; then
-  echo "ERROR: Please change MINIO_ROOT_PASSWORD in .env before starting Milvus." >&2
-  exit 1
+if [[ "${MINIO_ROOT_USER:-minioadmin}" == "minioadmin" && "${MINIO_ROOT_PASSWORD:-minioadmin}" == "minioadmin" ]]; then
+  echo "WARNING: Using Milvus 2.3.x default MinIO credentials. Keep MinIO ports bound to 127.0.0.1 and do not expose 9000/9001." >&2
 fi
 
 mkdir -p "${DATA_DIR}/etcd" "${DATA_DIR}/minio" "${DATA_DIR}/milvus"

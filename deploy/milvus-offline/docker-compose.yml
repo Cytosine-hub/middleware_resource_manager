@@ -28,8 +28,10 @@ services:
     image: minio/minio:${MINIO_VERSION:-RELEASE.2023-03-20T20-16-18Z}
     restart: unless-stopped
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-milvus}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-ChangeThisMinioPassword_2026}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
     command: minio server /minio_data --console-address ":9001"
     volumes:
       - ${MILVUS_DATA_DIR:-/data/milvus}/minio:/minio_data
@@ -52,8 +54,10 @@ services:
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-milvus}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-ChangeThisMinioPassword_2026}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - ${MILVUS_DATA_DIR:-/data/milvus}/milvus:/var/lib/milvus
     ports:
