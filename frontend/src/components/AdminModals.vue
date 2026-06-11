@@ -166,7 +166,7 @@
     </template>
   </FormModal>
 
-  <FormModal v-model="admin.showParamImportDialog.value" title="批量导入参数" submitText="开始导入" @submit="admin.importParameters">
+  <FormModal v-model="admin.showParamImportDialog.value" title="批量导入参数">
     <div class="form-grid single">
       <p class="muted" style="margin:0 0 12px">请先下载模板，按格式填写后上传 Excel 文件。支持的列：参数编码、参数名称、参数值、参数类型（文本值/布尔值/数值）、取值范围、说明、是否启用（是/否）、是否部署标准（是/否）。</p>
       <label class="file-field">选择 Excel 文件
@@ -185,7 +185,7 @@
     </div>
     <template #actions>
       <BaseButton variant="ghost" @click="admin.downloadParameterTemplate()">下载模板</BaseButton>
-      <BaseButton variant="primary" type="submit" :loading="admin.paramImporting.value">{{ admin.paramImporting.value ? '导入中...' : '开始导入' }}</BaseButton>
+      <BaseButton variant="primary" :loading="admin.paramImporting.value" @click="admin.importParameters()">{{ admin.paramImporting.value ? '导入中...' : '开始导入' }}</BaseButton>
       <BaseButton variant="ghost" @click="admin.showParamImportDialog.value = false; admin.paramImportResult.value = null">关闭</BaseButton>
     </template>
   </FormModal>
@@ -211,7 +211,7 @@
     </label>
   </FormModal>
 
-  <FormModal v-model="admin.showUserImportDialog.value" title="批量导入用户" submitText="开始导入" @submit="admin.importUsers">
+  <FormModal v-model="admin.showUserImportDialog.value" title="批量导入用户">
     <div class="form-grid single">
       <p class="muted" style="margin:0 0 12px">请先下载模板，按格式填写后上传 Excel 文件。支持的列：账号、用户名、角色。密码默认为 admin123。</p>
       <label class="file-field">选择 Excel 文件
@@ -230,7 +230,7 @@
     </div>
     <template #actions>
       <BaseButton variant="ghost" @click="admin.downloadUserTemplate()">下载模板</BaseButton>
-      <BaseButton variant="primary" type="submit" :loading="admin.userImporting.value">{{ admin.userImporting.value ? '导入中...' : '开始导入' }}</BaseButton>
+      <BaseButton variant="primary" :loading="admin.userImporting.value" @click="admin.importUsers()">{{ admin.userImporting.value ? '导入中...' : '开始导入' }}</BaseButton>
       <BaseButton variant="ghost" @click="admin.showUserImportDialog.value = false; admin.userImportResult.value = null">关闭</BaseButton>
     </template>
   </FormModal>
