@@ -652,7 +652,7 @@ export function useAdmin(auth, notify, confirm) {
   function closeRevisionModal() { showRevisionModal.value = false }
 
   // ── 用户管理 ──
-  function openCreateUserDialog() { Object.assign(userForm, { username: '', displayName: '', password: '', role: '开发经理' }); userFormTarget.value = null; showUserDialog.value = true }
+  function openCreateUserDialog() { Object.assign(userForm, { username: '', displayName: '', password: '', role: '开发经理' }); userFormTarget.value = null; if (!allRoles.value.length) loadRoles(); showUserDialog.value = true }
   function closeUserDialog() { showUserDialog.value = false }
   async function createUser() {
     if (!userForm.username.trim() || !userForm.password) { notify('账号和密码必填', 'error'); return }
