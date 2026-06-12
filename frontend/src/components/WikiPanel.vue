@@ -963,7 +963,8 @@ function lintTypeLabel(type) {
 
 async function loadLintResults() {
   try {
-    lintResults.value = await request('/api/wiki/lint/results')
+    // 自动运行 lint，避免显示过期数据
+    await runLint()
   } catch (e) {
     console.error('Failed to load lint results:', e)
   }
