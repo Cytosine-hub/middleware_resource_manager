@@ -41,7 +41,7 @@ app:
     knowledge-enabled: ${KNOWLEDGE_ENABLED:true}
     diagnostics-enabled: ${DIAGNOSTICS_ENABLED:true}
   llm:
-    max-concurrent: ${LLM_MAX_CONCURRENT:3}
+    max-concurrent: ${LLM_MAX_CONCURRENT:5}
     timeout-seconds: ${LLM_TIMEOUT_SECONDS:600}
 
 # ========== 知识库 & Agent 配置 ==========

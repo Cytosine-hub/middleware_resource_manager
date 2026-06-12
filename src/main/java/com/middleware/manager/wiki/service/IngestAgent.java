@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
@@ -287,39 +288,71 @@ public class IngestAgent {
         if (plans == null || plans.isEmpty()) {
             throw new PlannedIngestException(ErrorMessages.WIKI_PAGE_GENERATION_FAILED);
         }
-        JsonArray generatedPages = new JsonArray();
         List<JsonArray> planBatches = partitionPlanBatch(plans);
-        int completed = 0;
-        for (JsonArray planBatch : planBatches) {
-            long batchStart = System.currentTimeMillis();
-            completed++;
-            progress.report(progressBetween(65, 80, completed - 1, planBatches.size()),
-                    "正在按页面计划生成页面 " + completed + "/" + planBatches.size(),
-                    completed - 1, planBatches.size());
-            Set<String> sectionIds = coveredSectionIds(planBatch);
-            String outlineJson = toCompactOutlineJson(outline, sectionsByIds(outline, sectionIds), 500);
-            String sectionFactsJson = gson.toJson(filterSectionFacts(sectionFacts, sectionIds));
-            JsonObject batchPlan = new JsonObject();
-            batchPlan.add("pages", planBatch.deepCopy());
-            String pagesJson = callLlm(IngestPromptTemplates.buildPlannedPageGenerationPrompt(
-                    outlineJson, sectionFactsJson, gson.toJson(batchPlan), buildSourceMetaJson(source)), llmMetrics);
-            JsonObject pagesResult = parseJson(pagesJson);
-            JsonArray pages = pagesResult != null && pagesResult.has("pages") && pagesResult.get("pages").isJsonArray()
-                    ? pagesResult.getAsJsonArray("pages")
-                    : fallbackPagesFromPlan(source, planBatch, outline, sectionFacts);
-            if (pagesResult == null || !pagesResult.has("pages") || !pagesResult.get("pages").isJsonArray()
-                    || pages.isEmpty()) {
-                log.warn("Planned page JSON invalid for source '{}', using deterministic fallback for {} plans",
-                        source.getTitle(), planBatch.size());
-                pages = fallbackPagesFromPlan(source, planBatch, outline, sectionFacts);
-            }
-            for (JsonElement page : pages) {
-                generatedPages.add(page);
-            }
-            log.info("Planned ingest Step 3 batch completed for source '{}': batch={}/{}, plans={}, pages={}, durationMs={}",
-                    source.getTitle(), completed, planBatches.size(), planBatch.size(), pages.size(),
-                    System.currentTimeMillis() - batchStart);
+        progress.report(65, "正在按页面计划生成页面 0/" + planBatches.size(), 0, planBatches.size());
+
+        // 按 batch 索引存放结果
+        Map<Integer, JsonArray> resultsByIndex = new LinkedHashMap<>();
+
+        // 并发执行所有 LLM batch
+        List<CompletableFuture<Map.Entry<Integer, JsonArray>>> futures = new ArrayList<>();
+        for (int i = 0; i < planBatches.size(); i++) {
+            final int batchIndex = i;
+            JsonArray planBatch = planBatches.get(batchIndex);
+            futures.add(CompletableFuture.supplyAsync(() -> {
+                long batchStart = System.currentTimeMillis();
+                Set<String> sectionIds = coveredSectionIds(planBatch);
+                String outlineJson = toCompactOutlineJson(outline, sectionsByIds(outline, sectionIds), 500);
+                String sectionFactsJson = gson.toJson(filterSectionFacts(sectionFacts, sectionIds));
+                JsonObject batchPlan = new JsonObject();
+                batchPlan.add("pages", planBatch.deepCopy());
+                String pagesJson = callLlm(IngestPromptTemplates.buildPlannedPageGenerationPrompt(
+                        outlineJson, sectionFactsJson, gson.toJson(batchPlan), buildSourceMetaJson(source)), llmMetrics);
+                JsonObject pagesResult = parseJson(pagesJson);
+                JsonArray pages = pagesResult != null && pagesResult.has("pages") && pagesResult.get("pages").isJsonArray()
+                        ? pagesResult.getAsJsonArray("pages")
+                        : fallbackPagesFromPlan(source, planBatch, outline, sectionFacts);
+                if (pagesResult == null || !pagesResult.has("pages") || !pagesResult.get("pages").isJsonArray()
+                        || pages.isEmpty()) {
+                    log.warn("Planned page JSON invalid for source '{}', using deterministic fallback for {} plans",
+                            source.getTitle(), planBatch.size());
+                    pages = fallbackPagesFromPlan(source, planBatch, outline, sectionFacts);
+                }
+                log.info("Planned ingest Step 3 batch completed for source '{}': batch={}/{}, plans={}, pages={}, durationMs={}",
+                        source.getTitle(), batchIndex + 1, planBatches.size(), planBatch.size(), pages.size(),
+                        System.currentTimeMillis() - batchStart);
+                return Map.entry(batchIndex, pages);
+            }));
         }
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        int completed = 0;
+        for (CompletableFuture<Map.Entry<Integer, JsonArray>> f : futures) {
+            try {
+                Map.Entry<Integer, JsonArray> entry = f.join();
+                resultsByIndex.put(entry.getKey(), entry.getValue());
+                completed++;
+            } catch (Exception e) {
+                log.warn("Page generation batch failed: {}", e.getMessage());
+                completed++;
+            }
+            progress.report(progressBetween(65, 80, completed, planBatches.size()),
+                    "正在按页面计划生成页面 " + completed + "/" + planBatches.size(),
+                    completed, planBatches.size());
+        }
+
+        // 按 batch 顺序合并
+        JsonArray generatedPages = new JsonArray();
+        for (int i = 0; i < planBatches.size(); i++) {
+            JsonArray batchResult = resultsByIndex.get(i);
+            if (batchResult != null) {
+                for (JsonElement page : batchResult) {
+                    generatedPages.add(page);
+                }
+            }
+        }
+
         if (generatedPages.isEmpty()) {
             throw new PlannedIngestException(ErrorMessages.WIKI_PAGE_GENERATION_FAILED);
         }
@@ -330,38 +363,77 @@ public class IngestAgent {
     private JsonObject generateSectionFacts(DocumentOutlineExtractor.DocumentOutline outline, ProgressReporter progress,
                                             LlmMetrics llmMetrics) {
         long start = System.currentTimeMillis();
-        JsonObject merged = new JsonObject();
-        JsonArray mergedFacts = new JsonArray();
         List<List<DocumentOutlineExtractor.DocumentSection>> batches = partitionSectionFacts(outline.getSections());
-        int completed = 0;
+        progress.report(25, "正在生成章节事实 0/" + batches.size(), 0, batches.size());
+
+        // 按 batch 顺序存放结果
+        Map<Integer, JsonArray> resultsByIndex = new LinkedHashMap<>();
+        List<Integer> llmBatchIndices = new ArrayList<>();
         int localOnlySections = 0;
-        for (List<DocumentOutlineExtractor.DocumentSection> batch : batches) {
-            long batchStart = System.currentTimeMillis();
-            completed++;
-            progress.report(progressBetween(25, 52, completed - 1, batches.size()),
-                    "正在生成章节事实 " + completed + "/" + batches.size(), completed - 1, batches.size());
+
+        // 先处理本地 batch（无需 LLM）
+        for (int i = 0; i < batches.size(); i++) {
+            List<DocumentOutlineExtractor.DocumentSection> batch = batches.get(i);
             if (batch.stream().allMatch(this::canUseLocalSectionFact)) {
-                localOnlySections += batch.size();
+                JsonArray facts = new JsonArray();
                 for (DocumentOutlineExtractor.DocumentSection section : batch) {
-                    mergedFacts.add(fallbackSectionFact(section));
+                    facts.add(fallbackSectionFact(section));
                 }
-                log.info("Section facts batch skipped LLM: batch={}/{}, sections={}, durationMs={}",
-                        completed, batches.size(), batch.size(), System.currentTimeMillis() - batchStart);
-                continue;
+                resultsByIndex.put(i, facts);
+                localOnlySections += batch.size();
+                log.info("Section facts batch skipped LLM: batch={}/{}, sections={}", i + 1, batches.size(), batch.size());
+            } else {
+                llmBatchIndices.add(i);
             }
-            String batchOutlineJson = toCompactOutlineJson(outline, batch, 500);
-            String response = callLlm(IngestPromptTemplates.buildSectionFactsPrompt(batchOutlineJson), llmMetrics);
-            JsonObject parsed = parseJson(response);
-            JsonObject normalized = normalizeSectionFacts(parsed, batch);
-            if (parsed == null || !parsed.has("section_facts")) {
-                log.warn("Section facts JSON invalid, using fallback for {} sections", batch.size());
-            }
-            for (JsonElement fact : normalized.getAsJsonArray("section_facts")) {
-                mergedFacts.add(fact);
-            }
-            log.info("Section facts batch completed: batch={}/{}, sections={}, durationMs={}",
-                    completed, batches.size(), batch.size(), System.currentTimeMillis() - batchStart);
         }
+
+        // LLM batch 并发执行
+        if (!llmBatchIndices.isEmpty()) {
+            List<CompletableFuture<Map.Entry<Integer, JsonArray>>> futures = new ArrayList<>();
+            for (int batchIndex : llmBatchIndices) {
+                List<DocumentOutlineExtractor.DocumentSection> batch = batches.get(batchIndex);
+                futures.add(CompletableFuture.supplyAsync(() -> {
+                    long batchStart = System.currentTimeMillis();
+                    String batchOutlineJson = toCompactOutlineJson(outline, batch, 500);
+                    String response = callLlm(IngestPromptTemplates.buildSectionFactsPrompt(batchOutlineJson), llmMetrics);
+                    JsonObject parsed = parseJson(response);
+                    JsonObject normalized = normalizeSectionFacts(parsed, batch);
+                    if (parsed == null || !parsed.has("section_facts")) {
+                        log.warn("Section facts JSON invalid, using fallback for {} sections", batch.size());
+                    }
+                    log.info("Section facts batch completed: batch={}/{}, sections={}, durationMs={}",
+                            batchIndex + 1, batches.size(), batch.size(), System.currentTimeMillis() - batchStart);
+                    return Map.entry(batchIndex, normalized.getAsJsonArray("section_facts"));
+                }));
+            }
+
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+            for (CompletableFuture<Map.Entry<Integer, JsonArray>> f : futures) {
+                try {
+                    Map.Entry<Integer, JsonArray> entry = f.join();
+                    resultsByIndex.put(entry.getKey(), entry.getValue());
+                } catch (Exception e) {
+                    log.warn("Section facts batch failed: {}", e.getMessage());
+                }
+                progress.report(progressBetween(25, 52, resultsByIndex.size(), batches.size()),
+                        "正在生成章节事实 " + resultsByIndex.size() + "/" + batches.size(),
+                        resultsByIndex.size(), batches.size());
+            }
+        }
+
+        // 按 batch 顺序合并
+        JsonArray mergedFacts = new JsonArray();
+        for (int i = 0; i < batches.size(); i++) {
+            JsonArray batchResult = resultsByIndex.get(i);
+            if (batchResult != null) {
+                for (JsonElement fact : batchResult) {
+                    mergedFacts.add(fact);
+                }
+            }
+        }
+
+        JsonObject merged = new JsonObject();
         merged.add("section_facts", mergedFacts);
         progress.report(52, "章节事实生成完成，正在生成页面计划...", batches.size(), batches.size());
         log.info("Planned ingest Step 1 completed: sections={}, batches={}, localOnlySections={}, durationMs={}",
