@@ -418,6 +418,8 @@ CREATE TABLE `wiki_ingest_tasks` (
   `pages_updated` int DEFAULT '0',
   `error_message` text,
   `quality_report` json DEFAULT NULL COMMENT '质量门禁报告',
+  `section_facts` json DEFAULT NULL COMMENT '章节事实中间产物',
+  `page_plan` json DEFAULT NULL COMMENT '页面计划中间产物',
   `operator_id` bigint DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
