@@ -56,7 +56,10 @@ class IngestAgentTest {
         MockitoAnnotations.openMocks(this);
         ingestAgent = new IngestAgent(chatModel, pageMapper, sourceMapper, logMapper,
                 linkResolver, embeddingService, vectorStore, softwareTypeMapper,
-                new DocumentTypeClassifier(), new DocumentOutlineExtractor(), new WikiIngestQualityGate(), 50000);
+                new DocumentTypeClassifier(), new DocumentOutlineExtractor(), new WikiIngestQualityGate(),
+                new org.springframework.transaction.support.TransactionTemplate(
+                        mock(org.springframework.transaction.PlatformTransactionManager.class)),
+                50000);
     }
 
     @Nested
