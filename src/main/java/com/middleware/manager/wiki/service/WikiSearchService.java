@@ -2,6 +2,7 @@ package com.middleware.manager.wiki.service;
 
 import com.middleware.manager.knowledge.embedding.EmbeddingService;
 import com.middleware.manager.knowledge.store.VectorStore;
+import com.middleware.manager.knowledge.store.VectorSearchFilter;
 import com.middleware.manager.wiki.entity.WikiLink;
 import com.middleware.manager.wiki.entity.WikiPage;
 import com.middleware.manager.wiki.repository.WikiLinkMapper;
@@ -295,7 +296,8 @@ public class WikiSearchService {
             try {
                 float[] queryVec = embeddingService.embed(query);
                 log.debug("Vector search (attempt {}): query='{}', dim={}, topK={}", attempt, query, queryVec.length, topK * 2);
-                List<VectorStore.VectorSearchResult> vecResults = vectorStore.search(queryVec, topK * 2);
+                VectorSearchFilter filter = VectorSearchFilter.none().addSource("wiki");
+                List<VectorStore.VectorSearchResult> vecResults = vectorStore.search(queryVec, topK * 2, filter);
                 log.debug("Vector search returned {} results", vecResults.size());
                 List<WikiPage> pages = new ArrayList<>();
                 for (VectorStore.VectorSearchResult vr : vecResults) {

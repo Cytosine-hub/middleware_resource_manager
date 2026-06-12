@@ -24,11 +24,19 @@ public class InMemoryVectorStore implements VectorStore {
 
     @Override
     public List<VectorSearchResult> search(float[] queryVector, int topK) {
+        return search(queryVector, topK, VectorSearchFilter.none());
+    }
+
+    @Override
+    public List<VectorSearchResult> search(float[] queryVector, int topK, VectorSearchFilter filter) {
         List<VectorSearchResult> results = new ArrayList<>();
 
         for (Map.Entry<String, float[]> entry : vectors.entrySet()) {
             float score = cosineSimilarity(queryVector, entry.getValue());
             Map<String, String> meta = metadataStore.get(entry.getKey());
+            if (filter != null && !filter.matches(meta)) {
+                continue;
+            }
             results.add(new VectorSearchResult(entry.getKey(), score, meta));
         }
 

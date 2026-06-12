@@ -163,6 +163,200 @@ class IngestAgentTest {
             assertEquals("CONTRADICTED", updatedPage.getStatus());
             assertEquals("版本冲突", updatedPage.getContradictionNote());
         }
+
+        @Test
+        @DisplayName("等价标题按 canonical title 匹配已有页面")
+        void canonicalTitleMatchesExistingPage() {
+            JsonObject analysis = new JsonObject();
+            analysis.addProperty("dummy", "value");
+
+            JsonObject pagesResult = new JsonObject();
+            com.google.gson.JsonArray pages = new com.google.gson.JsonArray();
+            JsonObject pageObj = new JsonObject();
+            pageObj.addProperty("title", "BES安装指南");
+            pageObj.addProperty("page_type", "RUNBOOK");
+            pageObj.addProperty("content", "new install content");
+            pageObj.addProperty("summary", "summary");
+            pages.add(pageObj);
+            pagesResult.add("pages", pages);
+
+            JsonObject mergeDecision = new JsonObject();
+            mergeDecision.addProperty("action", "APPEND");
+
+            ChatResponse resp1 = createChatResponse(gson.toJson(analysis));
+            ChatResponse resp2 = createChatResponse(gson.toJson(pagesResult));
+            ChatResponse resp3 = createChatResponse(gson.toJson(mergeDecision));
+            when(chatModel.chat(anyList()))
+                    .thenReturn(resp1)
+                    .thenReturn(resp2)
+                    .thenReturn(resp3);
+
+            WikiPage existing = new WikiPage();
+            existing.setId(1L);
+            existing.setTitle("BES 安装指南");
+            existing.setPageType("RUNBOOK");
+            existing.setCategory("中间件");
+            existing.setSoftware("BES");
+            existing.setContent("old install content");
+            when(pageMapper.findByCategoryOrSoftware("中间件", "BES", 100))
+                    .thenReturn(java.util.List.of(existing));
+            when(softwareTypeMapper.findAllByOrderByCategoryAscNameAsc()).thenReturn(Collections.emptyList());
+
+            IngestAgent.IngestResult result = ingestAgent.ingestContent(
+                    "test content", "test title", "中间件", "BES", 1L);
+
+            assertEquals("SUCCESS", result.getStatus());
+            verify(pageMapper, never()).insert(any(WikiPage.class));
+            ArgumentCaptor<WikiPage> pageCaptor = ArgumentCaptor.forClass(WikiPage.class);
+            verify(pageMapper).update(pageCaptor.capture());
+            assertEquals("BES 安装指南", pageCaptor.getValue().getTitle());
+            assertTrue(pageCaptor.getValue().getContent().contains("new install content"));
+        }
+
+        @Test
+        @DisplayName("APPEND 合并按 Markdown 标题块补丁更新")
+        void appendMergesMarkdownHeadingBlocks() {
+            JsonObject analysis = new JsonObject();
+            analysis.addProperty("dummy", "value");
+
+            JsonObject pagesResult = new JsonObject();
+            com.google.gson.JsonArray pages = new com.google.gson.JsonArray();
+            JsonObject pageObj = new JsonObject();
+            pageObj.addProperty("title", "BES 安装指南");
+            pageObj.addProperty("page_type", "RUNBOOK");
+            pageObj.addProperty("content", "# 安装步骤\n新增安装步骤\n# 启动验证\n新增验证方法");
+            pageObj.addProperty("summary", "summary");
+            pages.add(pageObj);
+            pagesResult.add("pages", pages);
+
+            JsonObject mergeDecision = new JsonObject();
+            mergeDecision.addProperty("action", "APPEND");
+
+            ChatResponse resp1 = createChatResponse(gson.toJson(analysis));
+            ChatResponse resp2 = createChatResponse(gson.toJson(pagesResult));
+            ChatResponse resp3 = createChatResponse(gson.toJson(mergeDecision));
+            when(chatModel.chat(anyList()))
+                    .thenReturn(resp1)
+                    .thenReturn(resp2)
+                    .thenReturn(resp3);
+
+            WikiPage existing = new WikiPage();
+            existing.setId(1L);
+            existing.setTitle("BES 安装指南");
+            existing.setPageType("RUNBOOK");
+            existing.setContent("# 安装步骤\n已有安装步骤");
+            when(pageMapper.findByTitleAndType("BES 安装指南", "RUNBOOK")).thenReturn(existing);
+            when(softwareTypeMapper.findAllByOrderByCategoryAscNameAsc()).thenReturn(Collections.emptyList());
+
+            IngestAgent.IngestResult result = ingestAgent.ingestContent(
+                    "test content", "test title", "中间件", "BES", 1L);
+
+            assertEquals("SUCCESS", result.getStatus());
+            ArgumentCaptor<WikiPage> pageCaptor = ArgumentCaptor.forClass(WikiPage.class);
+            verify(pageMapper).update(pageCaptor.capture());
+            String content = pageCaptor.getValue().getContent();
+            assertEquals(1, countOccurrences(content, "# 安装步骤"));
+            assertTrue(content.contains("已有安装步骤"));
+            assertTrue(content.contains("新增安装步骤"));
+            assertTrue(content.contains("# 启动验证"));
+        }
+
+        @Test
+        @DisplayName("新建页面持久化 canonical title 和 alias titles")
+        void persistsCanonicalAndAliasTitlesOnCreate() {
+            JsonObject analysis = new JsonObject();
+            analysis.addProperty("dummy", "value");
+
+            JsonObject pagesResult = new JsonObject();
+            com.google.gson.JsonArray pages = new com.google.gson.JsonArray();
+            JsonObject pageObj = new JsonObject();
+            pageObj.addProperty("title", "BES 安装指南");
+            pageObj.addProperty("page_type", "RUNBOOK");
+            pageObj.addProperty("content", "new install content");
+            pageObj.addProperty("summary", "summary");
+            com.google.gson.JsonArray aliases = new com.google.gson.JsonArray();
+            aliases.add("BES安装指南");
+            aliases.add("安装部署");
+            pageObj.add("alias_titles", aliases);
+            pages.add(pageObj);
+            pagesResult.add("pages", pages);
+
+            ChatResponse resp1 = createChatResponse(gson.toJson(analysis));
+            ChatResponse resp2 = createChatResponse(gson.toJson(pagesResult));
+            when(chatModel.chat(anyList()))
+                    .thenReturn(resp1)
+                    .thenReturn(resp2);
+            when(pageMapper.findByCategoryOrSoftware("中间件", "BES", 100))
+                    .thenReturn(Collections.emptyList());
+            when(softwareTypeMapper.findAllByOrderByCategoryAscNameAsc()).thenReturn(Collections.emptyList());
+
+            IngestAgent.IngestResult result = ingestAgent.ingestContent(
+                    "test content", "test title", "中间件", "BES", 1L);
+
+            assertEquals("SUCCESS", result.getStatus());
+            ArgumentCaptor<WikiPage> pageCaptor = ArgumentCaptor.forClass(WikiPage.class);
+            verify(pageMapper).insert(pageCaptor.capture());
+            WikiPage inserted = pageCaptor.getValue();
+            assertEquals("bes安装指南", inserted.getCanonicalTitle());
+            assertTrue(inserted.getAliasTitles().contains("BES安装指南"));
+            assertTrue(inserted.getAliasTitles().contains("安装部署"));
+        }
+    }
+
+    @Nested
+    @DisplayName("planned ingest 规划校验")
+    class PlannedIngestValidation {
+
+        @Test
+        @DisplayName("page_plan 漏掉 required section 时直接失败")
+        void failsWhenPagePlanMissesRequiredSection() {
+            JsonObject sectionFacts = new JsonObject();
+            com.google.gson.JsonArray facts = new com.google.gson.JsonArray();
+            JsonObject fact = new JsonObject();
+            fact.addProperty("section_id", "sec-001");
+            fact.addProperty("section_path", "配置说明");
+            facts.add(fact);
+            sectionFacts.add("section_facts", facts);
+
+            JsonObject pagePlan = new JsonObject();
+            com.google.gson.JsonArray plans = new com.google.gson.JsonArray();
+            JsonObject plan = new JsonObject();
+            plan.addProperty("planned_title", "BES V9.5.5 配置说明");
+            plan.addProperty("page_type", "STANDARD");
+            com.google.gson.JsonArray covered = new com.google.gson.JsonArray();
+            covered.add("sec-001");
+            plan.add("covered_section_ids", covered);
+            plans.add(plan);
+            pagePlan.add("pages", plans);
+
+            ChatResponse sectionFactsResponse = createChatResponse(gson.toJson(sectionFacts));
+            ChatResponse pagePlanResponse = createChatResponse(gson.toJson(pagePlan));
+            when(chatModel.chat(anyList()))
+                    .thenReturn(sectionFactsResponse)
+                    .thenReturn(pagePlanResponse);
+            when(softwareTypeMapper.findAllByOrderByCategoryAscNameAsc()).thenReturn(Collections.emptyList());
+
+            WikiSource source = new WikiSource();
+            source.setId(1L);
+            source.setTitle("config.md");
+            source.setSourceType("UPLOAD");
+            source.setCategory("中间件");
+            source.setSoftware("BES");
+            source.setContent("""
+                    # 配置说明
+                    这里描述配置文件。
+
+                    ## 最大连接数
+                    参数 maxConnections 默认值为 100。
+                    """);
+
+            IngestAgent.IngestResult result = ingestAgent.ingestPlanned(source, 1L);
+
+            assertEquals("FAILED", result.getStatus());
+            assertTrue(result.getErrorMessage().contains("缺少必需章节"));
+            verify(pageMapper, never()).insert(any(WikiPage.class));
+            verify(logMapper).insert(any());
+        }
     }
 
     @Nested
@@ -239,5 +433,15 @@ class IngestAgentTest {
         ChatResponse response = mock(ChatResponse.class);
         when(response.aiMessage()).thenReturn(aiMessage);
         return response;
+    }
+
+    private int countOccurrences(String text, String pattern) {
+        int count = 0;
+        int index = 0;
+        while ((index = text.indexOf(pattern, index)) >= 0) {
+            count++;
+            index += pattern.length();
+        }
+        return count;
     }
 }

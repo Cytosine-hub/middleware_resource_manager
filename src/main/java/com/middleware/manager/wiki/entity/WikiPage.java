@@ -16,6 +16,8 @@ public class WikiPage {
     private String category;
     private String software;
     private String version;
+    private String canonicalTitle;
+    private String aliasTitles;
     private String content;
     private String summary;
     private String sourceRefs;

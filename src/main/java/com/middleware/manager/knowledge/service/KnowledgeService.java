@@ -11,6 +11,7 @@ import com.middleware.manager.knowledge.loader.StandardDocumentLoader;
 import com.middleware.manager.knowledge.repository.KnowledgeChunkMapper;
 import com.middleware.manager.knowledge.splitter.TextSplitter;
 import com.middleware.manager.knowledge.store.VectorStore;
+import com.middleware.manager.knowledge.store.VectorSearchFilter;
 import com.middleware.manager.service.StorageService;
 import com.middleware.manager.util.TextUtil;
 import com.middleware.manager.wiki.entity.WikiSource;
@@ -86,12 +87,17 @@ public class KnowledgeService {
     private static final float MIN_SCORE_THRESHOLD = 0.5f;
 
     public List<SearchResult> search(String query, int topK) {
+        return search(query, topK, VectorSearchFilter.none());
+    }
+
+    public List<SearchResult> search(String query, int topK, VectorSearchFilter filter) {
         List<SearchResult> results = new ArrayList<>();
+        VectorSearchFilter safeFilter = filter == null ? VectorSearchFilter.none() : filter;
 
         // 向量检索
         try {
             float[] queryVector = embeddingService.embed(query);
-            List<VectorStore.VectorSearchResult> vectorResults = vectorStore.search(queryVector, topK);
+            List<VectorStore.VectorSearchResult> vectorResults = vectorStore.search(queryVector, topK, safeFilter);
             if (!vectorResults.isEmpty() && vectorResults.get(0).getScore() >= MIN_SCORE_THRESHOLD) {
                 for (VectorStore.VectorSearchResult vr : vectorResults) {
                     if (vr.getScore() < MIN_SCORE_THRESHOLD) break;
@@ -99,6 +105,10 @@ public class KnowledgeService {
                     SearchResult sr = new SearchResult();
                     sr.setContent(meta != null ? meta.get("content") : null);
                     sr.setSourceTitle(meta != null ? meta.get("sourceTitle") : null);
+                    sr.setSourceType(meta != null ? meta.get("sourceType") : null);
+                    sr.setSourceId(parseLong(meta != null ? meta.get("sourceId") : null));
+                    sr.setCategory(meta != null ? meta.get("category") : null);
+                    sr.setSoftware(meta != null ? meta.get("software") : null);
                     sr.setScore(vr.getScore());
                     sr.setSource("vector");
                     results.add(sr);
@@ -110,8 +120,13 @@ public class KnowledgeService {
 
         // 关键词搜索（补充或降级）
         List<String> terms = buildSearchTerms(query);
+        if (terms.isEmpty()) {
+            return results;
+        }
         List<Integer> weights = buildSearchWeights(terms, query);
-        List<KnowledgeChunk> keywordChunks = chunkMapper.findByTermsWithScore(terms, weights, topK);
+        List<KnowledgeChunk> keywordChunks = safeFilter.isEmpty()
+                ? chunkMapper.findByTermsWithScore(terms, weights, topK)
+                : chunkMapper.findByTermsWithScoreFiltered(terms, weights, topK, safeFilter);
         for (KnowledgeChunk chunk : keywordChunks) {
             boolean duplicate = false;
             for (SearchResult existing : results) {
@@ -125,6 +140,10 @@ public class KnowledgeService {
                 SearchResult sr = new SearchResult();
                 sr.setContent(chunk.getContent());
                 sr.setSourceTitle(chunk.getSourceTitle());
+                sr.setSourceType(chunk.getSourceType());
+                sr.setSourceId(chunk.getSourceId());
+                sr.setCategory(chunk.getCategory());
+                sr.setSoftware(chunk.getSoftware());
                 sr.setScore(0.8f);
                 sr.setSource("keyword");
                 results.add(sr);
@@ -136,6 +155,17 @@ public class KnowledgeService {
             results = results.subList(0, topK);
         }
         return results;
+    }
+
+    private Long parseLong(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private List<String> buildSearchTerms(String keyword) {
@@ -195,6 +225,7 @@ public class KnowledgeService {
             String vectorId = vectorId(sourceId, i);
 
             Map<String, String> metadata = new HashMap<>();
+            metadata.put("source", "knowledge");
             metadata.put("content", chunk.getContent());
             metadata.put("sourceTitle", chunk.getSourceTitle());
             metadata.put("chunkIndex", String.valueOf(chunk.getChunkIndex()));
@@ -389,12 +420,24 @@ public class KnowledgeService {
     public static class SearchResult {
         private String content;
         private String sourceTitle;
+        private String sourceType;
+        private Long sourceId;
+        private String category;
+        private String software;
         private float score;
         private String source;
         public String getContent() { return content; }
         public void setContent(String content) { this.content = content; }
         public String getSourceTitle() { return sourceTitle; }
         public void setSourceTitle(String sourceTitle) { this.sourceTitle = sourceTitle; }
+        public String getSourceType() { return sourceType; }
+        public void setSourceType(String sourceType) { this.sourceType = sourceType; }
+        public Long getSourceId() { return sourceId; }
+        public void setSourceId(Long sourceId) { this.sourceId = sourceId; }
+        public String getCategory() { return category; }
+        public void setCategory(String category) { this.category = category; }
+        public String getSoftware() { return software; }
+        public void setSoftware(String software) { this.software = software; }
         public float getScore() { return score; }
         public void setScore(float score) { this.score = score; }
         public String getSource() { return source; }

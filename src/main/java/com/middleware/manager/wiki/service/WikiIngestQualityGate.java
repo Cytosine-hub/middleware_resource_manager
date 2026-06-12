@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 @Service
@@ -44,17 +45,29 @@ public class WikiIngestQualityGate {
                 if (!"OVERVIEW".equals(pageType) && (content == null || content.length() < 300)) {
                     report.getShortPages().add(title == null ? "未命名页面" : title);
                 }
-                if (!hasSourceRefsSections(page)) {
+                if (isGenericTitle(title, page, outline)) {
+                    report.getGenericTitles().add(title == null ? "未命名页面" : title);
+                }
+                if (!"OVERVIEW".equals(pageType) && !hasSourceRefsSections(page)) {
                     report.getPagesWithoutSourceRefs().add(title == null ? "未命名页面" : title);
                 }
                 JsonObject coverage = page.has("coverage") && page.get("coverage").isJsonObject()
                         ? page.getAsJsonObject("coverage") : null;
+                int requiredSectionsInPage = 0;
                 if (coverage != null && coverage.has("section_ids") && coverage.get("section_ids").isJsonArray()) {
                     for (JsonElement id : coverage.getAsJsonArray("section_ids")) {
                         if (!id.isJsonNull()) {
-                            covered.add(id.getAsString());
+                            String sectionId = id.getAsString();
+                            covered.add(sectionId);
+                            if (requiredSectionIds.contains(sectionId)) {
+                                requiredSectionsInPage++;
+                            }
                         }
                     }
+                }
+                if (!"OVERVIEW".equals(pageType) && requiredSectionsInPage >= 2
+                        && (content == null || content.length() < requiredSectionsInPage * 300)) {
+                    report.getOverCompressedPages().add(title == null ? "未命名页面" : title);
                 }
             }
         }
@@ -74,11 +87,16 @@ public class WikiIngestQualityGate {
             report.setStatus("FAILED");
             report.getIssues().add("章节覆盖率低于 70%");
         } else if (report.getCoverageRatio() < 0.9 || !report.getMissingSections().isEmpty()
-                || !report.getPagesWithoutSourceRefs().isEmpty()) {
+                || !report.getPagesWithoutSourceRefs().isEmpty()
+                || !report.getGenericTitles().isEmpty()
+                || !report.getOverCompressedPages().isEmpty()
+                || !report.getShortPages().isEmpty()
+                || !report.getDuplicateTitles().isEmpty()) {
             report.setStatus("PARTIAL");
         } else {
             report.setStatus("SUCCESS");
         }
+        appendQualityIssues(report);
         return report;
     }
 
@@ -96,12 +114,47 @@ public class WikiIngestQualityGate {
         return elem != null && !elem.isJsonNull() ? elem.getAsString() : null;
     }
 
+    private boolean isGenericTitle(String title, JsonObject page, DocumentOutlineExtractor.DocumentOutline outline) {
+        if (title == null || title.isBlank()) {
+            return true;
+        }
+        String normalized = title.replaceAll("\\s+", "");
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        String software = getAsString(page, "software");
+        if ((software == null || software.isBlank()) && outline != null) {
+            software = outline.getSoftware();
+        }
+        boolean lacksSoftware = software != null && !software.isBlank()
+                && !lower.contains(software.replaceAll("\\s+", "").toLowerCase(Locale.ROOT));
+        boolean genericKeyword = lower.matches(".*(安装方式|安装步骤|环境要求|产品配置|配置说明|参数说明|问题处理|故障处理|监控指标|常见问题|操作步骤|使用说明).*");
+        boolean veryShortGeneric = normalized.length() <= 8
+                && lower.matches(".*(安装|配置|参数|监控|故障|问题|步骤|说明|概述).*");
+        return lacksSoftware && (genericKeyword || veryShortGeneric);
+    }
+
+    private void appendQualityIssues(QualityReport report) {
+        if (!report.getGenericTitles().isEmpty()) {
+            report.getIssues().add("存在泛化标题");
+        }
+        if (!report.getOverCompressedPages().isEmpty()) {
+            report.getIssues().add("存在过度压缩页面");
+        }
+        if (!report.getPagesWithoutSourceRefs().isEmpty()) {
+            report.getIssues().add("存在缺少来源章节的页面");
+        }
+        if (!report.getShortPages().isEmpty()) {
+            report.getIssues().add("存在正文过短页面");
+        }
+    }
+
     public static class QualityReport {
         private double coverageRatio;
         private int requiredSectionsTotal;
         private int requiredSectionsCovered;
         private List<String> missingSections = new ArrayList<>();
         private List<String> shortPages = new ArrayList<>();
+        private List<String> genericTitles = new ArrayList<>();
+        private List<String> overCompressedPages = new ArrayList<>();
         private List<String> duplicateTitles = new ArrayList<>();
         private List<String> pagesWithoutSourceRefs = new ArrayList<>();
         private List<String> issues = new ArrayList<>();
@@ -117,6 +170,10 @@ public class WikiIngestQualityGate {
         public void setMissingSections(List<String> missingSections) { this.missingSections = missingSections; }
         public List<String> getShortPages() { return shortPages; }
         public void setShortPages(List<String> shortPages) { this.shortPages = shortPages; }
+        public List<String> getGenericTitles() { return genericTitles; }
+        public void setGenericTitles(List<String> genericTitles) { this.genericTitles = genericTitles; }
+        public List<String> getOverCompressedPages() { return overCompressedPages; }
+        public void setOverCompressedPages(List<String> overCompressedPages) { this.overCompressedPages = overCompressedPages; }
         public List<String> getDuplicateTitles() { return duplicateTitles; }
         public void setDuplicateTitles(List<String> duplicateTitles) { this.duplicateTitles = duplicateTitles; }
         public List<String> getPagesWithoutSourceRefs() { return pagesWithoutSourceRefs; }

@@ -57,6 +57,7 @@ class IngestTaskServiceTest {
         IngestAgent.IngestResult failed = new IngestAgent.IngestResult();
         failed.setStatus("FAILED");
         failed.setErrorMessage(ErrorMessages.WIKI_PAGE_PLAN_FAILED);
+        failed.setQualityReport("{\"status\":\"FAILED\",\"coverageRatio\":0.2}");
 
         when(taskMapper.findById(9L)).thenReturn(task);
         when(sourceMapper.findById(3L)).thenReturn(source);
@@ -66,6 +67,7 @@ class IngestTaskServiceTest {
         service.executeTask(9L);
 
         verify(taskMapper, never()).updateResult(eq(9L), anyInt(), anyInt());
+        verify(taskMapper).updateQualityReport(eq(9L), eq("{\"status\":\"FAILED\",\"coverageRatio\":0.2}"));
         verify(taskMapper).updateStatus(eq(9L), eq("FAILED"), eq(ErrorMessages.WIKI_PAGE_PLAN_FAILED));
         ArgumentCaptor<WikiSource> sourceCaptor = ArgumentCaptor.forClass(WikiSource.class);
         verify(sourceMapper).update(sourceCaptor.capture());

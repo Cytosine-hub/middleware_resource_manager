@@ -177,7 +177,8 @@ public class IngestAgent {
 
                 if (title == null || pageType == null) continue;
 
-                WikiPage existing = pageMapper.findByTitleAndType(title, pageType);
+                WikiPage existing = findExistingPage(pageObj, title, pageType,
+                        source.getCategory(), source.getSoftware());
                 if (existing != null) {
                     String mergeDecision = callLlm(IngestPromptTemplates.buildMergeDecisionPrompt(
                         existing.getContent(), getAsString(pageObj, "content")));
@@ -195,14 +196,7 @@ public class IngestAgent {
                         updated++;
                         savedPages.add(existing);
                     } else {
-                        String newContent = getAsString(pageObj, "content");
-                        if (newContent != null) {
-                            existing.setContent(existing.getContent() + "\n\n---\n\n" + newContent);
-                        }
-                        String newSummary = getAsString(pageObj, "summary");
-                        if (newSummary != null) existing.setSummary(newSummary);
-                        existing.setCompiledBy("ingest-agent");
-                        existing.setCompiledAt(LocalDateTime.now());
+                        appendPageContent(existing, pageObj, source);
                         pageMapper.update(existing);
                         updated++;
                         savedPages.add(existing);
@@ -317,6 +311,7 @@ public class IngestAgent {
         }
 
         JsonObject pagePlan = generatePagePlan(source, outlineJson, sectionFactsJson);
+        validatePagePlanCoverage(pagePlan, outline);
         JsonArray pages = generatePagesFromPlan(source, outlineJson, sectionFactsJson, pagePlan);
         enrichPagesWithPlan(pages, pagePlan.getAsJsonArray("pages"), outline, source);
         validateGeneratedPages(pages);
@@ -349,6 +344,42 @@ public class IngestAgent {
             throw new PlannedIngestException(ErrorMessages.WIKI_PAGE_GENERATION_FAILED);
         }
         return pagesResult.getAsJsonArray("pages");
+    }
+
+    private void validatePagePlanCoverage(JsonObject pagePlan, DocumentOutlineExtractor.DocumentOutline outline) {
+        if (pagePlan == null || !pagePlan.has("pages") || !pagePlan.get("pages").isJsonArray()) {
+            throw new PlannedIngestException(ErrorMessages.WIKI_PAGE_PLAN_FAILED);
+        }
+        Set<String> required = new LinkedHashSet<>();
+        for (DocumentOutlineExtractor.DocumentSection section : outline.getSections()) {
+            if (section.isRequired()) {
+                required.add(section.getId());
+            }
+        }
+        if (required.isEmpty()) {
+            return;
+        }
+        Set<String> covered = new HashSet<>();
+        for (JsonElement element : pagePlan.getAsJsonArray("pages")) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject plan = element.getAsJsonObject();
+            if (!plan.has("covered_section_ids") || !plan.get("covered_section_ids").isJsonArray()) {
+                continue;
+            }
+            for (JsonElement sectionId : plan.getAsJsonArray("covered_section_ids")) {
+                if (!sectionId.isJsonNull()) {
+                    covered.add(sectionId.getAsString());
+                }
+            }
+        }
+        List<String> missing = required.stream()
+                .filter(sectionId -> !covered.contains(sectionId))
+                .toList();
+        if (!missing.isEmpty()) {
+            throw new PlannedIngestException(ErrorMessages.WIKI_PAGE_PLAN_FAILED + "：缺少必需章节 " + missing);
+        }
     }
 
     private void completePlannedIngest(WikiSource source, String hash, WikiIngestQualityGate.QualityReport report,
@@ -451,19 +482,19 @@ public class IngestAgent {
                 // 去掉分段后缀，用原始标题
                 String cleanTitle = pageTitle.replaceAll("\\s*\\[\\d+\\]$", "");
 
-                WikiPage existing = pageMapper.findByTitleAndType(cleanTitle, pageType);
+                WikiPage existing = findExistingPage(pageObj, cleanTitle, pageType, category, software);
                 if (existing != null) {
                     String mergeDecision = callLlm(IngestPromptTemplates.buildMergeDecisionPrompt(
                             existing.getContent(), getAsString(pageObj, "content")));
                     JsonObject decision = parseJson(mergeDecision);
-                    String action = decision != null ? getAsString(decision, "action") : "OVERWRITE";
+                    String action = decision != null ? getAsString(decision, "action") : "APPEND";
 
                     if ("CONTRADICT".equals(action)) {
                         existing.setStatus("CONTRADICTED");
                         existing.setContradictionNote(decision != null ? getAsString(decision, "reason") : "与新文档内容矛盾");
                         pageMapper.update(existing);
                     } else if ("APPEND".equals(action)) {
-                        existing.setContent(existing.getContent() + "\n\n" + getAsString(pageObj, "content"));
+                        existing.setContent(mergeMarkdownByHeading(existing.getContent(), getAsString(pageObj, "content")));
                         existing.setUpdatedAt(LocalDateTime.now());
                         pageMapper.update(existing);
                     } else {
@@ -480,6 +511,8 @@ public class IngestAgent {
                     newPage.setCategory(category);
                     newPage.setSoftware(software);
                     newPage.setVersion(getAsString(pageObj, "version"));
+                    newPage.setCanonicalTitle(canonicalTitle(cleanTitle));
+                    newPage.setAliasTitles(aliasTitlesFromPage(pageObj));
                     newPage.setContent(getAsString(pageObj, "content"));
                     newPage.setSummary(getAsString(pageObj, "summary"));
                     newPage.setStatus("DRAFT");
@@ -496,7 +529,7 @@ public class IngestAgent {
                 String pageTitle = getAsString(pageObj, "title");
                 if (pageTitle == null) continue;
                 String cleanTitle = pageTitle.replaceAll("\\s*\\[\\d+\\]$", "");
-                WikiPage savedPage = pageMapper.findByTitleAndType(cleanTitle, getAsString(pageObj, "page_type"));
+                WikiPage savedPage = findExistingPage(pageObj, cleanTitle, getAsString(pageObj, "page_type"), category, software);
                 if (savedPage != null) {
                     savedPages.add(savedPage);
                 }
@@ -610,15 +643,14 @@ public class IngestAgent {
 
             JsonArray sectionIds = plan.has("covered_section_ids") && plan.get("covered_section_ids").isJsonArray()
                     ? plan.getAsJsonArray("covered_section_ids") : new JsonArray();
-            if (!page.has("coverage") || !page.get("coverage").isJsonObject()) {
-                JsonObject coverage = new JsonObject();
-                coverage.add("section_ids", sectionIds.deepCopy());
+            JsonObject coverage = page.has("coverage") && page.get("coverage").isJsonObject()
+                    ? page.getAsJsonObject("coverage") : new JsonObject();
+            coverage.add("section_ids", sectionIds.deepCopy());
+            if (!coverage.has("evidence_quotes") || !coverage.get("evidence_quotes").isJsonArray()) {
                 coverage.add("evidence_quotes", new JsonArray());
-                page.add("coverage", coverage);
             }
-            if (!page.has("source_refs") || !page.get("source_refs").isJsonObject()) {
-                page.add("source_refs", buildSourceRefs(source, sectionIds, sections));
-            }
+            page.add("coverage", coverage);
+            page.add("source_refs", buildSourceRefs(source, sectionIds, sections));
             if (!page.has("category") || page.get("category").isJsonNull()) {
                 page.addProperty("category", getAsString(plan, "category"));
             }
@@ -647,6 +679,13 @@ public class IngestAgent {
             if (section != null) {
                 sectionRef.addProperty("section_path", section.getPath());
                 sectionRef.addProperty("char_range", section.getCharStart() + "-" + section.getCharEnd());
+                if (section.getPageRange() != null) {
+                    sectionRef.addProperty("page_range", section.getPageRange());
+                }
+                sectionRef.addProperty("paragraph_range", section.getParagraphStart() + "-" + section.getParagraphEnd());
+                if (section.getSourceSignal() != null) {
+                    sectionRef.addProperty("source_signal", section.getSourceSignal());
+                }
             }
             refsSections.add(sectionRef);
         }
@@ -663,7 +702,7 @@ public class IngestAgent {
             String pageType = getAsString(pageObj, "page_type");
 
             if (title == null || pageType == null) continue;
-            WikiPage existing = pageMapper.findByTitleAndType(title, pageType);
+            WikiPage existing = findExistingPage(pageObj, title, pageType, source.getCategory(), source.getSoftware());
             if (existing != null) {
                 String outcome = mergeExistingPage(existing, pageObj, source);
                 if ("CONTRADICT".equals(outcome)) {
@@ -681,6 +720,113 @@ public class IngestAgent {
             }
         }
         return new SaveStats(created, updated, contradictions, savedPages);
+    }
+
+    private WikiPage findExistingPage(JsonObject pageObj, String title, String pageType,
+                                      String category, String software) {
+        if (title == null || pageType == null) {
+            return null;
+        }
+        for (String candidateTitle : candidateTitles(pageObj, title)) {
+            WikiPage exact = pageMapper.findByTitleAndType(candidateTitle, pageType);
+            if (exact != null) {
+                return exact;
+            }
+        }
+
+        String targetCanonical = canonicalTitle(title);
+        WikiPage canonicalMatch = pageMapper.findByCanonicalTitleAndType(targetCanonical, pageType, category, software);
+        if (canonicalMatch != null) {
+            return canonicalMatch;
+        }
+
+        List<WikiPage> candidates = (category != null || software != null)
+                ? pageMapper.findByCategoryOrSoftware(category, software, 100)
+                : pageMapper.findAll();
+        for (WikiPage candidate : candidates) {
+            if (!pageType.equals(candidate.getPageType())) {
+                continue;
+            }
+            if (targetCanonical.equals(pageCanonicalTitle(candidate))) {
+                return candidate;
+            }
+            for (String aliasTitle : candidateTitles(pageObj, title)) {
+                String aliasCanonical = canonicalTitle(aliasTitle);
+                if (aliasCanonical.equals(pageCanonicalTitle(candidate))) {
+                    return candidate;
+                }
+                for (String persistedAlias : persistedAliasTitles(candidate)) {
+                    if (aliasCanonical.equals(canonicalTitle(persistedAlias))) {
+                        return candidate;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private Set<String> candidateTitles(JsonObject pageObj, String title) {
+        Set<String> titles = new LinkedHashSet<>();
+        if (title != null && !title.isBlank()) {
+            titles.add(title.trim());
+        }
+        if (pageObj != null && pageObj.has("alias_titles") && pageObj.get("alias_titles").isJsonArray()) {
+            for (JsonElement aliasElement : pageObj.getAsJsonArray("alias_titles")) {
+                if (!aliasElement.isJsonNull()) {
+                    String alias = aliasElement.getAsString();
+                    if (alias != null && !alias.isBlank()) {
+                        titles.add(alias.trim());
+                    }
+                }
+            }
+        }
+        return titles;
+    }
+
+    private String canonicalTitle(String title) {
+        if (title == null) {
+            return "";
+        }
+        return title.toLowerCase(Locale.ROOT)
+                .replaceAll("[\\s\\p{Punct}，。；：、（）【】《》“”‘’]+", "");
+    }
+
+    private String pageCanonicalTitle(WikiPage page) {
+        if (page == null) {
+            return "";
+        }
+        if (page.getCanonicalTitle() != null && !page.getCanonicalTitle().isBlank()) {
+            return page.getCanonicalTitle();
+        }
+        return canonicalTitle(page.getTitle());
+    }
+
+    private List<String> persistedAliasTitles(WikiPage page) {
+        if (page == null || page.getAliasTitles() == null || page.getAliasTitles().isBlank()) {
+            return Collections.emptyList();
+        }
+        return parseAliasTitles(page.getAliasTitles(), page.getId());
+    }
+
+    private List<String> parseAliasTitles(String aliasTitles, Long pageId) {
+        if (aliasTitles == null || aliasTitles.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            JsonArray aliases = gson.fromJson(aliasTitles, JsonArray.class);
+            List<String> result = new ArrayList<>();
+            if (aliases != null) {
+                for (JsonElement alias : aliases) {
+                    if (!alias.isJsonNull() && !alias.getAsString().isBlank()) {
+                        result.add(alias.getAsString().trim());
+                    }
+                }
+            }
+            return result;
+        } catch (Exception e) {
+            log.debug("Ignore invalid alias_titles for pageId={}: {}", pageId, e.getMessage());
+            return Collections.emptyList();
+        }
     }
 
     private String mergeExistingPage(WikiPage existing, JsonObject pageObj, WikiSource source) {
@@ -707,14 +853,100 @@ public class IngestAgent {
     private void appendPageContent(WikiPage existing, JsonObject pageObj, WikiSource source) {
         String newContent = getAsString(pageObj, "content");
         if (newContent != null) {
-            existing.setContent(existing.getContent() + "\n\n---\n\n" + newContent);
+            existing.setContent(mergeMarkdownByHeading(existing.getContent(), newContent));
         }
         String newSummary = getAsString(pageObj, "summary");
         if (newSummary != null) existing.setSummary(newSummary);
         existing.setSourceRefs(sourceRefsFromPage(pageObj, source));
+        existing.setCanonicalTitle(canonicalTitle(existing.getTitle()));
+        existing.setAliasTitles(mergeAliasTitles(existing.getAliasTitles(), pageObj));
         existing.setCompiledBy("ingest-agent");
         existing.setCompiledAt(LocalDateTime.now());
     }
+
+    private String mergeMarkdownByHeading(String existingContent, String newContent) {
+        if (newContent == null || newContent.isBlank()) {
+            return existingContent;
+        }
+        if (existingContent == null || existingContent.isBlank()) {
+            return newContent;
+        }
+
+        List<MarkdownBlock> existingBlocks = markdownBlocks(existingContent);
+        List<MarkdownBlock> newBlocks = markdownBlocks(newContent);
+        if (existingBlocks.isEmpty() || newBlocks.isEmpty()) {
+            return appendWithSeparator(existingContent, newContent);
+        }
+
+        Map<String, MarkdownBlock> newByHeading = new LinkedHashMap<>();
+        for (MarkdownBlock block : newBlocks) {
+            newByHeading.putIfAbsent(canonicalTitle(block.heading()), block);
+        }
+
+        Set<String> consumedHeadings = new HashSet<>();
+        StringBuilder merged = new StringBuilder();
+        int cursor = 0;
+        for (MarkdownBlock existingBlock : existingBlocks) {
+            merged.append(existingContent, cursor, existingBlock.end());
+            String key = canonicalTitle(existingBlock.heading());
+            MarkdownBlock patch = newByHeading.get(key);
+            if (patch != null) {
+                String patchBody = stripHeading(patch.text()).trim();
+                if (!patchBody.isBlank() && !existingBlock.text().contains(patchBody)) {
+                    merged.append("\n\n").append(patchBody);
+                }
+                consumedHeadings.add(key);
+            }
+            cursor = existingBlock.end();
+        }
+        if (cursor < existingContent.length()) {
+            merged.append(existingContent.substring(cursor));
+        }
+        for (MarkdownBlock newBlock : newBlocks) {
+            if (!consumedHeadings.contains(canonicalTitle(newBlock.heading()))) {
+                merged.append("\n\n").append(newBlock.text().trim());
+            }
+        }
+        return merged.toString().trim();
+    }
+
+    private String appendWithSeparator(String existingContent, String newContent) {
+        return existingContent + "\n\n---\n\n" + newContent;
+    }
+
+    private List<MarkdownBlock> markdownBlocks(String content) {
+        if (content == null || content.isBlank()) {
+            return Collections.emptyList();
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("(?m)^#{1,6}\\s+(.+)$")
+                .matcher(content);
+        List<Integer> starts = new ArrayList<>();
+        List<String> headings = new ArrayList<>();
+        while (matcher.find()) {
+            starts.add(matcher.start());
+            headings.add(matcher.group(1).trim());
+        }
+        if (starts.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<MarkdownBlock> blocks = new ArrayList<>();
+        for (int i = 0; i < starts.size(); i++) {
+            int start = starts.get(i);
+            int end = (i + 1 < starts.size()) ? starts.get(i + 1) : content.length();
+            blocks.add(new MarkdownBlock(start, end, headings.get(i), content.substring(start, end)));
+        }
+        return blocks;
+    }
+
+    private String stripHeading(String blockText) {
+        if (blockText == null) {
+            return "";
+        }
+        return blockText.replaceFirst("(?s)^#{1,6}\\s+.*?(\\R|$)", "");
+    }
+
+    private record MarkdownBlock(int start, int end, String heading, String text) {}
 
     private String summarizeQuality(WikiIngestQualityGate.QualityReport report) {
         return String.format(Locale.ROOT, "coverage=%.2f, required=%d/%d, missing=%s",
@@ -743,6 +975,9 @@ public class IngestAgent {
                 metadata.put("pageId", String.valueOf(page.getId()));
                 metadata.put("title", page.getTitle());
                 metadata.put("pageType", page.getPageType());
+                if (page.getCategory() != null) metadata.put("category", page.getCategory());
+                if (page.getSoftware() != null) metadata.put("software", page.getSoftware());
+                if (page.getStatus() != null) metadata.put("status", page.getStatus());
                 metadata.put("content", text);
                 metadata.put("sourceTitle", page.getTitle());
                 try {
@@ -806,12 +1041,54 @@ public class IngestAgent {
         page.setSoftware(getAsString(json, "software"));
         if (page.getSoftware() == null && source != null) page.setSoftware(source.getSoftware());
         page.setVersion(getAsString(json, "version"));
+        page.setCanonicalTitle(canonicalTitle(page.getTitle()));
+        page.setAliasTitles(aliasTitlesFromPage(json));
         page.setContent(getAsString(json, "content"));
         page.setSummary(getAsString(json, "summary"));
         page.setStatus("DRAFT");
         page.setCompiledBy("ingest-agent");
         page.setCompiledAt(LocalDateTime.now());
         page.setSourceRefs(sourceRefsFromPage(json, source));
+    }
+
+    private String aliasTitlesFromPage(JsonObject json) {
+        JsonArray aliases = new JsonArray();
+        if (json != null && json.has("alias_titles") && json.get("alias_titles").isJsonArray()) {
+            for (JsonElement alias : json.getAsJsonArray("alias_titles")) {
+                if (!alias.isJsonNull()) {
+                    String value = alias.getAsString();
+                    if (value != null && !value.isBlank()) {
+                        aliases.add(value.trim());
+                    }
+                }
+            }
+        }
+        return aliases.isEmpty() ? null : gson.toJson(aliases);
+    }
+
+    private String mergeAliasTitles(String existingAliasTitles, JsonObject pageObj) {
+        Set<String> aliases = new LinkedHashSet<>(parseAliasTitles(existingAliasTitles, null));
+        String newAliases = aliasTitlesFromPage(pageObj);
+        if (newAliases != null) {
+            try {
+                JsonArray newArray = gson.fromJson(newAliases, JsonArray.class);
+                for (JsonElement alias : newArray) {
+                    if (!alias.isJsonNull() && !alias.getAsString().isBlank()) {
+                        aliases.add(alias.getAsString().trim());
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("Ignore invalid generated alias_titles: {}", e.getMessage());
+            }
+        }
+        if (aliases.isEmpty()) {
+            return existingAliasTitles;
+        }
+        JsonArray merged = new JsonArray();
+        for (String alias : aliases) {
+            merged.add(alias);
+        }
+        return gson.toJson(merged);
     }
 
     private String sourceRefsFromPage(JsonObject json, WikiSource source) {

@@ -9,6 +9,17 @@ public interface VectorStore {
 
     List<VectorSearchResult> search(float[] queryVector, int topK);
 
+    default List<VectorSearchResult> search(float[] queryVector, int topK, VectorSearchFilter filter) {
+        List<VectorSearchResult> results = search(queryVector, topK);
+        if (filter == null || filter.isEmpty()) {
+            return results;
+        }
+        return results.stream()
+                .filter(result -> filter.matches(result.getMetadata()))
+                .limit(topK)
+                .toList();
+    }
+
     void delete(String id);
 
     void createCollection();

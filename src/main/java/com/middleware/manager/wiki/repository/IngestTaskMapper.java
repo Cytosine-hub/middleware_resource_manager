@@ -18,6 +18,7 @@ public interface IngestTaskMapper {
                      @Param("errorMessage") String errorMessage);
     int updateResult(@Param("id") Long id, @Param("pagesCreated") int pagesCreated,
                      @Param("pagesUpdated") int pagesUpdated);
+    int updateQualityReport(@Param("id") Long id, @Param("qualityReport") String qualityReport);
 
     int deleteBySourceId(@Param("sourceId") Long sourceId);
 }

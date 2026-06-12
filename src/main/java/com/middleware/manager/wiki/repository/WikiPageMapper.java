@@ -13,6 +13,11 @@ public interface WikiPageMapper {
 
     WikiPage findByTitleAndType(@Param("title") String title, @Param("pageType") String pageType);
 
+    WikiPage findByCanonicalTitleAndType(@Param("canonicalTitle") String canonicalTitle,
+                                         @Param("pageType") String pageType,
+                                         @Param("category") String category,
+                                         @Param("software") String software);
+
     List<WikiPage> findAll();
 
     List<WikiPage> findByCategory(@Param("category") String category);

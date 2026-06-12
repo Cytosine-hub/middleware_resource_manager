@@ -1,6 +1,7 @@
 package com.middleware.manager.agent.tool;
 
 import com.middleware.manager.knowledge.service.KnowledgeService;
+import com.middleware.manager.knowledge.store.VectorSearchFilter;
 import com.middleware.manager.wiki.entity.WikiPage;
 import com.middleware.manager.wiki.service.WikiSearchService;
 import org.springframework.beans.factory.ObjectProvider;
@@ -30,7 +31,7 @@ public class KnowledgeSearchTool implements Tool {
 
     @Override
     public String description() {
-        return "从 Wiki 和向量知识库混合检索相关内容。用于查找产品介绍、排查手册、配置指南、历史案例。参数：query(查询内容), top_k(返回数量，默认5)";
+        return "从 Wiki 和向量知识库混合检索相关内容。用于查找产品介绍、排查手册、配置指南、历史案例。参数：query(查询内容), top_k(返回数量，默认5), category, software, source_type, source_id";
     }
 
     @Override
@@ -41,6 +42,13 @@ public class KnowledgeSearchTool implements Tool {
             Object v = params.get("top_k");
             topK = v instanceof Number ? ((Number) v).intValue() : Integer.parseInt(String.valueOf(v));
         }
+        String category = stringParam(params, "category");
+        String software = stringParam(params, "software");
+        VectorSearchFilter filter = VectorSearchFilter.none()
+                .addCategory(category)
+                .addSoftware(software)
+                .addSourceType(stringParam(params, "source_type"))
+                .addSourceId(longParam(params, "source_id"));
 
         List<String> blocks = new ArrayList<>();
         Set<String> dedupe = new LinkedHashSet<>();
@@ -50,7 +58,7 @@ public class KnowledgeSearchTool implements Tool {
                     query, topK, ToolContextHolder.getAuthentication());
             for (WikiSearchService.WikiSearchResult result : wikiResults) {
                 WikiPage page = result.getPage();
-                if (page == null || !dedupe.add("wiki:" + page.getId())) {
+                if (page == null || !matchesWikiFilter(page, category, software) || !dedupe.add("wiki:" + page.getId())) {
                     continue;
                 }
                 String content = trim(page.getContent(), 1200);
@@ -63,7 +71,7 @@ public class KnowledgeSearchTool implements Tool {
             }
         }
 
-        List<KnowledgeService.SearchResult> knowledgeResults = knowledgeService.search(query, topK);
+        List<KnowledgeService.SearchResult> knowledgeResults = knowledgeService.search(query, topK, filter);
         for (KnowledgeService.SearchResult result : knowledgeResults) {
             String key = "doc:" + result.getSourceTitle() + ":" + result.getContent();
             if (!dedupe.add(key)) {
@@ -91,5 +99,34 @@ public class KnowledgeSearchTool implements Tool {
 
     private String valueOrDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private String stringParam(Map<String, Object> params, String key) {
+        Object value = params.get(key);
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private Long longParam(Map<String, Object> params, String key) {
+        String value = stringParam(params, key);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private boolean matchesWikiFilter(WikiPage page, String category, String software) {
+        return matches(category, page.getCategory()) && matches(software, page.getSoftware());
+    }
+
+    private boolean matches(String expected, String actual) {
+        return expected == null || expected.isBlank() || expected.equals(actual);
     }
 }

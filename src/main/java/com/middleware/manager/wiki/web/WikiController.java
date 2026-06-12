@@ -181,6 +181,9 @@ public class WikiController {
                 metadata.put("pageId", String.valueOf(page.getId()));
                 metadata.put("title", page.getTitle());
                 metadata.put("pageType", page.getPageType());
+                if (page.getCategory() != null) metadata.put("category", page.getCategory());
+                if (page.getSoftware() != null) metadata.put("software", page.getSoftware());
+                if (page.getStatus() != null) metadata.put("status", page.getStatus());
                 metadata.put("content", page.getSummary() != null ? page.getSummary() : page.getTitle());
                 metadata.put("sourceTitle", page.getTitle());
                 vectorStore.add(vectorId, vector, metadata);

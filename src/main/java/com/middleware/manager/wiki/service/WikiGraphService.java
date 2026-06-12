@@ -48,7 +48,7 @@ public class WikiGraphService {
     }
 
     /**
-     * 构建完整的知识图谱：5信号评分 + Louvain 社区检测
+     * 构建完整的知识图谱：5 信号评分 + 软件类型社区聚类。
      */
     public Map<String, Object> buildGraph() {
         long now = System.currentTimeMillis();
@@ -78,6 +78,9 @@ public class WikiGraphService {
             Map<String, Object> empty = new HashMap<>();
             empty.put("nodes", Collections.emptyList());
             empty.put("links", Collections.emptyList());
+            empty.put("communityCount", 0);
+            empty.put("communities", Collections.emptyMap());
+            empty.put("communityStats", Collections.emptyList());
             return empty;
         }
 
@@ -120,7 +123,6 @@ public class WikiGraphService {
         for (WikiPage p : pages) graph.addVertex(p.getId());
 
         Map<String, Double> edgeWeights = new HashMap<>();
-        Set<Long> allPageIds = pageMap.keySet();
 
         // 信号1: 直接链接
         for (var entry : directLinks.entrySet()) {
@@ -200,11 +202,8 @@ public class WikiGraphService {
             graph.setEdgeWeight(edge, edgeWeights.getOrDefault(key, 0.0));
         }
 
-        // Louvain 社区检测
-        Map<Long, Integer> communities = louvain(graph, allPageIds);
-
-        // 社区名称（取每个社区中被引用最多的页面的软件/分类作为名称）
-        Map<Integer, String> communityNames = computeCommunityNames(communities, pageMap);
+        StableCommunities stableCommunities = buildSoftwareCommunities(pages);
+        Map<Long, Integer> communities = stableCommunities.nodeCommunities();
 
         // 构建输出
         List<Map<String, Object>> nodes = new ArrayList<>();
@@ -220,7 +219,8 @@ public class WikiGraphService {
             node.put("software", p.getSoftware());
             node.put("status", p.getStatus());
             node.put("community", communities.getOrDefault(p.getId(), 0));
-            node.put("communityName", communityNames.getOrDefault(communities.getOrDefault(p.getId(), 0), ""));
+            node.put("communityKey", stableCommunities.communityKeys().get(communities.getOrDefault(p.getId(), 0)));
+            node.put("communityName", stableCommunities.communityNames().getOrDefault(communities.getOrDefault(p.getId(), 0), ""));
             nodes.add(node);
             nodeIdMap.put(p.getId(), idx);
             idx++;
@@ -243,11 +243,12 @@ public class WikiGraphService {
             }
         }
 
-        Map<String, Object> result = new HashMap<>();
+        Map<String, Object> result = new LinkedHashMap<>();
         result.put("nodes", nodes);
         result.put("links", edges);
-        result.put("communityCount", communityNames.size());
-        result.put("communities", communityNames);
+        result.put("communityCount", stableCommunities.communityNames().size());
+        result.put("communities", stableCommunities.communityNames());
+        result.put("communityStats", buildCommunityStats(stableCommunities, communities, graph));
         return result;
     }
 
@@ -291,194 +292,83 @@ public class WikiGraphService {
         return "RELATED";
     }
 
-    // ========== Louvain 社区检测 ==========
-
-    private Map<Long, Integer> louvain(Graph<Long, DefaultWeightedEdge> graph, Set<Long> nodes) {
-        if (nodes.size() <= 1) {
-            Map<Long, Integer> result = new HashMap<>();
-            int i = 0;
-            for (long n : nodes) result.put(n, i++);
-            return result;
+    private StableCommunities buildSoftwareCommunities(List<WikiPage> pages) {
+        Set<String> sortedKeys = new TreeSet<>();
+        Map<Long, String> keyByPageId = new HashMap<>();
+        for (WikiPage page : pages) {
+            String key = communityKey(page);
+            keyByPageId.put(page.getId(), key);
+            sortedKeys.add(key);
         }
 
-        // 初始化：每个节点一个社区
-        Map<Long, Integer> nodeCommunity = new HashMap<>();
-        int cid = 0;
-        for (long n : nodes) nodeCommunity.put(n, cid++);
+        Map<String, Integer> idByKey = new LinkedHashMap<>();
+        Map<Integer, String> communityKeys = new LinkedHashMap<>();
+        Map<Integer, String> communityNames = new LinkedHashMap<>();
+        int id = 0;
+        for (String key : sortedKeys) {
+            idByKey.put(key, id);
+            communityKeys.put(id, key);
+            communityNames.put(id, communityName(key));
+            id++;
+        }
 
-        double totalWeight = totalEdgeWeight(graph);
-        if (totalWeight == 0) return nodeCommunity;
+        Map<Long, Integer> nodeCommunities = new HashMap<>();
+        for (Map.Entry<Long, String> entry : keyByPageId.entrySet()) {
+            nodeCommunities.put(entry.getKey(), idByKey.get(entry.getValue()));
+        }
+        return new StableCommunities(nodeCommunities, communityKeys, communityNames);
+    }
 
-        // 迭代优化
-        boolean improved = true;
-        int maxIterations = 20;
-        int iter = 0;
-        while (improved && iter < maxIterations) {
-            improved = false;
-            iter++;
+    private String communityKey(WikiPage page) {
+        return normalizeCommunityPart(page.getCategory(), "未分类")
+                + "::" + normalizeCommunityPart(page.getSoftware(), "通用");
+    }
 
-            // 随机顺序遍历节点
-            List<Long> shuffled = new ArrayList<>(nodes);
-            Collections.sort(shuffled);
+    private String communityName(String communityKey) {
+        String[] parts = communityKey.split("::", 2);
+        String category = parts.length > 0 ? parts[0] : "未分类";
+        String software = parts.length > 1 ? parts[1] : "通用";
+        return software + " (" + category + ")";
+    }
 
-            for (long node : shuffled) {
-                int currentCommunity = nodeCommunity.get(node);
-                double bestGain = 0;
-                int bestCommunity = currentCommunity;
+    private String normalizeCommunityPart(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value.trim();
+    }
 
-                // 计算邻居社区
-                Set<Long> neighbors = getNeighbors(graph, node);
-                Set<Integer> neighborCommunities = new HashSet<>();
-                neighborCommunities.add(currentCommunity);
-                for (long n : neighbors) {
-                    neighborCommunities.add(nodeCommunity.get(n));
-                }
-
-                // 尝试移动到每个邻居社区
-                for (int targetCommunity : neighborCommunities) {
-                    if (targetCommunity == currentCommunity) continue;
-
-                    double gain = modularityGain(graph, nodeCommunity, node, currentCommunity, targetCommunity, totalWeight);
-                    if (gain > bestGain) {
-                        bestGain = gain;
-                        bestCommunity = targetCommunity;
-                    }
-                }
-
-                if (bestCommunity != currentCommunity) {
-                    nodeCommunity.put(node, bestCommunity);
-                    improved = true;
-                }
+    private List<Map<String, Object>> buildCommunityStats(StableCommunities stableCommunities,
+                                                          Map<Long, Integer> communities,
+                                                          Graph<Long, DefaultWeightedEdge> graph) {
+        Map<Integer, Integer> nodeCounts = new HashMap<>();
+        Map<Integer, Integer> edgeCounts = new HashMap<>();
+        for (Integer communityId : stableCommunities.communityNames().keySet()) {
+            nodeCounts.put(communityId, 0);
+            edgeCounts.put(communityId, 0);
+        }
+        for (Integer communityId : communities.values()) {
+            nodeCounts.merge(communityId, 1, Integer::sum);
+        }
+        for (DefaultWeightedEdge edge : graph.edgeSet()) {
+            Integer sourceCommunity = communities.get(graph.getEdgeSource(edge));
+            Integer targetCommunity = communities.get(graph.getEdgeTarget(edge));
+            if (sourceCommunity != null && sourceCommunity.equals(targetCommunity)) {
+                edgeCounts.merge(sourceCommunity, 1, Integer::sum);
             }
         }
 
-        // 重新编号社区（连续）
-        return renumberCommunities(nodeCommunity);
-    }
-
-    private double modularityGain(Graph<Long, DefaultWeightedEdge> graph,
-                                   Map<Long, Integer> nodeCommunity,
-                                   long node, int fromCommunity, int toCommunity,
-                                   double totalWeight) {
-        double m2 = 2.0 * totalWeight;
-        if (m2 == 0) return 0;
-
-        double ki = weightedDegree(graph, node);
-        double kiInFrom = weightToCommunity(graph, nodeCommunity, node, fromCommunity);
-        double kiInTo = weightToCommunity(graph, nodeCommunity, node, toCommunity);
-        double sigmaTotFrom = communityTotalDegree(graph, nodeCommunity, fromCommunity);
-        double sigmaTotTo = communityTotalDegree(graph, nodeCommunity, toCommunity);
-
-        // modularity gain from leaving fromCommunity
-        double dqFrom = (kiInFrom / m2) - (sigmaTotFrom * ki / (m2 * m2));
-        // modularity gain from joining toCommunity
-        double dqTo = (kiInTo / m2) + (sigmaTotTo * ki / (m2 * m2)) - (ki * ki / (m2 * m2));
-
-        return dqTo - dqFrom;
-    }
-
-    private double weightedDegree(Graph<Long, DefaultWeightedEdge> graph, long node) {
-        double sum = 0;
-        for (DefaultWeightedEdge e : graph.edgesOf(node)) {
-            sum += graph.getEdgeWeight(e);
+        List<Map<String, Object>> stats = new ArrayList<>();
+        for (Integer communityId : stableCommunities.communityNames().keySet()) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", communityId);
+            item.put("key", stableCommunities.communityKeys().get(communityId));
+            item.put("name", stableCommunities.communityNames().get(communityId));
+            item.put("nodeCount", nodeCounts.getOrDefault(communityId, 0));
+            item.put("edgeCount", edgeCounts.getOrDefault(communityId, 0));
+            stats.add(item);
         }
-        return sum;
+        return stats;
     }
 
-    private double weightToCommunity(Graph<Long, DefaultWeightedEdge> graph,
-                                      Map<Long, Integer> nodeCommunity, long node, int community) {
-        double sum = 0;
-        for (DefaultWeightedEdge e : graph.edgesOf(node)) {
-            long other = graph.getEdgeSource(e) == node ? graph.getEdgeTarget(e) : graph.getEdgeSource(e);
-            if (nodeCommunity.getOrDefault(other, -1) == community && other != node) {
-                sum += graph.getEdgeWeight(e);
-            }
-        }
-        return sum;
-    }
-
-    private double communityTotalDegree(Graph<Long, DefaultWeightedEdge> graph,
-                                         Map<Long, Integer> nodeCommunity, int community) {
-        double sum = 0;
-        for (DefaultWeightedEdge e : graph.edgeSet()) {
-            long src = graph.getEdgeSource(e);
-            long tgt = graph.getEdgeTarget(e);
-            boolean srcIn = nodeCommunity.getOrDefault(src, -1) == community;
-            boolean tgtIn = nodeCommunity.getOrDefault(tgt, -1) == community;
-            if (srcIn || tgtIn) {
-                sum += graph.getEdgeWeight(e);
-            }
-        }
-        return sum;
-    }
-
-    private Set<Long> getNeighbors(Graph<Long, DefaultWeightedEdge> graph, long node) {
-        Set<Long> neighbors = new HashSet<>();
-        for (DefaultWeightedEdge e : graph.edgesOf(node)) {
-            long src = graph.getEdgeSource(e);
-            long tgt = graph.getEdgeTarget(e);
-            neighbors.add(src == node ? tgt : src);
-        }
-        return neighbors;
-    }
-
-    private Map<Long, Integer> renumberCommunities(Map<Long, Integer> original) {
-        Map<Integer, Integer> remap = new HashMap<>();
-        int[] counter = {0};
-        Map<Long, Integer> result = new HashMap<>();
-        for (long node : original.keySet()) {
-            int oldComm = original.get(node);
-            int newComm = remap.computeIfAbsent(oldComm, k -> counter[0]++);
-            result.put(node, newComm);
-        }
-        return result;
-    }
-
-    private double totalEdgeWeight(Graph<Long, DefaultWeightedEdge> graph) {
-        double sum = 0;
-        for (DefaultWeightedEdge e : graph.edgeSet()) {
-            sum += graph.getEdgeWeight(e);
-        }
-        return sum;
-    }
-
-    private Map<Integer, String> computeCommunityNames(Map<Long, Integer> communities, Map<Long, WikiPage> pageMap) {
-        Map<Integer, Map<String, Integer>> communitySoftware = new HashMap<>();
-        Map<Integer, Map<String, Integer>> communityCategory = new HashMap<>();
-
-        for (var entry : communities.entrySet()) {
-            WikiPage page = pageMap.get(entry.getKey());
-            if (page == null) continue;
-            int comm = entry.getValue();
-            if (page.getSoftware() != null && !page.getSoftware().isEmpty()) {
-                communitySoftware.computeIfAbsent(comm, k -> new HashMap<>())
-                        .merge(page.getSoftware(), 1, Integer::sum);
-            }
-            if (page.getCategory() != null && !page.getCategory().isEmpty()) {
-                communityCategory.computeIfAbsent(comm, k -> new HashMap<>())
-                        .merge(page.getCategory(), 1, Integer::sum);
-            }
-        }
-
-        Map<Integer, String> names = new HashMap<>();
-        for (int comm : communitySoftware.keySet()) {
-            String topSoftware = topKey(communitySoftware.get(comm));
-            String topCategory = topKey(communityCategory.getOrDefault(comm, Collections.emptyMap()));
-            if (topSoftware != null) {
-                names.put(comm, topSoftware + (topCategory != null ? " (" + topCategory + ")" : ""));
-            } else if (topCategory != null) {
-                names.put(comm, topCategory);
-            } else {
-                names.put(comm, "社区 " + comm);
-            }
-        }
-        return names;
-    }
-
-    private String topKey(Map<String, Integer> map) {
-        return map.entrySet().stream()
-                .max(Map.Entry.comparingByValue())
-                .map(Map.Entry::getKey)
-                .orElse(null);
-    }
+    private record StableCommunities(Map<Long, Integer> nodeCommunities,
+                                     Map<Integer, String> communityKeys,
+                                     Map<Integer, String> communityNames) {}
 }

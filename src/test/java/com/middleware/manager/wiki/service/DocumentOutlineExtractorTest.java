@@ -60,4 +60,55 @@ class DocumentOutlineExtractorTest {
         assertThat(outline.getSections().get(1).getPath()).isEqualTo("配置说明/最大连接数");
         assertThat(outline.getSections().get(1).getSectionType()).isEqualTo("CONFIG_ITEM");
     }
+
+    @Test
+    void extractsMarkdownSetextHeadings() {
+        String content = """
+                配置说明
+                ========
+
+                总体配置说明。
+
+                连接池参数
+                --------
+
+                参数 maxConnections 默认值为 100。
+                """;
+
+        DocumentTypeClassifier.Classification classification = classifier.classify("config.md", content);
+        DocumentOutlineExtractor.DocumentOutline outline =
+                extractor.extract("config.md", content, "中间件", "BES", classification);
+
+        assertThat(outline.getSections()).hasSize(2);
+        assertThat(outline.getSections().get(0).getPath()).isEqualTo("配置说明");
+        assertThat(outline.getSections().get(0).getSourceSignal()).isEqualTo("markdown-setext");
+        assertThat(outline.getSections().get(1).getPath()).isEqualTo("配置说明/连接池参数");
+    }
+
+    @Test
+    void mapsTextHeadingsToTocPageRanges() {
+        String content = """
+                目录
+                1 配置说明 .... 3
+                1.1 最大连接数 .... 4
+                \f
+                第 3 页
+                1 配置说明
+                这里描述配置文件。
+                \f
+                第 4 页
+                1.1 最大连接数
+                参数 maxConnections 默认值为 100。
+                """;
+
+        DocumentTypeClassifier.Classification classification = classifier.classify("manual.pdf", content);
+        DocumentOutlineExtractor.DocumentOutline outline =
+                extractor.extract("manual.pdf", content, "中间件", "BES", classification);
+
+        assertThat(outline.getSections()).hasSize(2);
+        assertThat(outline.getSections().get(0).getPageRange()).isEqualTo("3");
+        assertThat(outline.getSections().get(1).getPageRange()).isEqualTo("4");
+        assertThat(outline.getSections().get(1).getSourceSignal()).isEqualTo("numbered-heading");
+        assertThat(outline.getSections().get(1).getParagraphStart()).isGreaterThan(0);
+    }
 }

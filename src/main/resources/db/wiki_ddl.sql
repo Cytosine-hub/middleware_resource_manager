@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS wiki_pages (
     category VARCHAR(50),
     software VARCHAR(100),
     version VARCHAR(50),
+    canonical_title VARCHAR(200),
+    alias_titles JSON,
     content LONGTEXT NOT NULL,
     summary VARCHAR(500),
     source_refs JSON,
@@ -25,6 +27,7 @@ CREATE TABLE IF NOT EXISTS wiki_pages (
     INDEX idx_category_software (category, software),
     INDEX idx_status (status),
     INDEX idx_software_version (software, version),
+    INDEX idx_canonical_title (canonical_title),
     FULLTEXT INDEX ft_content (title, summary, content)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -72,6 +75,7 @@ CREATE TABLE IF NOT EXISTS wiki_ingest_tasks (
     pages_created INT DEFAULT 0,
     pages_updated INT DEFAULT 0,
     error_message TEXT,
+    quality_report JSON COMMENT 'quality gate report',
     operator_id BIGINT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

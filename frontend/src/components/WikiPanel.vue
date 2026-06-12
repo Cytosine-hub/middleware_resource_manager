@@ -69,11 +69,12 @@
           <div>连接: {{ graphData.links?.length || 0 }}</div>
           <div>社区: {{ graphData.communityCount || 0 }}</div>
         </div>
-        <div v-if="graphData.communities" class="community-legend">
+        <div v-if="graphCommunityStats.length" class="community-legend">
           <div class="legend-title">社区聚类</div>
-          <div v-for="(name, cid) in graphData.communities" :key="cid" class="legend-item">
-            <span class="legend-dot" :style="{ background: communityColor(Number(cid)) }"></span>
-            <span class="legend-label">{{ name }}</span>
+          <div v-for="community in graphCommunityStats" :key="community.id" class="legend-item">
+            <span class="legend-dot" :style="{ background: communityColor(community.id) }"></span>
+            <span class="legend-label">{{ community.name }}</span>
+            <span class="legend-count">{{ community.nodeCount }} / {{ community.edgeCount }}</span>
           </div>
         </div>
       </div>
@@ -213,12 +214,81 @@
           <div class="page-audit" v-if="selectedSource.contentHash">
             内容哈希: <code>{{ selectedSource.contentHash?.substring(0, 16) }}...</code>
           </div>
-          <div style="margin-top: 12px; display: flex; gap: 8px;">
+          <div class="source-actions">
             <button v-if="getSourceTask(selectedSource.id)" class="action-btn" @click="showSourceTask(selectedSource.id)">
               查看编译进度 ({{ getSourceTask(selectedSource.id)?.progress || 0 }}%)
             </button>
             <button v-else-if="!selectedSource.ingested" class="action-btn primary" @click="reingestSource">编译此文档</button>
             <button class="action-btn danger" @click="deleteSource">删除此文档</button>
+          </div>
+          <div v-if="selectedSourceQualityReport" class="quality-panel">
+            <div class="quality-header">
+              <h3>编译质量</h3>
+              <span :class="['status-badge', qualityStatusClass(selectedSourceQualityReport.status)]">
+                {{ qualityStatusLabel(selectedSourceQualityReport.status) }}
+              </span>
+            </div>
+            <div v-if="latestSourceTask" class="quality-task-row">
+              <span>任务 #{{ latestSourceTask.id }}</span>
+              <span>{{ formatDate(latestSourceTask.updatedAt || latestSourceTask.createdAt) }}</span>
+              <span>页面 {{ latestSourceTask.pagesCreated || 0 }} / {{ latestSourceTask.pagesUpdated || 0 }}</span>
+            </div>
+            <div class="quality-grid">
+              <div class="quality-metric">
+                <span>章节覆盖率</span>
+                <strong>{{ qualityCoveragePercent(selectedSourceQualityReport) }}</strong>
+              </div>
+              <div class="quality-metric">
+                <span>必需章节</span>
+                <strong>{{ qualityCoveredText(selectedSourceQualityReport) }}</strong>
+              </div>
+              <div class="quality-metric">
+                <span>缺失章节</span>
+                <strong>{{ qualityArray(selectedSourceQualityReport, 'missingSections', 'missing_sections').length }}</strong>
+              </div>
+              <div class="quality-metric">
+                <span>来源缺失页</span>
+                <strong>{{ qualityArray(selectedSourceQualityReport, 'pagesWithoutSourceRefs', 'pages_without_source_refs').length }}</strong>
+              </div>
+              <div class="quality-metric">
+                <span>泛化标题</span>
+                <strong>{{ qualityArray(selectedSourceQualityReport, 'genericTitles', 'generic_titles').length }}</strong>
+              </div>
+              <div class="quality-metric">
+                <span>压缩页面</span>
+                <strong>{{ qualityArray(selectedSourceQualityReport, 'overCompressedPages', 'over_compressed_pages').length }}</strong>
+              </div>
+            </div>
+            <div v-if="qualityArray(selectedSourceQualityReport, 'missingSections', 'missing_sections').length" class="quality-issue-row">
+              <span class="quality-issue-label">缺失章节</span>
+              <span v-for="id in qualityArray(selectedSourceQualityReport, 'missingSections', 'missing_sections').slice(0, 8)"
+                    :key="id" class="meta-tag">{{ id }}</span>
+            </div>
+            <div v-if="qualityArray(selectedSourceQualityReport, 'shortPages', 'short_pages').length" class="quality-issue-row">
+              <span class="quality-issue-label">短页面</span>
+              <span v-for="title in qualityArray(selectedSourceQualityReport, 'shortPages', 'short_pages').slice(0, 5)"
+                    :key="title" class="meta-tag">{{ title }}</span>
+            </div>
+            <div v-if="qualityArray(selectedSourceQualityReport, 'genericTitles', 'generic_titles').length" class="quality-issue-row">
+              <span class="quality-issue-label">泛化标题</span>
+              <span v-for="title in qualityArray(selectedSourceQualityReport, 'genericTitles', 'generic_titles').slice(0, 5)"
+                    :key="title" class="meta-tag">{{ title }}</span>
+            </div>
+            <div v-if="qualityArray(selectedSourceQualityReport, 'overCompressedPages', 'over_compressed_pages').length" class="quality-issue-row">
+              <span class="quality-issue-label">压缩页面</span>
+              <span v-for="title in qualityArray(selectedSourceQualityReport, 'overCompressedPages', 'over_compressed_pages').slice(0, 5)"
+                    :key="title" class="meta-tag">{{ title }}</span>
+            </div>
+            <div v-if="latestSourceTask?.errorMessage" class="quality-note">
+              {{ latestSourceTask.errorMessage }}
+            </div>
+            <div v-if="qualityArray(selectedSourceQualityReport, 'missingSections', 'missing_sections').length && !isSourceCompiling(selectedSource.id)" class="quality-actions">
+              <button class="action-btn primary" @click="reingestSource">重新编译缺失章节</button>
+            </div>
+            <details class="quality-detail">
+              <summary>完整质量报告</summary>
+              <pre>{{ formattedSelectedQualityReport }}</pre>
+            </details>
           </div>
         </div>
         <div class="source-content">
@@ -494,6 +564,18 @@ const selectedGraphNode = ref(null)
 const graphContainer = ref(null)
 let graph = null
 
+const graphCommunityStats = computed(() => {
+  if (Array.isArray(graphData.value.communityStats) && graphData.value.communityStats.length) {
+    return graphData.value.communityStats
+  }
+  return Object.entries(graphData.value.communities || {}).map(([id, name]) => ({
+    id: Number(id),
+    name,
+    nodeCount: 0,
+    edgeCount: 0
+  }))
+})
+
 // Edit state
 const editing = ref(false)
 const saving = ref(false)
@@ -531,6 +613,71 @@ function getSourceTask(sourceId) {
   return ingestTasks.value.find(t => t.sourceId === sourceId && (t.status === 'PENDING' || t.status === 'PROCESSING'))
 }
 
+const latestSourceTask = computed(() => {
+  if (!selectedSource.value) return null
+  const terminalTasks = ingestTasks.value
+    .filter(t => t.sourceId === selectedSource.value.id && isTerminalTaskStatus(t.status))
+    .slice()
+    .sort((a, b) => {
+      const at = Date.parse(a.updatedAt || a.createdAt || '') || 0
+      const bt = Date.parse(b.updatedAt || b.createdAt || '') || 0
+      if (bt !== at) return bt - at
+      return (b.id || 0) - (a.id || 0)
+    })
+  return terminalTasks[0] || null
+})
+
+const selectedSourceQualityReport = computed(() => parseQualityReport(latestSourceTask.value?.qualityReport))
+
+const formattedSelectedQualityReport = computed(() => {
+  if (!selectedSourceQualityReport.value) return ''
+  return JSON.stringify(selectedSourceQualityReport.value, null, 2)
+})
+
+function parseQualityReport(value) {
+  if (!value) return null
+  if (typeof value === 'object') return value
+  try {
+    return JSON.parse(value)
+  } catch (error) {
+    console.warn('Failed to parse quality report', error)
+    return null
+  }
+}
+
+function qualityArray(report, camelKey, snakeKey) {
+  const value = report?.[camelKey] ?? report?.[snakeKey]
+  return Array.isArray(value) ? value : []
+}
+
+function qualityNumber(report, camelKey, snakeKey) {
+  const value = report?.[camelKey] ?? report?.[snakeKey]
+  return Number.isFinite(Number(value)) ? Number(value) : 0
+}
+
+function qualityCoveragePercent(report) {
+  const ratio = qualityNumber(report, 'coverageRatio', 'coverage_ratio')
+  return `${Math.round(ratio * 100)}%`
+}
+
+function qualityCoveredText(report) {
+  const covered = qualityNumber(report, 'requiredSectionsCovered', 'required_sections_covered')
+  const total = qualityNumber(report, 'requiredSectionsTotal', 'required_sections_total')
+  return `${covered}/${total}`
+}
+
+function qualityStatusClass(status) {
+  if (status === 'SUCCESS') return 'active'
+  if (status === 'PARTIAL') return 'draft'
+  if (status === 'FAILED') return 'rejected'
+  return 'stale'
+}
+
+function qualityStatusLabel(status) {
+  const map = { SUCCESS: '通过', PARTIAL: '部分通过', FAILED: '失败' }
+  return map[status] || status || '未知'
+}
+
 async function showSourceTask(sourceId) {
   const task = getSourceTask(sourceId)
   if (!task) return
@@ -544,7 +691,9 @@ async function showSourceTask(sourceId) {
 async function refreshIngestTasks() {
   try {
     ingestTasks.value = await request('/api/wiki/ingest/tasks')
-  } catch {}
+  } catch (error) {
+    console.warn('Failed to refresh ingest tasks', error)
+  }
 }
 
 // Ingest state
@@ -770,6 +919,7 @@ async function selectSource(src) {
   selectedSource.value = src
   selectedPage.value = null
   editing.value = false
+  refreshIngestTasks()
 }
 
 async function deleteSource() {
@@ -1188,6 +1338,7 @@ async function pollTasks(tasks) {
   const poll = async () => {
     try {
       const allTasks = await request('/api/wiki/ingest/tasks')
+      ingestTasks.value = allTasks
       const myTasks = allTasks.filter(t => taskIds.includes(t.id))
 
       completed = myTasks.filter(t => isTerminalTaskStatus(t.status)).length
@@ -1217,6 +1368,8 @@ async function pollTasks(tasks) {
         const partial = myTasks.filter(t => t.status === 'PARTIAL')
         if (partial.length) msg += `，${partial.length} 个部分成功`
         if (failed.length) msg += `，${failed.length} 个失败`
+        const partialQuality = partial.map(t => parseQualityReport(t.qualityReport)).find(Boolean)
+        if (partialQuality) msg += `，覆盖率 ${qualityCoveragePercent(partialQuality)}`
         ingestResult.value = { success: failed.length === 0, message: msg }
 
         ingesting.value = false
@@ -2074,6 +2227,12 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+}
+
+.legend-count {
+  flex-shrink: 0;
+  opacity: 0.72;
 }
 
 .community-tag {
@@ -2155,6 +2314,99 @@ onBeforeUnmount(() => {
 
 /* Source detail */
 .source-detail { padding: 20px 32px; }
+
+.source-actions {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quality-panel {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid;
+  border-radius: 8px;
+}
+
+.quality-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.quality-header h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.quality-task-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+.quality-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.quality-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.quality-metric span,
+.quality-issue-label,
+.quality-note {
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+.quality-metric strong {
+  font-size: 16px;
+}
+
+.quality-issue-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.quality-note {
+  margin-top: 10px;
+}
+
+.quality-actions {
+  margin-top: 10px;
+}
+
+.quality-detail {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.quality-detail summary {
+  cursor: pointer;
+  opacity: 0.78;
+}
+
+.quality-detail pre {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 .source-content {
   margin-top: 16px;

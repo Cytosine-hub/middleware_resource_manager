@@ -14,6 +14,7 @@
         <result property="pagesCreated" column="pages_created"/>
         <result property="pagesUpdated" column="pages_updated"/>
         <result property="errorMessage" column="error_message"/>
+        <result property="qualityReport" column="quality_report"/>
         <result property="operatorId" column="operator_id"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
@@ -32,8 +33,10 @@
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wiki_ingest_tasks (source_id, file_name, status, progress, step, total_chunks, operator_id)
-        VALUES (#{sourceId}, #{fileName}, #{status}, #{progress}, #{step}, #{totalChunks}, #{operatorId})
+        INSERT INTO wiki_ingest_tasks (source_id, file_name, status, progress, step, total_chunks,
+                                       quality_report, operator_id)
+        VALUES (#{sourceId}, #{fileName}, #{status}, #{progress}, #{step}, #{totalChunks},
+                #{qualityReport}, #{operatorId})
     </insert>
 
     <update id="update">
@@ -41,7 +44,7 @@
         SET source_id=#{sourceId}, file_name=#{fileName}, status=#{status}, progress=#{progress},
             step=#{step}, total_chunks=#{totalChunks}, completed_chunks=#{completedChunks},
             pages_created=#{pagesCreated}, pages_updated=#{pagesUpdated}, error_message=#{errorMessage},
-            operator_id=#{operatorId}
+            quality_report=#{qualityReport}, operator_id=#{operatorId}
         WHERE id=#{id}
     </update>
 
@@ -60,6 +63,12 @@
     <update id="updateResult">
         UPDATE wiki_ingest_tasks
         SET pages_created=#{pagesCreated}, pages_updated=#{pagesUpdated}, status='COMPLETED', progress=100
+        WHERE id=#{id}
+    </update>
+
+    <update id="updateQualityReport">
+        UPDATE wiki_ingest_tasks
+        SET quality_report=#{qualityReport}
         WHERE id=#{id}
     </update>
 

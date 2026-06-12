@@ -9,6 +9,8 @@
         <result property="category" column="category"/>
         <result property="software" column="software"/>
         <result property="version" column="version"/>
+        <result property="canonicalTitle" column="canonical_title"/>
+        <result property="aliasTitles" column="alias_titles"/>
         <result property="content" column="content"/>
         <result property="summary" column="summary"/>
         <result property="sourceRefs" column="source_refs"/>
@@ -28,6 +30,25 @@
 
     <select id="findByTitleAndType" resultMap="wikiPageResultMap">
         SELECT * FROM wiki_pages WHERE title = #{title} AND page_type = #{pageType}
+    </select>
+
+    <select id="findByCanonicalTitleAndType" resultMap="wikiPageResultMap">
+        SELECT * FROM wiki_pages WHERE canonical_title = #{canonicalTitle} AND page_type = #{pageType}
+        <if test="category != null or software != null">
+            AND (
+            <if test="category != null">
+                category = #{category}
+            </if>
+            <if test="category != null and software != null">
+                OR
+            </if>
+            <if test="software != null">
+                software = #{software}
+            </if>
+            )
+        </if>
+        ORDER BY updated_at DESC
+        LIMIT 1
     </select>
 
     <select id="findAll" resultMap="wikiPageResultMap">
@@ -68,13 +89,14 @@
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wiki_pages (title, page_type, category, software, version, content, summary, source_refs, status, compiled_by, compiled_at)
-        VALUES (#{title}, #{pageType}, #{category}, #{software}, #{version}, #{content}, #{summary}, #{sourceRefs}, #{status}, #{compiledBy}, #{compiledAt})
+        INSERT INTO wiki_pages (title, page_type, category, software, version, canonical_title, alias_titles, content, summary, source_refs, status, compiled_by, compiled_at)
+        VALUES (#{title}, #{pageType}, #{category}, #{software}, #{version}, #{canonicalTitle}, #{aliasTitles}, #{content}, #{summary}, #{sourceRefs}, #{status}, #{compiledBy}, #{compiledAt})
     </insert>
 
     <update id="update">
         UPDATE wiki_pages
         SET title=#{title}, page_type=#{pageType}, category=#{category}, software=#{software}, version=#{version},
+            canonical_title=#{canonicalTitle}, alias_titles=#{aliasTitles},
             content=#{content}, summary=#{summary}, source_refs=#{sourceRefs}, status=#{status},
             contradiction_note=#{contradictionNote}, compiled_by=#{compiledBy}, compiled_at=#{compiledAt},
             reviewed_by=#{reviewedBy}, reviewed_at=#{reviewedAt}, updated_at=NOW()

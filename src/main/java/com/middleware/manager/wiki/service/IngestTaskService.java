@@ -226,6 +226,7 @@ public class IngestTaskService {
         taskMapper.updateProgress(taskId, 10, "正在抽取文档类型和目录结构...", 0);
         taskMapper.updateProgress(taskId, 25, "正在生成章节事实和页面计划...", 0);
         IngestAgent.IngestResult result = ingestAgent.ingestPlanned(source, task.getOperatorId());
+        persistQualityReport(taskId, result);
         if ("FAILED".equals(result.getStatus())) {
             markSourceNotIngested(source);
             taskMapper.updateStatus(taskId, "FAILED", failureMessage(result, ErrorMessages.WIKI_INGEST_FAILED));
@@ -258,6 +259,12 @@ public class IngestTaskService {
         source.setIngested("SUCCESS".equals(result.getStatus()) || "SKIPPED".equals(result.getStatus()));
         source.setIngestedAt(Boolean.TRUE.equals(source.getIngested()) ? LocalDateTime.now() : null);
         sourceMapper.update(source);
+    }
+
+    private void persistQualityReport(Long taskId, IngestAgent.IngestResult result) {
+        if (result != null && result.getQualityReport() != null && !result.getQualityReport().isBlank()) {
+            taskMapper.updateQualityReport(taskId, result.getQualityReport());
+        }
     }
 
     private String failureMessage(IngestAgent.IngestResult result, String fallback) {

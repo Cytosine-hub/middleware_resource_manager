@@ -1,6 +1,7 @@
 package com.middleware.manager.knowledge.repository;
 
 import com.middleware.manager.knowledge.entity.KnowledgeChunk;
+import com.middleware.manager.knowledge.store.VectorSearchFilter;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -25,6 +26,11 @@ public interface KnowledgeChunkMapper {
     List<KnowledgeChunk> findByTermsWithScore(@Param("terms") List<String> terms,
                                                @Param("weights") List<Integer> weights,
                                                @Param("limit") int limit);
+
+    List<KnowledgeChunk> findByTermsWithScoreFiltered(@Param("terms") List<String> terms,
+                                                       @Param("weights") List<Integer> weights,
+                                                       @Param("limit") int limit,
+                                                       @Param("filter") VectorSearchFilter filter);
 
     List<KnowledgeChunk> findBySourceTitleAndSourceType(@Param("sourceTitle") String sourceTitle, @Param("sourceType") String sourceType);
 

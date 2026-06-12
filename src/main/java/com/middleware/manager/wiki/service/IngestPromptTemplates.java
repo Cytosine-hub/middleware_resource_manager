@@ -221,7 +221,8 @@ public class IngestPromptTemplates {
             4. 每个页面必须写入 source_refs.sections，section_id 必须来自 page_plan.covered_section_ids。
             5. 每个页面必须写入 coverage.section_ids，必须等于或覆盖 page_plan.covered_section_ids。
             6. 不要编造原文没有的配置项、命令、指标或故障原因。
-            7. 输出必须是合法 JSON，不要包含任何其他文字。
+            7. 如果原文或常用叫法中存在等价标题，可写入 alias_titles；没有就输出空数组。
+            8. 输出必须是合法 JSON，不要包含任何其他文字。
 
             ## 输出 JSON 格式
             {
@@ -232,6 +233,7 @@ public class IngestPromptTemplates {
                   "category": "中间件/数据库/主机/网络/安全",
                   "software": "软件名",
                   "version": "版本号",
+                  "alias_titles": ["等价标题或简称"],
                   "summary": "一句话摘要",
                   "content": "完整 Markdown 内容，含 [[wikilink]] 交叉引用",
                   "source_refs": {
@@ -239,7 +241,14 @@ public class IngestPromptTemplates {
                     "source_title": "来源标题",
                     "source_type": "UPLOAD",
                     "sections": [
-                      {"section_id": "sec-001", "section_path": "章节路径", "char_range": "0-1000"}
+                      {
+                        "section_id": "sec-001",
+                        "section_path": "章节路径",
+                        "char_range": "0-1000",
+                        "page_range": "3-5",
+                        "paragraph_range": "12-18",
+                        "source_signal": "numbered-heading"
+                      }
                     ]
                   },
                   "coverage": {

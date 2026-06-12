@@ -37,11 +37,40 @@ class WikiIngestQualityGateTest {
         assertThat(report.getMissingSections()).containsExactly("sec-002");
     }
 
+    @Test
+    void marksGenericTitlesAsPartial() {
+        DocumentOutlineExtractor.DocumentOutline outline = outline("sec-001");
+        JsonArray pages = new JsonArray();
+        pages.add(page("参数说明", "sec-001"));
+
+        WikiIngestQualityGate.QualityReport report = qualityGate.evaluate(outline, pages);
+
+        assertThat(report.getStatus()).isEqualTo("PARTIAL");
+        assertThat(report.getGenericTitles()).containsExactly("参数说明");
+        assertThat(report.getIssues()).contains("存在泛化标题");
+    }
+
+    @Test
+    void marksOverCompressedPagesAsPartial() {
+        DocumentOutlineExtractor.DocumentOutline outline = outline("sec-001", "sec-002");
+        JsonObject compressed = page("BES V9.5.5 配置参数", "sec-001", "sec-002");
+        compressed.addProperty("content", "这是一段覆盖多个章节但明显过短的正文。".repeat(20));
+        JsonArray pages = new JsonArray();
+        pages.add(compressed);
+
+        WikiIngestQualityGate.QualityReport report = qualityGate.evaluate(outline, pages);
+
+        assertThat(report.getStatus()).isEqualTo("PARTIAL");
+        assertThat(report.getOverCompressedPages()).containsExactly("BES V9.5.5 配置参数");
+        assertThat(report.getIssues()).contains("存在过度压缩页面");
+    }
+
     private DocumentOutlineExtractor.DocumentOutline outline(String... sectionIds) {
         DocumentOutlineExtractor.DocumentOutline outline = new DocumentOutlineExtractor.DocumentOutline();
         outline.setDocumentType(DocumentTypeClassifier.CONFIG_GUIDE);
         outline.setFormat("MARKDOWN");
         outline.setTitle("config.md");
+        outline.setSoftware("BES");
         outline.setSections(List.of(sectionIds).stream().map(id -> {
             DocumentOutlineExtractor.DocumentSection section = new DocumentOutlineExtractor.DocumentSection();
             section.setId(id);
@@ -59,7 +88,8 @@ class WikiIngestQualityGateTest {
         JsonObject page = new JsonObject();
         page.addProperty("title", title);
         page.addProperty("page_type", "STANDARD");
-        page.addProperty("content", "这是一段超过三百字的正文。".repeat(30));
+        page.addProperty("software", "BES");
+        page.addProperty("content", "这是一段超过三百字的正文。".repeat(80));
 
         JsonArray ids = new JsonArray();
         JsonArray refsSections = new JsonArray();

@@ -20,6 +20,7 @@ public class IngestTask {
     private Integer pagesCreated;
     private Integer pagesUpdated;
     private String errorMessage;
+    private String qualityReport;
     private Long operatorId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

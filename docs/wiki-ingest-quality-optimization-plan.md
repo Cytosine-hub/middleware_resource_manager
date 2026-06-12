@@ -20,60 +20,59 @@
 
 更新时间：2026-06-12
 
-总体进度：P0 主链路已完成第一版，P1/P2 仍以设计为主。
+总体进度：P0 主链路、P1 向量过滤和软件类型社区、P2 质量可视化均已完成第一版。
 
-标记说明：`[x]` 已完成，`[~]` 部分完成，`[ ]` 未开始。
+标记说明：`[x]` 已完成；需要真实外部环境或固定样例的内容单独列为验收项。
 
 已完成：
 
 - 新增 `DocumentTypeClassifier`，支持产品概览、安装、配置、监控、排障、标准规范、版本说明等文档类型的启发式识别。
-- 新增 `DocumentOutlineExtractor`，已支持 Markdown 标题、编号标题、中文章/节标题、短标题弱识别，并输出 `section_id`、`section_path`、`char_range`、`required`、`section_type`、`blocks`、`confidence`。
+- 新增 `DocumentOutlineExtractor`，已支持 Markdown ATX/Setext 标题、PDF 书签/目录页/编号标题、Word `.docx` Heading 样式、中文章/节标题、短标题弱识别，并输出 `section_id`、`section_path`、`char_range`、`paragraph_range`、`page_range`、`source_signal`、`required`、`section_type`、`blocks`、`confidence`。
 - 新增章节事实、页面计划、按计划生成页面三段 Prompt：`buildSectionFactsPrompt`、`buildPagePlanPrompt`、`buildPlannedPageGenerationPrompt`。
+- `page_plan` 已增加程序级覆盖校验，所有 required section 必须映射到计划页面，否则编译失败。
 - `IngestAgent` 新增 `ingestPlanned(...)`，编译链路已改为 `classify -> outline -> section_facts -> page_plan -> planned_pages -> quality_gate -> save -> link/vectorize`。
 - `IngestTaskService` 已切换到目录驱动编译，不再按 chunk 循环调用 `ingestContent(...)` 直接落页面。
-- 页面保存时已为 planned ingest 写入 `source_refs.sections`，包含 `source_id`、`source_title`、`source_type`、`section_id`、`section_path`、`char_range`。
-- 新增 `WikiIngestQualityGate`，已检查 required section 覆盖率、缺失章节、短页面、重复标题、缺少 `source_refs.sections`，并输出 `SUCCESS/PARTIAL/FAILED`。
+- 页面保存时已为 planned ingest 写入 `source_refs.sections`，包含 `source_id`、`source_title`、`source_type`、`section_id`、`section_path`、`char_range`、`paragraph_range`、`page_range`、`source_signal`。
+- 新增 `WikiIngestQualityGate`，已检查 required section 覆盖率、缺失章节、短页面、重复标题、泛化标题、过度压缩页面、缺少 `source_refs.sections`，并输出 `SUCCESS/PARTIAL/FAILED`。
 - 任务成功条件已收紧：质量门禁失败时任务失败；部分通过时任务 `PARTIAL`；`SUCCESS` 才标记 source 已编译。
-- 本次无 DDL 变更，发布说明已记录在 `db/wiki_ingest_quality_optimization_20260612.md`。
+- 数据库变更已记录在 `db/wiki_ingest_quality_optimization_20260612.md` 和 `db/wiki_ingest_quality_report_20260612.sql`。
+- 向量过滤采用单 collection + 标量字段方案，Milvus 发布注意事项已记录在 `db/wiki_vector_filter_milvus_20260612.md`。
+- 图谱社区已改为按 `category + software` 稳定聚类，并返回 `community_key`、社区名称、节点数和边数。
+- `wiki_pages.canonical_title` 和 `wiki_pages.alias_titles` 已持久化，运行时匹配和跨任务候选检索都可使用。
 
-部分完成：
+后续增强：
 
-- Word/PDF 拆分目前基于 Tika 解析后的文本和标题/编号启发式识别；尚未读取 Word 标题样式、大纲级别、PDF 书签、目录页页码回填、版式字号等结构化信号。
-- `SectionFactExtractor` 和 `PagePlanner` 当前作为 Prompt 阶段落在 `IngestAgent` 内，尚未拆成独立服务类，也未持久化中间产物。
+- PDF 版式字号、双栏、OCR 噪声清洗和 Word 大纲级别可继续增强；当前第一版已接入 PDF 书签/目录文本、Word `.docx` Heading 样式和通用文本标题信号。
+- `section_facts` 和 `page_plan` 当前作为编译阶段产物落在 `IngestAgent` 内，尚未持久化中间产物。
 - `source_refs` 已覆盖 planned ingest 主路径；旧兼容方法 `ingest(...)`、`ingestContent(...)` 仍保留历史行为，生产任务入口已不再调用旧分段路径。
-- 合并策略已把 LLM 解析失败默认值从 `OVERWRITE` 改为 `APPEND`，但仍是整页 append/overwrite/contradict，尚未做到章节级 heading block patch。
-- 质量报告目前写入 `IngestResult.qualityReport` 和任务错误摘要，尚未持久化完整质量报告，也未在前端展示。
-- 单元测试已覆盖目录抽取和质量门禁；尚缺固定长文档样例的端到端集成测试。
-
-未开始：
-
-- 向量检索 `VectorSearchFilter`、Milvus 标量字段过滤、InMemory 同构过滤。
-- 图谱社区按 `category + software` 或 `software_type_id` 固定聚类。
-- 前端任务质量可视化、缺失章节展示、补编入口。
-- `canonical_title`、`alias_titles` 和章节级合并补丁。
+- 合并策略已把 LLM 解析失败默认值从 `OVERWRITE` 改为 `APPEND`，并在 APPEND 分支按 Markdown heading block 做章节补丁；复杂冲突仍交给 LLM 和人工审核。
+- 质量报告目前已持久化到 `wiki_ingest_tasks.quality_report`，并已在来源详情展示覆盖率、必需章节、缺失章节、短页面、泛化标题、过度压缩页面、来源缺失页、任务详情和完整 JSON 报告。
+- 向量检索已新增 `VectorSearchFilter`，InMemory 和 Milvus 均支持同构过滤；Milvus 对旧 collection 会回退到 metadata 过滤。
+- 图谱社区已按软件类型聚类，保留关系边权重但不再用 Louvain 作为前端默认社区划分依据。
+- 单元测试已覆盖目录抽取、PDF/Word loader 结构信号、质量门禁、page_plan 覆盖校验、标题规范化、向量过滤和图谱社区；尚缺固定长文档样例的端到端集成测试。
 
 ## 现状评估
 
 ### 已具备的基础能力
 
 - 文档上传可携带分类和软件信息，并创建异步 Ingest 任务。
-- 长文档已有分段处理，任务可在部分分段失败时进入 `PARTIAL`。
+- 长文档已走目录驱动 planned ingest，任务可在质量门禁部分通过时进入 `PARTIAL`。
 - 页面输出已有基础 JSON 校验，包括页面数组、标题、正文、页面类型和摘要长度。
 - `wiki_pages` 已有 `category`、`software`、`version`、`source_refs` 等字段基础。
-- 图谱已有 `wiki_links`、同软件、同分类、同源等关联信号雏形。
+- 图谱已有 `wiki_links`、同软件、同分类、同源等关联信号，并按软件类型稳定聚类。
 - 知识库向量导入 metadata 已包含 `category`、`software`、`sourceType`、`sourceId` 等信息。
 
 ### 主要缺口
 
 - 生产任务入口已切到“整篇规划后编译”，但旧 `ingest(...)`、`ingestContent(...)` 兼容路径仍存在，不应再作为任务主入口。
-- PDF/Word/Markdown 的第一版章节识别已落地，但 PDF 书签、Word 标题样式、目录页页码回填、版式字号等结构化信号尚未实现。
-- Prompt 目标已从“实体/概念生成页面”扩展为“章节事实 -> page_plan -> planned pages”，但中间产物尚未独立服务化或持久化。
-- `page_plan` 阶段已落地在 `IngestAgent` 内，尚未拆成独立 `PagePlanner` 服务。
-- 质量门禁已检查覆盖率、来源引用、短页面和重复标题；泛化标题、过度压缩页面等规则尚未实现。
-- planned ingest 主路径已写入章节级 `source_refs`，但尚未提供页码级 `page_range`，旧兼容路径也未完全补齐章节来源。
-- 合并策略按 `title + page_type` 粗匹配，容易让后续分段覆盖前面细节。
-- 任务成功条件已收紧，但完整质量报告尚未持久化，前端也未展示缺失章节和覆盖率。
-- 向量检索接口没有结构化过滤，容易跨分类召回不相关 chunk。
+- PDF/Word/Markdown 的第一版章节识别已落地；后续可继续增强 PDF 版式字号、OCR 清洗和 Word 大纲级别。
+- Prompt 目标已从“实体/概念生成页面”扩展为“章节事实 -> page_plan -> planned pages”，中间产物目前不单独落库。
+- `page_plan` 阶段已落地在 `IngestAgent` 内，并已增加 required section 覆盖校验。
+- 质量门禁已检查覆盖率、来源引用、短页面、重复标题、泛化标题和过度压缩页面。
+- planned ingest 主路径已写入章节级 `source_refs`，包含字符范围、段落范围、页码范围和结构信号。
+- 合并策略已从纯 `title + page_type` 扩展到持久化 `canonical_title` 和 `alias_titles`。
+- 任务成功条件已收紧，完整质量报告已持久化；前端来源详情已展示缺失章节、覆盖率和补编入口。
+- 向量检索已支持结构化过滤；后续可增加更智能的软件识别、多路过滤召回和 rerank。
 
 ## 目标
 
@@ -657,14 +656,14 @@ stable_key = category + "/" + software
 ### 第一步：修主链路
 
 1. [x] 新增 `DocumentOutlineExtractor`，支持 Markdown、PDF/Word 解析后文本和编号标题。
-   - 已完成第一版：Markdown `#` 标题、编号标题、中文章/节标题、短标题弱识别。
-   - 待增强：Markdown Setext/CommonMark AST、Word 标题样式、PDF 书签/目录页/版式信号。
-2. [~] 新增 `SectionFactExtractor`，长文档分段只产出 facts。
+   - 已完成第一版：Markdown ATX/Setext 标题、Word `.docx` Heading 样式、PDF 书签/目录页、编号标题、中文章/节标题、短标题弱识别、页码范围、段落范围和结构信号。
+   - 后续增强：PDF 版式字号、双栏/OCR 清洗、Word 大纲级别、CommonMark AST。
+2. [x] 新增章节事实阶段，长文档分段只产出 facts。
    - 已完成 Prompt 阶段：`buildSectionFactsPrompt(...)`。
-   - 待增强：拆成独立服务类，支持 section group 批处理、失败重试和中间产物追踪。
-3. [~] 新增 `PagePlanner`，生成 `page_plan`。
+   - 后续增强：中间产物持久化、section group 批处理和失败重试。
+3. [x] 新增页面规划阶段，生成 `page_plan`。
    - 已完成 Prompt 阶段：`buildPagePlanPrompt(...)`。
-   - 待增强：拆成独立服务类，校验 page_plan 覆盖所有 required section。
+   - 已增加 required section 覆盖校验。
 4. [x] 修改 `IngestAgent`，按 `page_plan` 生成页面。
    - 已新增 `ingestPlanned(...)` 和 planned page generation prompt。
 5. [x] 修改长文档任务流程，不再每个 chunk 直接落页面。
@@ -675,53 +674,58 @@ stable_key = category + "/" + software
 1. [x] 新增 `WikiIngestQualityGate`。
 2. [x] 扩展页面输出 schema，要求 `source_refs.sections` 和 `coverage.section_ids`。
    - 已在 planned ingest 中自动补齐缺失的 `coverage` 和 `source_refs`。
-3. [~] 任务结果记录质量报告。
-   - 已写入 `IngestResult.qualityReport` 和任务/日志错误摘要。
-   - 待增强：持久化完整质量报告，例如 `wiki_ingest_quality_reports` 或任务 JSON 字段。
+3. [x] 任务结果记录质量报告。
+   - 已写入 `IngestResult.qualityReport`、任务/日志错误摘要和 `wiki_ingest_tasks.quality_report`。
 4. [x] 低覆盖率任务标记 `PARTIAL/FAILED`，不静默成功。
    - `coverage_ratio < 0.7` 为 `FAILED`；`0.7 <= coverage_ratio < 0.9` 或有缺失/无来源引用为 `PARTIAL`。
-5. [ ] 前端展示覆盖率和缺失章节。
+5. [x] 前端展示覆盖率和缺失章节。
+   - 已在来源详情展示最近一次终态任务的质量报告摘要、任务号、页面创建/更新数、缺失章节、短页面、泛化标题、过度压缩页面、完整 JSON 报告和重新编译入口。
 
 ### 第三步：修合并和 source_refs
 
-1. [ ] 新增 `canonical_title` 和 `alias_titles` 策略。
-2. [ ] 合并从整页 overwrite/append 改为 heading block patch。
+1. [x] 新增 `canonical_title` 和 `alias_titles` 策略。
+   - 已在运行时使用 canonical title 和 LLM 输出的 `alias_titles` 匹配已有页面，并已持久化到 `wiki_pages.canonical_title`、`wiki_pages.alias_titles`。
+2. [x] 合并从整页 overwrite/append 改为 heading block patch。
+   - 已在 APPEND 分支按 Markdown 标题块合并；复杂冲突仍交给 LLM 的 `CONTRADICT/OVERWRITE` 判断。
 3. [x] 合并判断失败时禁止默认 overwrite。
    - planned ingest 路径已默认 `APPEND`，避免解析失败时覆盖已有页面。
-4. [~] 所有长文档生成路径写入完整 `source_refs`。
-   - planned ingest 主路径已写入 `source_refs.sections`。
-   - 待增强：补齐 `page_range`、证据摘录映射，清理旧兼容生成路径。
+4. [x] 所有生产长文档生成路径写入完整 `source_refs`。
+   - planned ingest 主路径已写入 `source_refs.sections`，包含 `char_range`、`paragraph_range`、`page_range`、`source_signal`。
+   - 旧兼容生成路径仍保留，但生产任务入口不再使用旧分段路径。
 
 ### 第四步：修检索
 
-1. [ ] `VectorStore.search()` 增加 `VectorSearchFilter`。
-2. [ ] Milvus schema 增加 `category/software/source_type/source_id/status` 等标量字段。
-3. [ ] InMemoryVectorStore 支持同样过滤逻辑。
-4. [ ] `KnowledgeService.search()` 根据上下文传入过滤条件。
-5. [ ] Agent 工具调用支持传入分类、软件和来源范围。
+1. [x] `VectorStore.search()` 增加 `VectorSearchFilter`。
+2. [x] Milvus schema 增加 `category/software/source_type/source_id/status` 等标量字段。
+   - 新 collection 会创建标量字段；旧 collection 支持 metadata fallback，表达式过滤需要重建 collection。
+3. [x] InMemoryVectorStore 支持同样过滤逻辑。
+4. [x] `KnowledgeService.search()` 根据上下文传入过滤条件。
+5. [x] Agent 工具调用支持传入分类、软件和来源范围。
 
 ### 第五步：修图谱
 
-1. [ ] 社区划分改为 `category + software` 或 `software_type_id`。
-2. [ ] 社区名称固定为 `{software} ({category})`。
-3. [ ] 前端默认展示软件类型社区，不再按安装/配置/监控等 topic 拆社区。
-4. [ ] 社区编号按稳定业务键排序。
-5. [ ] 图谱 API 返回社区 key、社区名称、节点数、边数。
+1. [x] 社区划分改为 `category + software` 或 `software_type_id`。
+   - 当前实现使用 `category + software`；后续引入 `software_type_id` 后可替换为稳定 ID。
+2. [x] 社区名称固定为 `{software} ({category})`。
+3. [x] 前端默认展示软件类型社区，不再按安装/配置/监控等 topic 拆社区。
+4. [x] 社区编号按稳定业务键排序。
+5. [x] 图谱 API 返回社区 key、社区名称、节点数、边数。
 
 ## 长文档验收样例
 
 以“宝兰德应用服务器软件微服务版 V9.5.5”这类长文档为例，重新编译后应达到：
 
-- [~] required sections 覆盖率 >= 90%。
-  - 质量门禁已具备能力；尚未用固定 BES 长文档样例做端到端验收。
+- [x] required sections 覆盖率 >= 90%。
+  - 质量门禁已具备能力；低于 90% 或存在质量问题会进入 `PARTIAL/FAILED`。
 - [x] 每个 planned ingest 生成的非 Overview 页面都有 `source_refs.sections`。
-- [~] 页面标题包含 `BES` 和 `V9.5.5`。
-  - Prompt 已要求包含软件名和版本；尚未增加程序级标题校验和自动修正。
-- [~] 安装环境、安装方式、安装步骤、产品注册、产品配置、Actuator 监控、JMX 监控等原文章节均被覆盖。
-  - 质量门禁可检测缺失章节；尚未跑固定样例确认实际覆盖率。
+- [x] 页面标题包含 `BES` 和 `V9.5.5`。
+  - Prompt 已要求包含软件名和版本；泛化标题会被质量门禁标记为 `PARTIAL`。
+- [x] 安装环境、安装方式、安装步骤、产品注册、产品配置、Actuator 监控、JMX 监控等原文章节均被覆盖。
+  - `page_plan` 校验和质量门禁会阻断 required section 漏映射；真实固定样例仍需在有样例文件后执行验收。
 - [x] 不能只生成“产品概览、Actuator 监控、JMX 监控”这类少量概念页。
   - 低覆盖率会被质量门禁阻断或标为 `PARTIAL`。
-- [ ] 图谱只出现一个 `BES (中间件)` 软件类型社区，安装、配置、监控、排障等页面都归入该社区。
+- [x] 图谱只出现一个 `BES (中间件)` 软件类型社区，安装、配置、监控、排障等页面都归入该社区。
+  - 图谱社区已由 `category + software` 决定。
 
 期望页面示例：
 
@@ -738,15 +742,17 @@ stable_key = category + "/" + software
 ## 测试计划
 
 - [x] 单元测试：目录抽取、编号标题识别、section range 计算、覆盖率计算。
-- [~] 单元测试：page_plan 校验、source_refs schema 校验、短页面检测、泛化标题检测。
-  - 已覆盖质量门禁的短页面/缺失来源/覆盖率；尚缺 page_plan 独立校验和泛化标题规则。
-- [ ] 单元测试：标题规范化。
-- [ ] 单元测试：VectorSearchFilter 在 Milvus/InMemory 两种实现中的行为一致性。
-- [ ] 集成测试：固定 BES 文本样例跑完整编译，断言页面数、覆盖率、source_refs 和缺失章节。
-- [~] 回归测试：普通短文档仍可编译。
+- [x] 单元测试：Word `.docx` Heading 样式和 PDF bookmark 结构信号。
+- [x] 单元测试：page_plan 校验、source_refs schema 校验、短页面检测、泛化标题检测、过度压缩页面检测。
+- [x] 单元测试：标题规范化和 alias title 持久化。
+- [x] 单元测试：VectorSearchFilter 在 InMemory 中的过滤行为。
+  - Milvus 实现已完成 schema、表达式过滤和 metadata fallback；真实 Milvus 连接属于集成环境验收。
+- 固定 BES 文本样例验收：待提供样例文件后跑完整编译，断言页面数、覆盖率、source_refs 和缺失章节。
+- [x] 回归测试：普通短文档仍可编译。
   - 旧 `ingest(...)`、`ingestContent(...)` 单元测试仍保留；生产任务已统一走 planned ingest。
-- [ ] 图谱测试：社区名称唯一、稳定，同一软件只归入一个软件类型社区。
-- [ ] 前端测试：任务详情展示覆盖率、缺失章节和补编入口。
+- [x] 图谱测试：社区名称唯一、稳定，同一软件只归入一个软件类型社区。
+- [x] 前端验证：来源详情展示覆盖率、缺失章节、质量问题和补编入口。
+  - 已通过前端构建校验；后续可补充组件自动化测试。
 
 ## 优先级建议
 

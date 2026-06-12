@@ -417,6 +417,7 @@ CREATE TABLE `wiki_ingest_tasks` (
   `pages_created` int DEFAULT '0',
   `pages_updated` int DEFAULT '0',
   `error_message` text,
+  `quality_report` json DEFAULT NULL COMMENT '质量门禁报告',
   `operator_id` bigint DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -476,6 +477,8 @@ CREATE TABLE `wiki_pages` (
   `category` varchar(50) DEFAULT NULL,
   `software` varchar(100) DEFAULT NULL,
   `version` varchar(50) DEFAULT NULL,
+  `canonical_title` varchar(200) DEFAULT NULL,
+  `alias_titles` json DEFAULT NULL,
   `content` longtext NOT NULL,
   `summary` varchar(500) DEFAULT NULL,
   `source_refs` json DEFAULT NULL,
@@ -492,6 +495,7 @@ CREATE TABLE `wiki_pages` (
   KEY `idx_category_software` (`category`,`software`),
   KEY `idx_status` (`status`),
   KEY `idx_software_version` (`software`,`version`),
+  KEY `idx_canonical_title` (`canonical_title`),
   FULLTEXT KEY `ft_content` (`title`,`summary`,`content`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 DROP TABLE IF EXISTS `wiki_sources`;

@@ -4,6 +4,7 @@ import com.middleware.manager.knowledge.service.KnowledgeService;
 import com.middleware.manager.knowledge.service.KnowledgeService.ImportResult;
 import com.middleware.manager.knowledge.service.KnowledgeService.PreviewDocument;
 import com.middleware.manager.knowledge.service.KnowledgeService.SearchResult;
+import com.middleware.manager.knowledge.store.VectorSearchFilter;
 import com.middleware.manager.service.StorageService;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.parser.AutoDetectParser;
@@ -114,13 +115,23 @@ public class KnowledgeController {
     @GetMapping("/search")
     public ResponseEntity<?> search(
             @RequestParam String q,
-            @RequestParam(defaultValue = "5") int topK) {
+            @RequestParam(defaultValue = "5") int topK,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String software,
+            @RequestParam(required = false) String sourceType,
+            @RequestParam(required = false) Long sourceId) {
         try {
-            List<SearchResult> results = knowledgeService.search(q, topK);
+            VectorSearchFilter filter = VectorSearchFilter.none()
+                    .addCategory(category)
+                    .addSoftware(software)
+                    .addSourceType(sourceType)
+                    .addSourceId(sourceId);
+            List<SearchResult> results = knowledgeService.search(q, topK, filter);
             return ResponseEntity.ok(results);
         } catch (Exception e) {
+            log.warn("Knowledge search failed: {}", e.getMessage());
             Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
+            error.put("error", "知识库搜索失败，请查看后台日志");
             return ResponseEntity.badRequest().body(error);
         }
     }

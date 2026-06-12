@@ -13,10 +13,19 @@ This change implements the first phase of directory-driven Wiki ingest:
 - planned page generation
 - source_refs section coverage
 - quality gate status for ingest tasks
+- quality report persistence
+- canonical title and alias title persistence
+- source detail quality visualization
 
 ## Schema Changes
 
-No DDL change is required in this phase.
+The directory-driven ingest quality work adds task-level quality reports and
+page-level title matching fields.
+
+Migration scripts:
+
+- `db/wiki_ingest_quality_report_20260612.sql`
+- `db/wiki_page_title_match_20260612.sql`
 
 The implementation reuses existing columns:
 
@@ -32,7 +41,10 @@ The implementation reuses existing columns:
         {
           "section_id": "sec-001",
           "section_path": "配置/连接池参数",
-          "char_range": "1200-2200"
+          "char_range": "1200-2200",
+          "page_range": "6-7",
+          "paragraph_range": "18-24",
+          "source_signal": "numbered-heading"
         }
       ]
     }
@@ -47,6 +59,27 @@ The implementation reuses existing columns:
 - `wiki_ingest_log.error_detail`
   - reused for quality gate summary.
 
+New column:
+
+- `wiki_ingest_tasks.quality_report`
+  - stores the complete quality gate report JSON returned by planned ingest.
+  - used by task detail APIs and future frontend quality visualization.
+
+- `wiki_pages.canonical_title`
+  - stores a normalized title for stable merge matching.
+  - indexed by `idx_canonical_title`.
+
+- `wiki_pages.alias_titles`
+  - stores generated equivalent titles as JSON.
+  - used together with `canonical_title` when matching existing pages.
+
 ## Release Notes
 
-No SQL migration is needed for this change. If future releases need persistent quality reports, add a dedicated JSON column such as `wiki_ingest_tasks.quality_report` or a separate `wiki_ingest_quality_reports` table.
+Apply these scripts before releasing the planned ingest quality feature:
+
+1. `db/wiki_ingest_quality_report_20260612.sql`
+2. `db/wiki_page_title_match_20260612.sql`
+
+Related operational note:
+
+- `db/wiki_vector_filter_milvus_20260612.md`

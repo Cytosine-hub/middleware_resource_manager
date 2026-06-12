@@ -29,6 +29,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.StringJoiner;
 import lombok.extern.slf4j.Slf4j;
 
 @Component
@@ -39,10 +40,18 @@ public class MilvusVectorStore implements VectorStore {
     private static final String ID_FIELD = "id";
     private static final String VECTOR_FIELD = "vector";
     private static final String META_FIELD = "metadata";
+    private static final String SOURCE_FIELD = "source";
+    private static final String SOURCE_TYPE_FIELD = "source_type";
+    private static final String SOURCE_ID_FIELD = "source_id";
+    private static final String CATEGORY_FIELD = "category";
+    private static final String SOFTWARE_FIELD = "software";
+    private static final String STATUS_FIELD = "status";
 
     private final AiConfig config;
     private final Gson gson = new Gson();
     private MilvusServiceClient client;
+    private volatile boolean scalarInsertSupported = true;
+    private volatile boolean scalarSearchSupported = true;
 
     public MilvusVectorStore(AiConfig config) {
         this.config = config;
@@ -103,6 +112,12 @@ public class MilvusVectorStore implements VectorStore {
                 .withDataType(DataType.VarChar)
                 .withMaxLength(4096)
                 .build());
+        fields.add(varcharField(SOURCE_FIELD, 40));
+        fields.add(varcharField(SOURCE_TYPE_FIELD, 60));
+        fields.add(varcharField(SOURCE_ID_FIELD, 64));
+        fields.add(varcharField(CATEGORY_FIELD, 100));
+        fields.add(varcharField(SOFTWARE_FIELD, 200));
+        fields.add(varcharField(STATUS_FIELD, 40));
 
         client.createCollection(CreateCollectionParam.newBuilder()
                 .withCollectionName(collection)
@@ -131,26 +146,16 @@ public class MilvusVectorStore implements VectorStore {
     @Override
     public void add(String id, float[] vector, Map<String, String> metadata) {
         String collection = config.getVectorCollection();
+        List<InsertParam.Field> fields = scalarInsertSupported
+                ? buildScalarInsertFields(id, vector, metadata)
+                : buildLegacyInsertFields(id, vector, metadata);
 
-        List<InsertParam.Field> fields = Arrays.asList(
-                InsertParam.Field.builder()
-                        .name(ID_FIELD)
-                        .values(Collections.singletonList(id))
-                        .build(),
-                InsertParam.Field.builder()
-                        .name(VECTOR_FIELD)
-                        .values(Collections.singletonList(toList(vector)))
-                        .build(),
-                InsertParam.Field.builder()
-                        .name(META_FIELD)
-                        .values(Collections.singletonList(gson.toJson(metadata)))
-                        .build()
-        );
-
-        R<MutationResult> result = client.insert(InsertParam.newBuilder()
-                .withCollectionName(collection)
-                .withFields(fields)
-                .build());
+        R<MutationResult> result = insert(collection, fields);
+        if (result.getStatus() != R.Status.Success.getCode() && scalarInsertSupported) {
+            scalarInsertSupported = false;
+            log.warn("Milvus scalar insert failed for id={}, retrying legacy metadata schema: {}", id, result.getMessage());
+            result = insert(collection, buildLegacyInsertFields(id, vector, metadata));
+        }
 
         if (result.getStatus() != R.Status.Success.getCode()) {
             log.error("Milvus insert failed for id={}: {}", id, result.getMessage());
@@ -161,9 +166,28 @@ public class MilvusVectorStore implements VectorStore {
 
     @Override
     public List<VectorSearchResult> search(float[] queryVector, int topK) {
+        return search(queryVector, topK, VectorSearchFilter.none());
+    }
+
+    @Override
+    public List<VectorSearchResult> search(float[] queryVector, int topK, VectorSearchFilter filter) {
+        String expr = scalarSearchSupported ? buildExpr(filter) : null;
+        SearchOutcome outcome = searchInternal(queryVector, topK, expr);
+        if (expr == null || !outcome.failed() || filter == null || filter.isEmpty()) {
+            return outcome.results();
+        }
+        scalarSearchSupported = false;
+        log.warn("Milvus scalar search failed, falling back to metadata filtering");
+        return searchInternal(queryVector, topK * 3, null).results().stream()
+                .filter(result -> filter.matches(result.getMetadata()))
+                .limit(topK)
+                .toList();
+    }
+
+    private SearchOutcome searchInternal(float[] queryVector, int topK, String expr) {
         String collection = config.getVectorCollection();
 
-        SearchParam param = SearchParam.newBuilder()
+        SearchParam.Builder builder = SearchParam.newBuilder()
                 .withCollectionName(collection)
                 .withVectors(Collections.singletonList(toList(queryVector)))
                 .withVectorFieldName(VECTOR_FIELD)
@@ -171,25 +195,28 @@ public class MilvusVectorStore implements VectorStore {
                 .withMetricType(MetricType.COSINE)
                 .withParams("{\"nprobe\":16}")
                 .withOutFields(Arrays.asList(ID_FIELD, META_FIELD))
-                .withConsistencyLevel(ConsistencyLevelEnum.BOUNDED)
-                .build();
+                .withConsistencyLevel(ConsistencyLevelEnum.BOUNDED);
+        if (expr != null && !expr.isBlank()) {
+            builder.withExpr(expr);
+        }
+        SearchParam param = builder.build();
 
         R<SearchResults> result;
         try {
             result = client.search(param);
         } catch (Exception e) {
             reconnectAfterRpcFailure(e);
-            return Collections.emptyList();
+            return new SearchOutcome(Collections.emptyList(), true);
         }
         if (result.getStatus() != R.Status.Success.getCode()) {
-            log.error("Milvus search failed: {}", result.getMessage());
-            return Collections.emptyList();
+            log.error("Milvus search failed expr={}: {}", expr, result.getMessage());
+            return new SearchOutcome(Collections.emptyList(), true);
         }
 
         List<VectorSearchResult> results = new ArrayList<>();
         SearchResults data = result.getData();
         if (data.getResults() == null || data.getResults().getFieldsDataList().isEmpty()) {
-            return results;
+            return new SearchOutcome(results, false);
         }
 
         int count = data.getResults().getScoresCount();
@@ -213,8 +240,104 @@ public class MilvusVectorStore implements VectorStore {
             results.add(new VectorSearchResult(id, score, meta));
         }
 
-        return results;
+        return new SearchOutcome(results, false);
     }
+
+    private FieldType varcharField(String name, int maxLength) {
+        return FieldType.newBuilder()
+                .withName(name)
+                .withDataType(DataType.VarChar)
+                .withMaxLength(maxLength)
+                .build();
+    }
+
+    private R<MutationResult> insert(String collection, List<InsertParam.Field> fields) {
+        return client.insert(InsertParam.newBuilder()
+                .withCollectionName(collection)
+                .withFields(fields)
+                .build());
+    }
+
+    private List<InsertParam.Field> buildLegacyInsertFields(String id, float[] vector, Map<String, String> metadata) {
+        return Arrays.asList(
+                InsertParam.Field.builder()
+                        .name(ID_FIELD)
+                        .values(Collections.singletonList(id))
+                        .build(),
+                InsertParam.Field.builder()
+                        .name(VECTOR_FIELD)
+                        .values(Collections.singletonList(toList(vector)))
+                        .build(),
+                InsertParam.Field.builder()
+                        .name(META_FIELD)
+                        .values(Collections.singletonList(gson.toJson(metadata)))
+                        .build()
+        );
+    }
+
+    private List<InsertParam.Field> buildScalarInsertFields(String id, float[] vector, Map<String, String> metadata) {
+        List<InsertParam.Field> fields = new ArrayList<>(buildLegacyInsertFields(id, vector, metadata));
+        fields.add(stringField(SOURCE_FIELD, metadataValue(metadata, "source")));
+        fields.add(stringField(SOURCE_TYPE_FIELD, metadataValue(metadata, "sourceType")));
+        fields.add(stringField(SOURCE_ID_FIELD, metadataValue(metadata, "sourceId")));
+        fields.add(stringField(CATEGORY_FIELD, metadataValue(metadata, "category")));
+        fields.add(stringField(SOFTWARE_FIELD, metadataValue(metadata, "software")));
+        fields.add(stringField(STATUS_FIELD, metadataValue(metadata, "status")));
+        return fields;
+    }
+
+    private InsertParam.Field stringField(String name, String value) {
+        return InsertParam.Field.builder()
+                .name(name)
+                .values(Collections.singletonList(value == null ? "" : value))
+                .build();
+    }
+
+    private String metadataValue(Map<String, String> metadata, String key) {
+        if (metadata == null) {
+            return "";
+        }
+        String value = metadata.get(key);
+        return value == null ? "" : value.trim();
+    }
+
+    private String buildExpr(VectorSearchFilter filter) {
+        if (filter == null || filter.isEmpty()) {
+            return null;
+        }
+        List<String> terms = new ArrayList<>();
+        addInExpr(terms, SOURCE_FIELD, filter.getSources());
+        addInExpr(terms, CATEGORY_FIELD, filter.getCategories());
+        addInExpr(terms, SOFTWARE_FIELD, filter.getSoftware());
+        addInExpr(terms, SOURCE_TYPE_FIELD, filter.getSourceTypes());
+        addInExpr(terms, SOURCE_ID_FIELD, filter.getSourceIds());
+        addInExpr(terms, STATUS_FIELD, filter.getStatuses());
+        return terms.isEmpty() ? null : String.join(" and ", terms);
+    }
+
+    private void addInExpr(List<String> terms, String fieldName, Iterable<String> values) {
+        StringJoiner joiner = new StringJoiner(", ", fieldName + " in [", "]");
+        int count = 0;
+        for (String value : values) {
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            joiner.add("\"" + escapeExprValue(value) + "\"");
+            count++;
+        }
+        if (count > 0) {
+            terms.add(joiner.toString());
+        }
+    }
+
+    private String escapeExprValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private record SearchOutcome(List<VectorSearchResult> results, boolean failed) {}
 
     private synchronized void reconnectAfterRpcFailure(Exception e) {
         log.warn("Milvus search RPC failed, reconnecting client: {}", e.getMessage());
@@ -263,7 +386,7 @@ public class MilvusVectorStore implements VectorStore {
     public void delete(String id) {
         client.delete(DeleteParam.newBuilder()
                 .withCollectionName(config.getVectorCollection())
-                .withExpr(String.format("%s == \"%s\"", ID_FIELD, id))
+                .withExpr(String.format("%s == \"%s\"", ID_FIELD, escapeExprValue(id)))
                 .build());
     }
 

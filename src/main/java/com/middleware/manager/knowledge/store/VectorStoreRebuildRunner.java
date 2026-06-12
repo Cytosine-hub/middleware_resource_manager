@@ -67,6 +67,7 @@ public class VectorStoreRebuildRunner implements ApplicationRunner {
                     }
 
                     Map<String, String> metadata = new HashMap<>();
+                    metadata.put("source", "knowledge");
                     metadata.put("content", chunk.getContent());
                     metadata.put("sourceTitle", chunk.getSourceTitle());
                     metadata.put("chunkIndex", String.valueOf(chunk.getChunkIndex()));
@@ -75,6 +76,12 @@ public class VectorStoreRebuildRunner implements ApplicationRunner {
                     }
                     if (chunk.getSourceId() != null) {
                         metadata.put("sourceId", String.valueOf(chunk.getSourceId()));
+                    }
+                    if (chunk.getCategory() != null) {
+                        metadata.put("category", chunk.getCategory());
+                    }
+                    if (chunk.getSoftware() != null) {
+                        metadata.put("software", chunk.getSoftware());
                     }
 
                     vectorStore.add(vectorId, vector, metadata);
