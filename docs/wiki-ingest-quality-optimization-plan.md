@@ -20,7 +20,7 @@
 
 更新时间：2026-06-12
 
-总体进度：P0 主链路、P1 向量过滤和软件类型社区、P2 质量可视化均已完成第一版；当前进入 P0 性能与可观测性修正阶段。
+总体进度：P0 主链路、P1 向量过滤和软件类型社区、P2 质量可视化均已完成第一版；P0 性能与可观测性修正已完成；后续增强中中间产物持久化和旧路径清理已完成。
 
 标记说明：`[x]` 已完成；需要真实外部环境或固定样例的内容单独列为验收项。
 
@@ -42,6 +42,9 @@
 - 向量过滤采用单 collection + 标量字段方案，Milvus 发布注意事项已记录在 `db/wiki_vector_filter_milvus_20260612.md`。
 - 图谱社区已改为按 `category + software` 稳定聚类，并返回 `community_key`、社区名称、节点数和边数。
 - `wiki_pages.canonical_title` 和 `wiki_pages.alias_titles` 已持久化，运行时匹配和跨任务候选检索都可使用。
+- `QualityReport` 已新增 timing 指标（`totalDurationMs`、`outlineDurationMs`、`sectionFactsDurationMs`、`pagePlanDurationMs`、`pageGenerationDurationMs`、`qualityGateDurationMs`）和 LLM 指标（`llmCallCount`、`llmRetryCount`、`llmInputTokens`、`llmOutputTokens`），通过 `LlmMetrics` 内部类在 `callLlm()` 中自动收集。
+- 中间产物 `section_facts` 和 `page_plan` 已持久化到 `wiki_ingest_tasks` 表（新增 `section_facts JSON` 和 `page_plan JSON` 列），编译过程中通过 `BiConsumer<String, String> artifactSink` 回调写入。
+- 旧兼容路径 `ingest()` 和 `ingestContent()` 已删除，生产任务入口统一为 `ingestPlanned()`。
 
 后续增强：
 
