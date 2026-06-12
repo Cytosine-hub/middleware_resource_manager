@@ -22,16 +22,23 @@
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
+    <!-- 排除大 JSON 列的列集合，避免 ORDER BY 时 sort buffer 溢出 -->
+    <sql id="columnsExcludingLargeJson">
+        id, source_id, file_name, status, progress, step,
+        total_chunks, completed_chunks, pages_created, pages_updated,
+        error_message, operator_id, created_at, updated_at
+    </sql>
+
     <select id="findById" resultMap="taskResultMap">
         SELECT * FROM wiki_ingest_tasks WHERE id = #{id}
     </select>
 
     <select id="findAll" resultMap="taskResultMap">
-        SELECT * FROM wiki_ingest_tasks ORDER BY created_at DESC
+        SELECT <include refid="columnsExcludingLargeJson"/> FROM wiki_ingest_tasks ORDER BY created_at DESC
     </select>
 
     <select id="findByStatus" resultMap="taskResultMap">
-        SELECT * FROM wiki_ingest_tasks WHERE status = #{status} ORDER BY created_at DESC
+        SELECT <include refid="columnsExcludingLargeJson"/> FROM wiki_ingest_tasks WHERE status = #{status} ORDER BY created_at DESC
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
