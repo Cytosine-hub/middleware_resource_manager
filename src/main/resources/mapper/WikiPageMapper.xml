@@ -55,6 +55,10 @@
         SELECT * FROM wiki_pages ORDER BY updated_at DESC
     </select>
 
+    <select id="findAllIdAndTitle" resultMap="wikiPageResultMap">
+        SELECT id, title FROM wiki_pages
+    </select>
+
     <select id="findByCategory" resultMap="wikiPageResultMap">
         SELECT * FROM wiki_pages WHERE category = #{category} ORDER BY title
     </select>

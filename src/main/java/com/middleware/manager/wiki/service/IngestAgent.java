@@ -23,7 +23,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
@@ -53,7 +53,6 @@ public class IngestAgent {
     private final DocumentTypeClassifier documentTypeClassifier;
     private final DocumentOutlineExtractor documentOutlineExtractor;
     private final WikiIngestQualityGate qualityGate;
-    private final TransactionTemplate txTemplate;
     private final Gson gson = new Gson();
     private final int maxContentChars;
 
@@ -71,7 +70,6 @@ public class IngestAgent {
                        DocumentTypeClassifier documentTypeClassifier,
                        DocumentOutlineExtractor documentOutlineExtractor,
                        WikiIngestQualityGate qualityGate,
-                       TransactionTemplate txTemplate,
                        @Value("${app.wiki.ingest.max-content-chars:50000}") int maxContentChars) {
         this.chatModel = chatModel;
         this.pageMapper = pageMapper;
@@ -84,7 +82,6 @@ public class IngestAgent {
         this.documentTypeClassifier = documentTypeClassifier;
         this.documentOutlineExtractor = documentOutlineExtractor;
         this.qualityGate = qualityGate;
-        this.txTemplate = txTemplate;
         this.maxContentChars = maxContentChars;
     }
 
@@ -139,14 +136,17 @@ public class IngestAgent {
         synchronized int getOutputTokens() { return outputTokens; }
     }
 
+    @Transactional
     public IngestResult ingestPlanned(WikiSource source, Long operatorId) {
         return ingestPlanned(source, operatorId, NOOP_PROGRESS, null);
     }
 
+    @Transactional
     public IngestResult ingestPlanned(WikiSource source, Long operatorId, ProgressReporter progressReporter) {
         return ingestPlanned(source, operatorId, progressReporter, null);
     }
 
+    @Transactional
     public IngestResult ingestPlanned(WikiSource source, Long operatorId,
                                        ProgressReporter progressReporter,
                                        java.util.function.BiConsumer<String, String> artifactSink) {
@@ -166,28 +166,23 @@ public class IngestAgent {
                 return result;
             }
 
-            // 生成阶段：无事务，进度更新可实时提交
             PlannedPages plannedPages = generatePlannedPages(source, content, progress, artifactSink);
             result.setQualityReport(gson.toJson(plannedPages.report()));
             if ("FAILED".equals(plannedPages.report().getStatus())) {
-                return txTemplate.execute(status -> failPlanned(result, ingestLog, startTime,
-                        ErrorMessages.WIKI_QUALITY_GATE_FAILED + "：" + summarizeQuality(plannedPages.report())));
+                return failPlanned(result, ingestLog, startTime,
+                        ErrorMessages.WIKI_QUALITY_GATE_FAILED + "：" + summarizeQuality(plannedPages.report()));
             }
 
-            // 写入阶段：事务保护
-            final PlannedPages pp = plannedPages;
-            txTemplate.executeWithoutResult(status -> {
-                SaveStats stats = savePages(pp.pages(), source);
-                int linksCreated = linkResolver.resolveLinks(stats.savedPages());
-                vectorizePages(stats.savedPages());
-                completePlannedIngest(source, hash, pp.report(), stats, linksCreated, result);
-                writePlannedLog(ingestLog, pp.report(), stats, linksCreated, result, startTime);
+            SaveStats stats = savePages(plannedPages.pages(), source);
+            int linksCreated = linkResolver.resolveLinks(stats.savedPages());
+            vectorizePages(stats.savedPages());
+            completePlannedIngest(source, hash, plannedPages.report(), stats, linksCreated, result);
+            writePlannedLog(ingestLog, plannedPages.report(), stats, linksCreated, result, startTime);
 
-                log.info("Planned ingest completed for '{}': status={}, created={}, updated={}, links={}",
-                        source.getTitle(), result.getStatus(), stats.created(), stats.updated(), linksCreated);
-            });
+            log.info("Planned ingest completed for '{}': status={}, created={}, updated={}, links={}",
+                    source.getTitle(), result.getStatus(), stats.created(), stats.updated(), linksCreated);
         } catch (PlannedIngestException e) {
-            return txTemplate.execute(status -> failPlanned(result, ingestLog, startTime, e.getMessage()));
+            return failPlanned(result, ingestLog, startTime, e.getMessage());
         } catch (Exception e) {
             log.error("Planned ingest failed for source '{}': {}", source.getTitle(), e.getMessage(), e);
             result.setStatus("FAILED");
@@ -195,7 +190,7 @@ public class IngestAgent {
             ingestLog.setStatus("FAILED");
             ingestLog.setErrorDetail(ErrorMessages.WIKI_INGEST_TASK_FAILED);
             ingestLog.setDurationMs((int)(System.currentTimeMillis() - startTime));
-            txTemplate.executeWithoutResult(status -> logMapper.insert(ingestLog));
+            logMapper.insert(ingestLog);
         }
         return result;
     }

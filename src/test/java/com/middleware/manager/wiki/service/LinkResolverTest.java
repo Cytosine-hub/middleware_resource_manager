@@ -112,7 +112,7 @@ class LinkResolverTest {
                     "See [[Target Page]] for details");
             WikiPage target = createPage(2L, "Target Page", "CONFIG", "content");
 
-            when(pageMapper.findAll()).thenReturn(Arrays.asList(source, target));
+            when(pageMapper.findAllIdAndTitle()).thenReturn(Arrays.asList(source, target));
             when(linkMapper.insertIgnore(any(WikiLink.class))).thenReturn(1);
 
             int created = linkResolver.resolveLinks(Arrays.asList(source, target));
@@ -127,7 +127,7 @@ class LinkResolverTest {
             WikiPage page = createPage(1L, "Self Ref", "OVERVIEW",
                     "See [[Self Ref]] for details");
 
-            when(pageMapper.findAll()).thenReturn(Collections.singletonList(page));
+            when(pageMapper.findAllIdAndTitle()).thenReturn(Collections.singletonList(page));
 
             int created = linkResolver.resolveLinks(Collections.singletonList(page));
 
@@ -141,7 +141,7 @@ class LinkResolverTest {
             WikiPage source = createPage(1L, "Source", "OVERVIEW",
                     "See [[Nonexistent]] for details");
 
-            when(pageMapper.findAll()).thenReturn(Collections.singletonList(source));
+            when(pageMapper.findAllIdAndTitle()).thenReturn(Collections.singletonList(source));
 
             int created = linkResolver.resolveLinks(Collections.singletonList(source));
 
@@ -154,7 +154,7 @@ class LinkResolverTest {
         void nullIdPageSkipped() {
             WikiPage page = createPage(null, "No ID", "OVERVIEW", "[[Other]]");
             WikiPage other = createPage(2L, "Other", "CONFIG", "content");
-            when(pageMapper.findAll()).thenReturn(Collections.singletonList(other));
+            when(pageMapper.findAllIdAndTitle()).thenReturn(Collections.singletonList(other));
 
             int created = linkResolver.resolveLinks(Collections.singletonList(page));
 
@@ -167,7 +167,7 @@ class LinkResolverTest {
         void nullContentPageSafe() {
             WikiPage page = createPage(1L, "Null Content", "OVERVIEW", null);
 
-            when(pageMapper.findAll()).thenReturn(Collections.singletonList(page));
+            when(pageMapper.findAllIdAndTitle()).thenReturn(Collections.singletonList(page));
 
             int created = linkResolver.resolveLinks(Collections.singletonList(page));
 
@@ -186,7 +186,7 @@ class LinkResolverTest {
                     "See [[Missing Page]] and [[Redis]]");
 
             WikiPage redis = createPage(2L, "Redis", "CONFIG", "content");
-            when(pageMapper.findAll()).thenReturn(Arrays.asList(page, redis));
+            when(pageMapper.findAllIdAndTitle()).thenReturn(Arrays.asList(page, redis));
 
             List<String> broken = linkResolver.findBrokenLinks(page);
 
@@ -200,7 +200,7 @@ class LinkResolverTest {
             WikiPage page = createPage(1L, "Source", "OVERVIEW", "See [[Redis]]");
             WikiPage redis = createPage(2L, "Redis", "CONFIG", "content");
 
-            when(pageMapper.findAll()).thenReturn(Arrays.asList(page, redis));
+            when(pageMapper.findAllIdAndTitle()).thenReturn(Arrays.asList(page, redis));
 
             List<String> broken = linkResolver.findBrokenLinks(page);
 

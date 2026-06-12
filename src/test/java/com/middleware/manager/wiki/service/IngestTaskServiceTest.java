@@ -33,8 +33,9 @@ class IngestTaskServiceTest {
         sourceMapper = mock(WikiSourceMapper.class);
         ingestAgent = mock(IngestAgent.class);
         storageService = mock(StorageService.class);
+        IngestProgressHelper progressHelper = mock(IngestProgressHelper.class);
         List<DocumentLoader> loaders = Collections.emptyList();
-        service = new IngestTaskService(taskMapper, sourceMapper, ingestAgent, loaders, storageService);
+        service = new IngestTaskService(taskMapper, sourceMapper, ingestAgent, loaders, storageService, progressHelper);
         setField(service, "maxContentChars", 20);
         setField(service, "maxConcurrent", 1);
         service.init();

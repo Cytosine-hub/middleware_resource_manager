@@ -42,7 +42,8 @@ public class LinkResolver {
                 titleIndex.put(page.getTitle(), page.getId());
             }
         }
-        List<WikiPage> existingPages = pageMapper.findAll();
+        // 只查 id 和 title，避免 SELECT * 携带大 content 列导致排序溢出
+        List<WikiPage> existingPages = pageMapper.findAllIdAndTitle();
         for (WikiPage page : existingPages) {
             titleIndex.putIfAbsent(page.getTitle(), page.getId());
         }
@@ -71,7 +72,7 @@ public class LinkResolver {
         List<String> broken = new ArrayList<>();
         List<String> targets = extractWikiLinks(page.getContent());
         Set<String> existingTitles = new HashSet<>();
-        for (WikiPage p : pageMapper.findAll()) {
+        for (WikiPage p : pageMapper.findAllIdAndTitle()) {
             existingTitles.add(p.getTitle());
         }
         for (String target : targets) {

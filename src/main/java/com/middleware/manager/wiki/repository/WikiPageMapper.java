@@ -20,6 +20,9 @@ public interface WikiPageMapper {
 
     List<WikiPage> findAll();
 
+    /** 仅查询 id 和 title，避免 SELECT * 携带大 content 列导致排序溢出 */
+    List<WikiPage> findAllIdAndTitle();
+
     List<WikiPage> findByCategory(@Param("category") String category);
 
     List<WikiPage> findBySoftware(@Param("software") String software);

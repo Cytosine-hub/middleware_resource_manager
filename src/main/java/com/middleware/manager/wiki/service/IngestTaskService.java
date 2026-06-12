@@ -30,6 +30,7 @@ public class IngestTaskService {
     private final IngestAgent ingestAgent;
     private final List<DocumentLoader> documentLoaders;
     private final StorageService storageService;
+    private final IngestProgressHelper progressHelper;
 
     @Value("${app.wiki.ingest.max-content-chars:20000}")
     private int maxContentChars;
@@ -41,12 +42,13 @@ public class IngestTaskService {
 
     public IngestTaskService(IngestTaskMapper taskMapper, WikiSourceMapper sourceMapper,
                              IngestAgent ingestAgent, List<DocumentLoader> documentLoaders,
-                             StorageService storageService) {
+                             StorageService storageService, IngestProgressHelper progressHelper) {
         this.taskMapper = taskMapper;
         this.sourceMapper = sourceMapper;
         this.ingestAgent = ingestAgent;
         this.documentLoaders = documentLoaders;
         this.storageService = storageService;
+        this.progressHelper = progressHelper;
     }
 
     @PostConstruct
@@ -224,18 +226,19 @@ public class IngestTaskService {
         int totalChunks = task.getTotalChunks();
 
         IngestAgent.IngestResult result = ingestAgent.ingestPlanned(source, task.getOperatorId(),
+                // 使用 REQUIRES_NEW 事务传播，进度更新独立提交，前端可实时看到
                 (progress, step, completedUnits, totalUnits) -> {
                     if (totalUnits > 0) {
-                        taskMapper.updateProgressWithTotal(taskId, progress, step, completedUnits, totalUnits);
+                        progressHelper.updateProgressWithTotal(taskId, progress, step, completedUnits, totalUnits);
                     } else {
-                        taskMapper.updateProgress(taskId, progress, step, completedUnits);
+                        progressHelper.updateProgress(taskId, progress, step, completedUnits);
                     }
                 },
                 (type, json) -> {
                     if ("sectionFacts".equals(type)) {
-                        taskMapper.updateSectionFacts(taskId, json);
+                        progressHelper.updateSectionFacts(taskId, json);
                     } else if ("pagePlan".equals(type)) {
-                        taskMapper.updatePagePlan(taskId, json);
+                        progressHelper.updatePagePlan(taskId, json);
                     }
                 });
         persistQualityReport(taskId, result);
