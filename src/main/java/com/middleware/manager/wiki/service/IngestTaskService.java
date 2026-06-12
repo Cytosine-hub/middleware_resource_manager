@@ -230,6 +230,13 @@ public class IngestTaskService {
                     } else {
                         taskMapper.updateProgress(taskId, progress, step, completedUnits);
                     }
+                },
+                (type, json) -> {
+                    if ("sectionFacts".equals(type)) {
+                        taskMapper.updateSectionFacts(taskId, json);
+                    } else if ("pagePlan".equals(type)) {
+                        taskMapper.updatePagePlan(taskId, json);
+                    }
                 });
         persistQualityReport(taskId, result);
         if ("FAILED".equals(result.getStatus())) {

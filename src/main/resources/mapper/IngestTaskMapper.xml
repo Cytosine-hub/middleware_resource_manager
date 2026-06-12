@@ -15,6 +15,8 @@
         <result property="pagesUpdated" column="pages_updated"/>
         <result property="errorMessage" column="error_message"/>
         <result property="qualityReport" column="quality_report"/>
+        <result property="sectionFacts" column="section_facts"/>
+        <result property="pagePlan" column="page_plan"/>
         <result property="operatorId" column="operator_id"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
@@ -76,6 +78,18 @@
     <update id="updateQualityReport">
         UPDATE wiki_ingest_tasks
         SET quality_report=#{qualityReport}
+        WHERE id=#{id}
+    </update>
+
+    <update id="updateSectionFacts">
+        UPDATE wiki_ingest_tasks
+        SET section_facts=#{sectionFacts}
+        WHERE id=#{id}
+    </update>
+
+    <update id="updatePagePlan">
+        UPDATE wiki_ingest_tasks
+        SET page_plan=#{pagePlan}
         WHERE id=#{id}
     </update>
 

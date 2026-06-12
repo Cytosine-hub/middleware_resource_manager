@@ -160,6 +160,20 @@ public class WikiIngestQualityGate {
         private List<String> issues = new ArrayList<>();
         private String status;
 
+        // Timing metrics (milliseconds)
+        private long totalDurationMs;
+        private long outlineDurationMs;
+        private long sectionFactsDurationMs;
+        private long pagePlanDurationMs;
+        private long pageGenerationDurationMs;
+        private long qualityGateDurationMs;
+
+        // LLM call metrics
+        private int llmCallCount;
+        private int llmRetryCount;
+        private int llmInputTokens;
+        private int llmOutputTokens;
+
         public double getCoverageRatio() { return coverageRatio; }
         public void setCoverageRatio(double coverageRatio) { this.coverageRatio = coverageRatio; }
         public int getRequiredSectionsTotal() { return requiredSectionsTotal; }
@@ -182,5 +196,26 @@ public class WikiIngestQualityGate {
         public void setIssues(List<String> issues) { this.issues = issues; }
         public String getStatus() { return status; }
         public void setStatus(String status) { this.status = status; }
+
+        public long getTotalDurationMs() { return totalDurationMs; }
+        public void setTotalDurationMs(long totalDurationMs) { this.totalDurationMs = totalDurationMs; }
+        public long getOutlineDurationMs() { return outlineDurationMs; }
+        public void setOutlineDurationMs(long outlineDurationMs) { this.outlineDurationMs = outlineDurationMs; }
+        public long getSectionFactsDurationMs() { return sectionFactsDurationMs; }
+        public void setSectionFactsDurationMs(long sectionFactsDurationMs) { this.sectionFactsDurationMs = sectionFactsDurationMs; }
+        public long getPagePlanDurationMs() { return pagePlanDurationMs; }
+        public void setPagePlanDurationMs(long pagePlanDurationMs) { this.pagePlanDurationMs = pagePlanDurationMs; }
+        public long getPageGenerationDurationMs() { return pageGenerationDurationMs; }
+        public void setPageGenerationDurationMs(long pageGenerationDurationMs) { this.pageGenerationDurationMs = pageGenerationDurationMs; }
+        public long getQualityGateDurationMs() { return qualityGateDurationMs; }
+        public void setQualityGateDurationMs(long qualityGateDurationMs) { this.qualityGateDurationMs = qualityGateDurationMs; }
+        public int getLlmCallCount() { return llmCallCount; }
+        public void setLlmCallCount(int llmCallCount) { this.llmCallCount = llmCallCount; }
+        public int getLlmRetryCount() { return llmRetryCount; }
+        public void setLlmRetryCount(int llmRetryCount) { this.llmRetryCount = llmRetryCount; }
+        public int getLlmInputTokens() { return llmInputTokens; }
+        public void setLlmInputTokens(int llmInputTokens) { this.llmInputTokens = llmInputTokens; }
+        public int getLlmOutputTokens() { return llmOutputTokens; }
+        public void setLlmOutputTokens(int llmOutputTokens) { this.llmOutputTokens = llmOutputTokens; }
     }
 }

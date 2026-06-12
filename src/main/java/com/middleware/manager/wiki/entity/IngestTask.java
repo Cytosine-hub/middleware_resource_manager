@@ -21,6 +21,8 @@ public class IngestTask {
     private Integer pagesUpdated;
     private String errorMessage;
     private String qualityReport;
+    private String sectionFacts;
+    private String pagePlan;
     private Long operatorId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

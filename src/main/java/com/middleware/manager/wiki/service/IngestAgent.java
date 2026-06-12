@@ -117,157 +117,38 @@ public class IngestAgent {
     private static final ProgressReporter NOOP_PROGRESS = (progress, step, completedUnits, totalUnits) -> {
     };
 
-    @Transactional
-    public IngestResult ingest(WikiSource source, Long operatorId) {
-        long startTime = System.currentTimeMillis();
-        IngestResult result = new IngestResult();
-        WikiIngestLog ingestLog = new WikiIngestLog();
-        ingestLog.setSourceId(source.getId());
-        ingestLog.setOperatorId(operatorId);
+    /**
+     * LLM 调用指标收集器，线程安全。
+     */
+    static class LlmMetrics {
+        private int callCount;
+        private int retryCount;
+        private int inputTokens;
+        private int outputTokens;
 
-        try {
-            String hash = sha256(source.getContent());
-            if (hash.equals(source.getContentHash()) && Boolean.TRUE.equals(source.getIngested())) {
-                log.info("Source '{}' content unchanged, skipping ingest", source.getTitle());
-                result.setStatus("SKIPPED");
-                return result;
-            }
-
-            String existingSummary = buildExistingPagesSummary(source.getCategory(), source.getSoftware());
-
-            // 截断过长内容，避免超出 LLM 上下文窗口
-            String content = source.getContent();
-            if (content.length() > maxContentChars) {
-                log.warn("Source '{}' content too long ({} chars), truncating to {} chars",
-                        source.getTitle(), content.length(), maxContentChars);
-                content = content.substring(0, maxContentChars) + "\n\n[... 文档内容过长，已截断 ...]";
-            }
-
-            log.info("Ingest Step 1: Analyzing source '{}' ({} chars)", source.getTitle(), content.length());
-            String softwareRef = buildSoftwareReference();
-            String analysisPrompt = IngestPromptTemplates.buildAnalysisPrompt(content, existingSummary, softwareRef);
-            String analysisJson = callLlm(analysisPrompt);
-            ingestLog.setLlmModel("configured");
-
-            JsonObject analysis = parseJson(analysisJson);
-            if (analysis == null) {
-                log.error("Failed to parse analysis JSON for source '{}'", source.getTitle());
-                result.setStatus("FAILED");
-                result.setErrorMessage("Failed to parse analysis JSON");
-                ingestLog.setStatus("FAILED");
-                ingestLog.setErrorDetail("Failed to parse analysis JSON");
-                ingestLog.setDurationMs((int)(System.currentTimeMillis() - startTime));
-                logMapper.insert(ingestLog);
-                return result;
-            }
-
-            log.info("Ingest Step 2: Generating Wiki pages for source '{}'", source.getTitle());
-            String generationPrompt = IngestPromptTemplates.buildPageGenerationPrompt(content, analysisJson);
-            String pagesJson = callLlm(generationPrompt);
-
-            JsonObject pagesResult = parseJson(pagesJson);
-            if (pagesResult == null || !pagesResult.has("pages")) {
-                log.error("Failed to parse pages JSON for source '{}'", source.getTitle());
-                result.setStatus("FAILED");
-                result.setErrorMessage("Failed to parse pages JSON");
-                ingestLog.setStatus("FAILED");
-                ingestLog.setErrorDetail("Failed to parse pages JSON");
-                ingestLog.setDurationMs((int)(System.currentTimeMillis() - startTime));
-                logMapper.insert(ingestLog);
-                return result;
-            }
-
-            int created = 0, updated = 0, contradictions = 0;
-            List<WikiPage> savedPages = new ArrayList<>();
-            JsonArray pages = pagesResult.getAsJsonArray("pages");
-            validateGeneratedPages(pages);
-
-            for (JsonElement elem : pages) {
-                JsonObject pageObj = elem.getAsJsonObject();
-                String title = getAsString(pageObj, "title");
-                String pageType = getAsString(pageObj, "page_type");
-
-                if (title == null || pageType == null) continue;
-
-                WikiPage existing = findExistingPage(pageObj, title, pageType,
-                        source.getCategory(), source.getSoftware());
-                if (existing != null) {
-                    String mergeDecision = callLlm(IngestPromptTemplates.buildMergeDecisionPrompt(
-                        existing.getContent(), getAsString(pageObj, "content")));
-                    JsonObject decision = parseJson(mergeDecision);
-                    String action = decision != null ? getAsString(decision, "action") : "APPEND";
-
-                    if ("CONTRADICT".equals(action)) {
-                        existing.setStatus("CONTRADICTED");
-                        existing.setContradictionNote(decision != null ? getAsString(decision, "reason") : "与新文档内容矛盾");
-                        pageMapper.update(existing);
-                        contradictions++;
-                    } else if ("OVERWRITE".equals(action)) {
-                        updatePageFromJson(existing, pageObj, source);
-                        pageMapper.update(existing);
-                        updated++;
-                        savedPages.add(existing);
-                    } else {
-                        appendPageContent(existing, pageObj, source);
-                        pageMapper.update(existing);
-                        updated++;
-                        savedPages.add(existing);
-                    }
-                } else {
-                    WikiPage newPage = new WikiPage();
-                    updatePageFromJson(newPage, pageObj, source);
-                    pageMapper.insert(newPage);
-                    created++;
-                    savedPages.add(newPage);
-                }
-            }
-
-            int linksCreated = linkResolver.resolveLinks(savedPages);
-
-            vectorizePages(savedPages);
-
-            source.setContentHash(hash);
-            source.setIngested(true);
-            source.setIngestedAt(LocalDateTime.now());
-            sourceMapper.update(source);
-
-            result.setPagesCreated(created);
-            result.setPagesUpdated(updated);
-            result.setLinksCreated(linksCreated);
-            result.setContradictionsFound(contradictions);
-            result.setStatus("SUCCESS");
-
-            ingestLog.setPagesCreated(created);
-            ingestLog.setPagesUpdated(updated);
-            ingestLog.setLinksCreated(linksCreated);
-            ingestLog.setContradictionsFound(contradictions);
-            ingestLog.setStatus("SUCCESS");
-            ingestLog.setDurationMs((int)(System.currentTimeMillis() - startTime));
-            logMapper.insert(ingestLog);
-
-            log.info("Ingest completed for '{}': created={}, updated={}, links={}, contradictions={}",
-                source.getTitle(), created, updated, linksCreated, contradictions);
-
-        } catch (Exception e) {
-            log.error("Ingest failed for source '{}': {}", source.getTitle(), e.getMessage(), e);
-            result.setStatus("FAILED");
-            result.setErrorMessage(e.getMessage());
-            ingestLog.setStatus("FAILED");
-            ingestLog.setErrorDetail(e.getMessage());
-            ingestLog.setDurationMs((int)(System.currentTimeMillis() - startTime));
-            logMapper.insert(ingestLog);
-        }
-
-        return result;
+        synchronized void recordCall() { callCount++; }
+        synchronized void recordRetry() { retryCount++; }
+        synchronized void addTokens(int input, int output) { inputTokens += input; outputTokens += output; }
+        synchronized int getCallCount() { return callCount; }
+        synchronized int getRetryCount() { return retryCount; }
+        synchronized int getInputTokens() { return inputTokens; }
+        synchronized int getOutputTokens() { return outputTokens; }
     }
 
     @Transactional
     public IngestResult ingestPlanned(WikiSource source, Long operatorId) {
-        return ingestPlanned(source, operatorId, NOOP_PROGRESS);
+        return ingestPlanned(source, operatorId, NOOP_PROGRESS, null);
     }
 
     @Transactional
     public IngestResult ingestPlanned(WikiSource source, Long operatorId, ProgressReporter progressReporter) {
+        return ingestPlanned(source, operatorId, progressReporter, null);
+    }
+
+    @Transactional
+    public IngestResult ingestPlanned(WikiSource source, Long operatorId,
+                                       ProgressReporter progressReporter,
+                                       java.util.function.BiConsumer<String, String> artifactSink) {
         long startTime = System.currentTimeMillis();
         IngestResult result = new IngestResult();
         WikiIngestLog ingestLog = new WikiIngestLog();
@@ -284,7 +165,7 @@ public class IngestAgent {
                 return result;
             }
 
-            PlannedPages plannedPages = generatePlannedPages(source, content, progress);
+            PlannedPages plannedPages = generatePlannedPages(source, content, progress, artifactSink);
             result.setQualityReport(gson.toJson(plannedPages.report()));
             if ("FAILED".equals(plannedPages.report().getStatus())) {
                 return failPlanned(result, ingestLog, startTime,
@@ -313,7 +194,11 @@ public class IngestAgent {
         return result;
     }
 
-    private PlannedPages generatePlannedPages(WikiSource source, String content, ProgressReporter progress) {
+    private PlannedPages generatePlannedPages(WikiSource source, String content, ProgressReporter progress,
+                                               java.util.function.BiConsumer<String, String> artifactSink) {
+        long totalStart = System.currentTimeMillis();
+        LlmMetrics llmMetrics = new LlmMetrics();
+
         long stepStart = System.currentTimeMillis();
         progress.report(10, "正在抽取文档类型和目录结构...", 0, 0);
         log.info("Planned ingest Step 0: Extracting outline for source '{}'", source.getTitle());
@@ -322,33 +207,67 @@ public class IngestAgent {
         DocumentOutlineExtractor.DocumentOutline outline = documentOutlineExtractor.extract(
                 source.getTitle(), content, source.getCategory(), source.getSoftware(), classification);
         String outlineJson = toCompactOutlineJson(outline, outline.getSections(), 260);
+        long outlineMs = System.currentTimeMillis() - stepStart;
         log.info("Planned ingest Step 0 completed for source '{}': sections={}, durationMs={}",
-                source.getTitle(), outline.getSections().size(), System.currentTimeMillis() - stepStart);
+                source.getTitle(), outline.getSections().size(), outlineMs);
 
         log.info("Planned ingest Step 1: Extracting section facts for source '{}'", source.getTitle());
-        JsonObject sectionFacts = generateSectionFacts(outline, progress);
+        stepStart = System.currentTimeMillis();
+        JsonObject sectionFacts = generateSectionFacts(outline, progress, llmMetrics);
         String sectionFactsJson = gson.toJson(sectionFacts);
+        long sectionFactsMs = System.currentTimeMillis() - stepStart;
+        if (artifactSink != null) {
+            artifactSink.accept("sectionFacts", sectionFactsJson);
+        }
 
-        JsonObject pagePlan = generatePagePlan(source, outlineJson, sectionFactsJson, outline, progress);
+        stepStart = System.currentTimeMillis();
+        JsonObject pagePlan = generatePagePlan(source, outlineJson, sectionFactsJson, outline, progress, llmMetrics);
+        long pagePlanMs = System.currentTimeMillis() - stepStart;
+        if (artifactSink != null) {
+            artifactSink.accept("pagePlan", gson.toJson(pagePlan));
+        }
         validatePagePlanCoverage(pagePlan, outline);
-        JsonArray pages = generatePagesFromPlan(source, outline, sectionFacts, pagePlan, progress);
+
+        stepStart = System.currentTimeMillis();
+        JsonArray pages = generatePagesFromPlan(source, outline, sectionFacts, pagePlan, progress, llmMetrics);
+        long pageGenerationMs = System.currentTimeMillis() - stepStart;
+
         progress.report(82, "正在补充来源引用并执行页面校验...", 0, 0);
         enrichPagesWithPlan(pages, pagePlan.getAsJsonArray("pages"), outline, source);
         validateGeneratedPages(pages);
+
         progress.report(86, "正在执行质量门禁...", 0, 0);
+        stepStart = System.currentTimeMillis();
         WikiIngestQualityGate.QualityReport report = qualityGate.evaluate(outline, pages);
+        long qualityGateMs = System.currentTimeMillis() - stepStart;
+
+        report.setTotalDurationMs(System.currentTimeMillis() - totalStart);
+        report.setOutlineDurationMs(outlineMs);
+        report.setSectionFactsDurationMs(sectionFactsMs);
+        report.setPagePlanDurationMs(pagePlanMs);
+        report.setPageGenerationDurationMs(pageGenerationMs);
+        report.setQualityGateDurationMs(qualityGateMs);
+        report.setLlmCallCount(llmMetrics.getCallCount());
+        report.setLlmRetryCount(llmMetrics.getRetryCount());
+        report.setLlmInputTokens(llmMetrics.getInputTokens());
+        report.setLlmOutputTokens(llmMetrics.getOutputTokens());
+
+        log.info("Planned ingest timing sourceId={} outlineMs={} sectionFactsMs={} pagePlanMs={} pageGenerationMs={} qualityGateMs={} totalMs={} llmCalls={} llmRetries={}",
+                source.getId(), outlineMs, sectionFactsMs, pagePlanMs, pageGenerationMs, qualityGateMs,
+                report.getTotalDurationMs(), llmMetrics.getCallCount(), llmMetrics.getRetryCount());
         return new PlannedPages(pages, report);
     }
 
     private JsonObject generatePagePlan(WikiSource source, String outlineJson, String sectionFactsJson,
-                                        DocumentOutlineExtractor.DocumentOutline outline, ProgressReporter progress) {
+                                        DocumentOutlineExtractor.DocumentOutline outline, ProgressReporter progress,
+                                        LlmMetrics llmMetrics) {
         long start = System.currentTimeMillis();
         progress.report(55, "正在生成页面计划...", 0, 0);
         log.info("Planned ingest Step 2: Planning pages for source '{}'", source.getTitle());
         String existingSummary = buildExistingPagesSummary(source.getCategory(), source.getSoftware());
         String softwareRef = buildSoftwareReference();
         String pagePlanJson = callLlm(IngestPromptTemplates.buildPagePlanPrompt(
-                outlineJson, sectionFactsJson, existingSummary, softwareRef));
+                outlineJson, sectionFactsJson, existingSummary, softwareRef), llmMetrics);
         JsonObject pagePlan = parseJson(pagePlanJson);
         if (pagePlan == null || !pagePlan.has("pages") || !pagePlan.get("pages").isJsonArray()
                 || pagePlan.getAsJsonArray("pages").isEmpty()) {
@@ -361,7 +280,8 @@ public class IngestAgent {
     }
 
     private JsonArray generatePagesFromPlan(WikiSource source, DocumentOutlineExtractor.DocumentOutline outline,
-                                            JsonObject sectionFacts, JsonObject pagePlan, ProgressReporter progress) {
+                                            JsonObject sectionFacts, JsonObject pagePlan, ProgressReporter progress,
+                                            LlmMetrics llmMetrics) {
         log.info("Planned ingest Step 3: Generating planned pages for source '{}'", source.getTitle());
         JsonArray plans = pagePlan.getAsJsonArray("pages");
         if (plans == null || plans.isEmpty()) {
@@ -382,7 +302,7 @@ public class IngestAgent {
             JsonObject batchPlan = new JsonObject();
             batchPlan.add("pages", planBatch.deepCopy());
             String pagesJson = callLlm(IngestPromptTemplates.buildPlannedPageGenerationPrompt(
-                    outlineJson, sectionFactsJson, gson.toJson(batchPlan), buildSourceMetaJson(source)));
+                    outlineJson, sectionFactsJson, gson.toJson(batchPlan), buildSourceMetaJson(source)), llmMetrics);
             JsonObject pagesResult = parseJson(pagesJson);
             JsonArray pages = pagesResult != null && pagesResult.has("pages") && pagesResult.get("pages").isJsonArray()
                     ? pagesResult.getAsJsonArray("pages")
@@ -407,7 +327,8 @@ public class IngestAgent {
         return generatedPages;
     }
 
-    private JsonObject generateSectionFacts(DocumentOutlineExtractor.DocumentOutline outline, ProgressReporter progress) {
+    private JsonObject generateSectionFacts(DocumentOutlineExtractor.DocumentOutline outline, ProgressReporter progress,
+                                            LlmMetrics llmMetrics) {
         long start = System.currentTimeMillis();
         JsonObject merged = new JsonObject();
         JsonArray mergedFacts = new JsonArray();
@@ -429,7 +350,7 @@ public class IngestAgent {
                 continue;
             }
             String batchOutlineJson = toCompactOutlineJson(outline, batch, 500);
-            String response = callLlm(IngestPromptTemplates.buildSectionFactsPrompt(batchOutlineJson));
+            String response = callLlm(IngestPromptTemplates.buildSectionFactsPrompt(batchOutlineJson), llmMetrics);
             JsonObject parsed = parseJson(response);
             JsonObject normalized = normalizeSectionFacts(parsed, batch);
             if (parsed == null || !parsed.has("section_facts")) {
@@ -972,129 +893,11 @@ public class IngestAgent {
         }
     }
 
-    /**
-     * 直接编译内容，不创建/更新 WikiSource（用于分段编译）
-     */
-    @Transactional
-    public IngestResult ingestContent(String content, String title, String category, String software, Long operatorId) {
-        IngestResult result = new IngestResult();
-
-        try {
-            String existingSummary = buildExistingPagesSummary(category, software);
-
-            // 截断
-            if (content.length() > maxContentChars) {
-                content = content.substring(0, maxContentChars) + "\n\n[... 已截断 ...]";
-            }
-
-            log.info("IngestContent Step 1: Analyzing '{}' ({} chars)", title, content.length());
-            String softwareRef = buildSoftwareReference();
-            String analysisPrompt = IngestPromptTemplates.buildAnalysisPrompt(content, existingSummary, softwareRef);
-            String analysisJson = callLlm(analysisPrompt);
-
-            JsonObject analysis = parseJson(analysisJson);
-            if (analysis == null) {
-                log.error("Failed to parse analysis JSON for '{}'", title);
-                result.setStatus("FAILED");
-                result.setErrorMessage("Failed to parse analysis JSON");
-                return result;
-            }
-
-            log.info("IngestContent Step 2: Generating pages for '{}'", title);
-            String generationPrompt = IngestPromptTemplates.buildPageGenerationPrompt(content, analysisJson);
-            String pagesJson = callLlm(generationPrompt);
-
-            JsonObject pagesResult = parseJson(pagesJson);
-            if (pagesResult == null || !pagesResult.has("pages")) {
-                log.error("Failed to parse pages JSON for '{}'", title);
-                result.setStatus("FAILED");
-                result.setErrorMessage("Failed to parse pages JSON");
-                return result;
-            }
-
-            // 保存页面
-            int created = 0, updated = 0;
-            JsonArray pages = pagesResult.getAsJsonArray("pages");
-            validateGeneratedPages(pages);
-            for (JsonElement pageElem : pages) {
-                JsonObject pageObj = pageElem.getAsJsonObject();
-                String pageTitle = getAsString(pageObj, "title");
-                String pageType = getAsString(pageObj, "page_type");
-                if (pageTitle == null || pageType == null) continue;
-
-                // 去掉分段后缀，用原始标题
-                String cleanTitle = pageTitle.replaceAll("\\s*\\[\\d+\\]$", "");
-
-                WikiPage existing = findExistingPage(pageObj, cleanTitle, pageType, category, software);
-                if (existing != null) {
-                    String mergeDecision = callLlm(IngestPromptTemplates.buildMergeDecisionPrompt(
-                            existing.getContent(), getAsString(pageObj, "content")));
-                    JsonObject decision = parseJson(mergeDecision);
-                    String action = decision != null ? getAsString(decision, "action") : "APPEND";
-
-                    if ("CONTRADICT".equals(action)) {
-                        existing.setStatus("CONTRADICTED");
-                        existing.setContradictionNote(decision != null ? getAsString(decision, "reason") : "与新文档内容矛盾");
-                        pageMapper.update(existing);
-                    } else if ("APPEND".equals(action)) {
-                        existing.setContent(mergeMarkdownByHeading(existing.getContent(), getAsString(pageObj, "content")));
-                        existing.setUpdatedAt(LocalDateTime.now());
-                        pageMapper.update(existing);
-                    } else {
-                        existing.setContent(getAsString(pageObj, "content"));
-                        existing.setSummary(getAsString(pageObj, "summary"));
-                        existing.setUpdatedAt(LocalDateTime.now());
-                        pageMapper.update(existing);
-                    }
-                    updated++;
-                } else {
-                    WikiPage newPage = new WikiPage();
-                    newPage.setTitle(cleanTitle);
-                    newPage.setPageType(pageType);
-                    newPage.setCategory(category);
-                    newPage.setSoftware(software);
-                    newPage.setVersion(getAsString(pageObj, "version"));
-                    newPage.setCanonicalTitle(canonicalTitle(cleanTitle));
-                    newPage.setAliasTitles(aliasTitlesFromPage(pageObj));
-                    newPage.setContent(getAsString(pageObj, "content"));
-                    newPage.setSummary(getAsString(pageObj, "summary"));
-                    newPage.setStatus("DRAFT");
-                    newPage.setCompiledBy("configured");
-                    pageMapper.insert(newPage);
-                    created++;
-                }
-            }
-
-            // 解析链接
-            List<WikiPage> savedPages = new ArrayList<>();
-            for (JsonElement pageElem : pages) {
-                JsonObject pageObj = pageElem.getAsJsonObject();
-                String pageTitle = getAsString(pageObj, "title");
-                if (pageTitle == null) continue;
-                String cleanTitle = pageTitle.replaceAll("\\s*\\[\\d+\\]$", "");
-                WikiPage savedPage = findExistingPage(pageObj, cleanTitle, getAsString(pageObj, "page_type"), category, software);
-                if (savedPage != null) {
-                    savedPages.add(savedPage);
-                }
-            }
-            if (!savedPages.isEmpty()) {
-                linkResolver.resolveLinks(savedPages);
-            }
-
-            result.setPagesCreated(created);
-            result.setPagesUpdated(updated);
-            result.setStatus("SUCCESS");
-
-        } catch (Exception e) {
-            log.error("IngestContent failed for '{}': {}", title, e.getMessage(), e);
-            result.setStatus("FAILED");
-            result.setErrorMessage(e.getMessage());
-        }
-
-        return result;
+    private String callLlm(String prompt) {
+        return callLlm(prompt, null);
     }
 
-    private String callLlm(String prompt) {
+    private String callLlm(String prompt, LlmMetrics metrics) {
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(new SystemMessage("你是一个严格的知识编译器。只输出要求的格式，不要包含任何其他文字。"));
         messages.add(new UserMessage(prompt));
@@ -1102,10 +905,21 @@ public class IngestAgent {
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 ChatResponse response = chatModel.chat(messages);
+                if (metrics != null) {
+                    metrics.recordCall();
+                    if (response.tokenUsage() != null) {
+                        metrics.addTokens(
+                                response.tokenUsage().inputTokenCount() != null ? response.tokenUsage().inputTokenCount() : 0,
+                                response.tokenUsage().outputTokenCount() != null ? response.tokenUsage().outputTokenCount() : 0);
+                    }
+                }
                 AiMessage aiMessage = response.aiMessage();
                 return aiMessage != null ? aiMessage.text() : "";
             } catch (Exception e) {
                 log.warn("LLM call failed (attempt {}/{}): {}", attempt, MAX_RETRIES, e.getMessage());
+                if (metrics != null) {
+                    metrics.recordRetry();
+                }
                 if (attempt < MAX_RETRIES) {
                     try { Thread.sleep(attempt * 2000L); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
                 }
