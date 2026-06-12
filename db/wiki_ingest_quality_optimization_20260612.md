@@ -83,3 +83,18 @@ Apply these scripts before releasing the planned ingest quality feature:
 Related operational note:
 
 - `db/wiki_vector_filter_milvus_20260612.md`
+
+## 2026-06-12 Runtime Fix Notes
+
+No new schema change is required for the batch fallback and progress fixes.
+
+Runtime fixes included in this release:
+
+- `wiki_ingest_tasks.quality_report` remains selected by task list queries so
+  the frontend can display source-level quality summaries.
+- `wiki_ingest_tasks.section_facts` and `wiki_ingest_tasks.page_plan` remain
+  excluded from task list queries to avoid large JSON sort-buffer pressure.
+- planned ingest now reports batch progress as each `section_facts` and
+  `page_generation` batch completes.
+- planned ingest now uses deterministic fallback at batch level when a single
+  LLM response is invalid JSON, truncated, or fails after retries.

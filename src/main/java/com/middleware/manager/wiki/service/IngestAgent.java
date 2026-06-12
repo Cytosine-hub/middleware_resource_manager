@@ -21,6 +21,7 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import jakarta.annotation.PreDestroy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +29,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
@@ -38,7 +44,13 @@ public class IngestAgent {
     private static final int SECTION_FACTS_BATCH_SIZE = 12;
     private static final int SECTION_FACTS_BATCH_CHAR_LIMIT = 12000;
     private static final int TITLE_ONLY_EXCERPT_MAX_LENGTH = 120;
+    private static final int LOW_INFORMATION_EXCERPT_MAX_LENGTH = 50;
     private static final int PAGE_GENERATION_BATCH_SIZE = 4;
+    private static final List<String> SECTION_FACT_OPERATION_SIGNALS = List.of(
+            "配置", "安装", "启动", "停止", "部署", "验证", "创建", "删除", "更新", "修改",
+            "命令", "参数", "端口", "路径", "文件", "脚本", "报错", "错误", "故障", "异常",
+            "监控", "阈值", "日志", "license", "http", "https", "jdbc", "jndi", "session",
+            "worker", "apache", "tongweb", "ths", "tdg");
     private static final Set<String> VALID_PAGE_TYPES = Set.of(
             "ENTITY", "CONCEPT", "RUNBOOK", "EXPERIENCE", "STANDARD", "SYNTHESIS", "OVERVIEW");
 
@@ -55,6 +67,8 @@ public class IngestAgent {
     private final WikiIngestQualityGate qualityGate;
     private final Gson gson = new Gson();
     private final int maxContentChars;
+    private final int llmBatchConcurrency;
+    private final ExecutorService llmBatchExecutor;
 
     @Value("${app.vector.type:milvus}")
     private String vectorType;
@@ -70,7 +84,8 @@ public class IngestAgent {
                        DocumentTypeClassifier documentTypeClassifier,
                        DocumentOutlineExtractor documentOutlineExtractor,
                        WikiIngestQualityGate qualityGate,
-                       @Value("${app.wiki.ingest.max-content-chars:50000}") int maxContentChars) {
+                       @Value("${app.wiki.ingest.max-content-chars:50000}") int maxContentChars,
+                       @Value("${app.llm.max-concurrent:5}") int llmBatchConcurrency) {
         this.chatModel = chatModel;
         this.pageMapper = pageMapper;
         this.sourceMapper = sourceMapper;
@@ -83,6 +98,13 @@ public class IngestAgent {
         this.documentOutlineExtractor = documentOutlineExtractor;
         this.qualityGate = qualityGate;
         this.maxContentChars = maxContentChars;
+        this.llmBatchConcurrency = Math.max(1, llmBatchConcurrency);
+        this.llmBatchExecutor = Executors.newFixedThreadPool(this.llmBatchConcurrency);
+    }
+
+    @PreDestroy
+    public void shutdownLlmBatchExecutor() {
+        llmBatchExecutor.shutdownNow();
     }
 
     public static class IngestResult {
@@ -275,6 +297,7 @@ public class IngestAgent {
             log.warn("Page plan JSON invalid for source '{}', using deterministic fallback", source.getTitle());
             return fallbackPagePlan(source, outline);
         }
+        repairPagePlanCoverage(source, pagePlan, outline);
         log.info("Planned ingest Step 2 completed for source '{}': plannedPages={}, durationMs={}",
                 source.getTitle(), pagePlan.getAsJsonArray("pages").size(), System.currentTimeMillis() - start);
         return pagePlan;
@@ -291,58 +314,34 @@ public class IngestAgent {
         List<JsonArray> planBatches = partitionPlanBatch(plans);
         progress.report(65, "正在按页面计划生成页面 0/" + planBatches.size(), 0, planBatches.size());
 
-        // 按 batch 索引存放结果
         Map<Integer, JsonArray> resultsByIndex = new LinkedHashMap<>();
-
-        // 并发执行所有 LLM batch
-        List<CompletableFuture<Map.Entry<Integer, JsonArray>>> futures = new ArrayList<>();
+        CompletionService<BatchPagesResult> completionService = new ExecutorCompletionService<>(llmBatchExecutor);
         for (int i = 0; i < planBatches.size(); i++) {
             final int batchIndex = i;
-            JsonArray planBatch = planBatches.get(batchIndex);
-            futures.add(CompletableFuture.supplyAsync(() -> {
-                long batchStart = System.currentTimeMillis();
-                Set<String> sectionIds = coveredSectionIds(planBatch);
-                String outlineJson = toCompactOutlineJson(outline, sectionsByIds(outline, sectionIds), 500);
-                String sectionFactsJson = gson.toJson(filterSectionFacts(sectionFacts, sectionIds));
-                JsonObject batchPlan = new JsonObject();
-                batchPlan.add("pages", planBatch.deepCopy());
-                String pagesJson = callLlm(IngestPromptTemplates.buildPlannedPageGenerationPrompt(
-                        outlineJson, sectionFactsJson, gson.toJson(batchPlan), buildSourceMetaJson(source)), llmMetrics);
-                JsonObject pagesResult = parseJson(pagesJson);
-                JsonArray pages = pagesResult != null && pagesResult.has("pages") && pagesResult.get("pages").isJsonArray()
-                        ? pagesResult.getAsJsonArray("pages")
-                        : fallbackPagesFromPlan(source, planBatch, outline, sectionFacts);
-                if (pagesResult == null || !pagesResult.has("pages") || !pagesResult.get("pages").isJsonArray()
-                        || pages.isEmpty()) {
-                    log.warn("Planned page JSON invalid for source '{}', using deterministic fallback for {} plans",
-                            source.getTitle(), planBatch.size());
-                    pages = fallbackPagesFromPlan(source, planBatch, outline, sectionFacts);
-                }
-                log.info("Planned ingest Step 3 batch completed for source '{}': batch={}/{}, plans={}, pages={}, durationMs={}",
-                        source.getTitle(), batchIndex + 1, planBatches.size(), planBatch.size(), pages.size(),
-                        System.currentTimeMillis() - batchStart);
-                return Map.entry(batchIndex, pages);
-            }));
+            final JsonArray planBatch = planBatches.get(batchIndex);
+            completionService.submit(() -> generatePageBatch(source, outline, sectionFacts, planBatch,
+                    batchIndex, planBatches.size(), llmMetrics));
         }
-
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
         int completed = 0;
-        for (CompletableFuture<Map.Entry<Integer, JsonArray>> f : futures) {
-            try {
-                Map.Entry<Integer, JsonArray> entry = f.join();
-                resultsByIndex.put(entry.getKey(), entry.getValue());
+        try {
+            for (int i = 0; i < planBatches.size(); i++) {
+                Future<BatchPagesResult> future = completionService.take();
+                BatchPagesResult result = future.get();
+                resultsByIndex.put(result.batchIndex(), result.pages());
                 completed++;
-            } catch (Exception e) {
-                log.warn("Page generation batch failed: {}", e.getMessage());
-                completed++;
+                progress.report(progressBetween(65, 80, completed, planBatches.size()),
+                        "正在按页面计划生成页面 " + completed + "/" + planBatches.size(),
+                        completed, planBatches.size());
             }
-            progress.report(progressBetween(65, 80, completed, planBatches.size()),
-                    "正在按页面计划生成页面 " + completed + "/" + planBatches.size(),
-                    completed, planBatches.size());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new PlannedIngestException(ErrorMessages.WIKI_PAGE_GENERATION_FAILED);
+        } catch (ExecutionException e) {
+            log.warn("Page generation batch failed unexpectedly: {}", e.getMessage());
+            throw new PlannedIngestException(ErrorMessages.WIKI_PAGE_GENERATION_FAILED);
         }
 
-        // 按 batch 顺序合并
         JsonArray generatedPages = new JsonArray();
         for (int i = 0; i < planBatches.size(); i++) {
             JsonArray batchResult = resultsByIndex.get(i);
@@ -358,6 +357,43 @@ public class IngestAgent {
         }
         progress.report(80, "页面生成完成，正在校验质量...", planBatches.size(), planBatches.size());
         return generatedPages;
+    }
+
+    private BatchPagesResult generatePageBatch(WikiSource source,
+                                               DocumentOutlineExtractor.DocumentOutline outline,
+                                               JsonObject sectionFacts,
+                                               JsonArray planBatch,
+                                               int batchIndex,
+                                               int totalBatches,
+                                               LlmMetrics llmMetrics) {
+        long batchStart = System.currentTimeMillis();
+        try {
+            Set<String> sectionIds = coveredSectionIds(planBatch);
+            String outlineJson = toCompactOutlineJson(outline, sectionsByIds(outline, sectionIds), 500);
+            String sectionFactsJson = gson.toJson(filterSectionFacts(sectionFacts, sectionIds));
+            JsonObject batchPlan = new JsonObject();
+            batchPlan.add("pages", planBatch.deepCopy());
+            String pagesJson = callLlm(IngestPromptTemplates.buildPlannedPageGenerationPrompt(
+                    outlineJson, sectionFactsJson, gson.toJson(batchPlan), buildSourceMetaJson(source)), llmMetrics);
+            JsonObject pagesResult = parseJson(pagesJson);
+            JsonArray pages = pagesResult != null && pagesResult.has("pages") && pagesResult.get("pages").isJsonArray()
+                    ? pagesResult.getAsJsonArray("pages")
+                    : null;
+            if (pages == null || pages.isEmpty()) {
+                log.warn("Planned page JSON invalid for source '{}', using deterministic fallback for {} plans",
+                        source.getTitle(), planBatch.size());
+                pages = fallbackPagesFromPlan(source, planBatch, outline, sectionFacts);
+            }
+            log.info("Planned ingest Step 3 batch completed for source '{}': batch={}/{}, plans={}, pages={}, durationMs={}",
+                    source.getTitle(), batchIndex + 1, totalBatches, planBatch.size(), pages.size(),
+                    System.currentTimeMillis() - batchStart);
+            return new BatchPagesResult(batchIndex, pages);
+        } catch (Exception e) {
+            JsonArray fallback = fallbackPagesFromPlan(source, planBatch, outline, sectionFacts);
+            log.warn("Planned page batch failed for source '{}', using deterministic fallback: batch={}/{}, plans={}, pages={}, error={}",
+                    source.getTitle(), batchIndex + 1, totalBatches, planBatch.size(), fallback.size(), e.getMessage());
+            return new BatchPagesResult(batchIndex, fallback);
+        }
     }
 
     private JsonObject generateSectionFacts(DocumentOutlineExtractor.DocumentOutline outline, ProgressReporter progress,
@@ -389,40 +425,30 @@ public class IngestAgent {
 
         // LLM batch 并发执行
         if (!llmBatchIndices.isEmpty()) {
-            List<CompletableFuture<Map.Entry<Integer, JsonArray>>> futures = new ArrayList<>();
+            CompletionService<BatchSectionFactsResult> completionService = new ExecutorCompletionService<>(llmBatchExecutor);
             for (int batchIndex : llmBatchIndices) {
-                List<DocumentOutlineExtractor.DocumentSection> batch = batches.get(batchIndex);
-                futures.add(CompletableFuture.supplyAsync(() -> {
-                    long batchStart = System.currentTimeMillis();
-                    String batchOutlineJson = toCompactOutlineJson(outline, batch, 500);
-                    String response = callLlm(IngestPromptTemplates.buildSectionFactsPrompt(batchOutlineJson), llmMetrics);
-                    JsonObject parsed = parseJson(response);
-                    JsonObject normalized = normalizeSectionFacts(parsed, batch);
-                    if (parsed == null || !parsed.has("section_facts")) {
-                        log.warn("Section facts JSON invalid, using fallback for {} sections", batch.size());
-                    }
-                    log.info("Section facts batch completed: batch={}/{}, sections={}, durationMs={}",
-                            batchIndex + 1, batches.size(), batch.size(), System.currentTimeMillis() - batchStart);
-                    return Map.entry(batchIndex, normalized.getAsJsonArray("section_facts"));
-                }));
+                final List<DocumentOutlineExtractor.DocumentSection> batch = batches.get(batchIndex);
+                completionService.submit(() -> generateSectionFactsBatch(outline, batch, batchIndex, batches.size(), llmMetrics));
             }
 
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
-            for (CompletableFuture<Map.Entry<Integer, JsonArray>> f : futures) {
-                try {
-                    Map.Entry<Integer, JsonArray> entry = f.join();
-                    resultsByIndex.put(entry.getKey(), entry.getValue());
-                } catch (Exception e) {
-                    log.warn("Section facts batch failed: {}", e.getMessage());
+            try {
+                for (int i = 0; i < llmBatchIndices.size(); i++) {
+                    Future<BatchSectionFactsResult> future = completionService.take();
+                    BatchSectionFactsResult result = future.get();
+                    resultsByIndex.put(result.batchIndex(), result.facts());
+                    progress.report(progressBetween(25, 52, resultsByIndex.size(), batches.size()),
+                            "正在生成章节事实 " + resultsByIndex.size() + "/" + batches.size(),
+                            resultsByIndex.size(), batches.size());
                 }
-                progress.report(progressBetween(25, 52, resultsByIndex.size(), batches.size()),
-                        "正在生成章节事实 " + resultsByIndex.size() + "/" + batches.size(),
-                        resultsByIndex.size(), batches.size());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new PlannedIngestException(ErrorMessages.WIKI_INGEST_FAILED);
+            } catch (ExecutionException e) {
+                log.warn("Section facts batch failed unexpectedly: {}", e.getMessage());
+                throw new PlannedIngestException(ErrorMessages.WIKI_INGEST_FAILED);
             }
         }
 
-        // 按 batch 顺序合并
         JsonArray mergedFacts = new JsonArray();
         for (int i = 0; i < batches.size(); i++) {
             JsonArray batchResult = resultsByIndex.get(i);
@@ -441,6 +467,35 @@ public class IngestAgent {
         return merged;
     }
 
+    private BatchSectionFactsResult generateSectionFactsBatch(DocumentOutlineExtractor.DocumentOutline outline,
+                                                             List<DocumentOutlineExtractor.DocumentSection> batch,
+                                                             int batchIndex,
+                                                             int totalBatches,
+                                                             LlmMetrics llmMetrics) {
+        long batchStart = System.currentTimeMillis();
+        try {
+            String batchOutlineJson = toFactsOnlyOutlineJson(outline, batch);
+            String response = callLlm(IngestPromptTemplates.buildSectionFactsPrompt(batchOutlineJson), llmMetrics);
+            JsonObject parsed = parseJson(response);
+            JsonObject normalized = normalizeSectionFacts(parsed, batch);
+            if (parsed == null || !parsed.has("section_facts")) {
+                log.warn("Section facts JSON invalid, using fallback for {} sections", batch.size());
+            }
+            JsonArray facts = normalized.getAsJsonArray("section_facts");
+            log.info("Section facts batch completed: batch={}/{}, sections={}, durationMs={}",
+                    batchIndex + 1, totalBatches, batch.size(), System.currentTimeMillis() - batchStart);
+            return new BatchSectionFactsResult(batchIndex, facts);
+        } catch (Exception e) {
+            JsonArray facts = new JsonArray();
+            for (DocumentOutlineExtractor.DocumentSection section : batch) {
+                facts.add(fallbackSectionFact(section));
+            }
+            log.warn("Section facts batch failed, using fallback: batch={}/{}, sections={}, error={}",
+                    batchIndex + 1, totalBatches, batch.size(), e.getMessage());
+            return new BatchSectionFactsResult(batchIndex, facts);
+        }
+    }
+
     private boolean canUseLocalSectionFact(DocumentOutlineExtractor.DocumentSection section) {
         if (section == null || hasRichBlocks(section)) {
             return false;
@@ -452,9 +507,30 @@ public class IngestAgent {
         }
         String normalizedExcerpt = canonicalTitle(excerpt);
         String normalizedTitle = canonicalTitle(title);
-        return !normalizedExcerpt.isBlank()
+        if (!normalizedExcerpt.isBlank()
                 && !normalizedTitle.isBlank()
-                && (normalizedExcerpt.equals(normalizedTitle) || normalizedExcerpt.endsWith(normalizedTitle));
+                && (normalizedExcerpt.equals(normalizedTitle) || normalizedExcerpt.endsWith(normalizedTitle))) {
+            return true;
+        }
+        return isLowInformationSection(excerpt);
+    }
+
+    private boolean isLowInformationSection(String excerpt) {
+        String value = trimToNull(excerpt);
+        if (value == null || value.length() > LOW_INFORMATION_EXCERPT_MAX_LENGTH) {
+            return false;
+        }
+        String normalized = value.toLowerCase(Locale.ROOT);
+        for (String signal : SECTION_FACT_OPERATION_SIGNALS) {
+            if (normalized.contains(signal.toLowerCase(Locale.ROOT))) {
+                return false;
+            }
+        }
+        return normalized.matches("[\\p{Punct}\\s\\d０-９一二三四五六七八九十百千万第章节、（）()\\.．-]+")
+                || normalized.length() < 24
+                || normalized.startsWith("本章")
+                || normalized.startsWith("本节")
+                || normalized.startsWith("本文");
     }
 
     private boolean hasRichBlocks(DocumentOutlineExtractor.DocumentSection section) {
@@ -575,6 +651,39 @@ public class IngestAgent {
         }
         pagePlan.add("pages", plans);
         return pagePlan;
+    }
+
+    private void repairPagePlanCoverage(WikiSource source, JsonObject pagePlan,
+                                        DocumentOutlineExtractor.DocumentOutline outline) {
+        if (pagePlan == null || !pagePlan.has("pages") || !pagePlan.get("pages").isJsonArray()) {
+            return;
+        }
+        Set<String> covered = coveredSectionIds(pagePlan.getAsJsonArray("pages"));
+        List<DocumentOutlineExtractor.DocumentSection> missing = outline.getSections().stream()
+                .filter(DocumentOutlineExtractor.DocumentSection::isRequired)
+                .filter(section -> !covered.contains(section.getId()))
+                .toList();
+        if (missing.isEmpty()) {
+            return;
+        }
+
+        JsonArray plans = pagePlan.getAsJsonArray("pages");
+        List<DocumentOutlineExtractor.DocumentSection> current = new ArrayList<>();
+        String currentGroup = null;
+        for (DocumentOutlineExtractor.DocumentSection section : missing) {
+            String group = firstPathSegment(section.getPath());
+            if (!current.isEmpty() && (!Objects.equals(currentGroup, group) || current.size() >= 8)) {
+                plans.add(fallbackPlan(source, currentGroup, current));
+                current = new ArrayList<>();
+            }
+            currentGroup = group;
+            current.add(section);
+        }
+        if (!current.isEmpty()) {
+            plans.add(fallbackPlan(source, currentGroup, current));
+        }
+        log.warn("Page plan missed required sections for source '{}', added fallback plans: missingSections={}, totalPlans={}",
+                source.getTitle(), missing.size(), plans.size());
     }
 
     private JsonObject fallbackPlan(WikiSource source, String group,
@@ -845,6 +954,34 @@ public class IngestAgent {
         return gson.toJson(compact);
     }
 
+    private String toFactsOnlyOutlineJson(DocumentOutlineExtractor.DocumentOutline outline,
+                                          List<DocumentOutlineExtractor.DocumentSection> sections) {
+        JsonObject compact = new JsonObject();
+        compact.addProperty("documentType", outline.getDocumentType());
+        compact.addProperty("title", outline.getTitle());
+        compact.addProperty("category", outline.getCategory());
+        compact.addProperty("software", outline.getSoftware());
+        JsonArray compactSections = new JsonArray();
+        for (DocumentOutlineExtractor.DocumentSection section : sections) {
+            JsonObject item = new JsonObject();
+            item.addProperty("id", section.getId());
+            item.addProperty("path", section.getPath());
+            item.addProperty("required", section.isRequired());
+            item.addProperty("sectionType", section.getSectionType());
+            item.addProperty("excerpt", limit(section.getExcerpt(), 360));
+            JsonArray blocks = new JsonArray();
+            if (section.getBlocks() != null) {
+                for (String block : section.getBlocks()) {
+                    blocks.add(block);
+                }
+            }
+            item.add("blocks", blocks);
+            compactSections.add(item);
+        }
+        compact.add("sections", compactSections);
+        return gson.toJson(compact);
+    }
+
     private String firstPathSegment(String path) {
         String value = trimToNull(path);
         if (value == null) {
@@ -959,6 +1096,10 @@ public class IngestAgent {
 
     private record PlannedPages(JsonArray pages, WikiIngestQualityGate.QualityReport report) {}
 
+    private record BatchPagesResult(int batchIndex, JsonArray pages) {}
+
+    private record BatchSectionFactsResult(int batchIndex, JsonArray facts) {}
+
     private static class PlannedIngestException extends RuntimeException {
         PlannedIngestException(String message) {
             super(message);
@@ -997,7 +1138,9 @@ public class IngestAgent {
                 }
             }
         }
-        throw new com.middleware.manager.exception.BusinessException(com.middleware.manager.constant.ErrorCode.UNKNOWN_ERROR, "LLM 调用失败，请稍后再试");
+        throw new com.middleware.manager.exception.BusinessException(
+                com.middleware.manager.constant.ErrorCode.UNKNOWN_ERROR,
+                ErrorMessages.LLM_SERVICE_BUSY);
     }
 
     private JsonObject parseJson(String text) {
@@ -1010,22 +1153,58 @@ public class IngestAgent {
         if (text.endsWith("```")) text = text.substring(0, text.length() - 3);
         text = text.trim();
 
-        // 直接尝试解析
         try {
             return gson.fromJson(text, JsonObject.class);
         } catch (Exception ignored) {}
 
-        // 尝试提取第一个 { ... } 块
-        int start = text.indexOf('{');
-        int end = text.lastIndexOf('}');
-        if (start >= 0 && end > start) {
+        String balancedJson = extractBalancedJsonObject(text);
+        if (balancedJson != null) {
             try {
-                return gson.fromJson(text.substring(start, end + 1), JsonObject.class);
+                return gson.fromJson(balancedJson, JsonObject.class);
             } catch (Exception ignored) {}
         }
 
-        log.warn("Failed to parse JSON from LLM response ({} chars): {}...",
-                text.length(), text.substring(0, Math.min(200, text.length())));
+        String head = text.substring(0, Math.min(200, text.length()));
+        String tail = text.substring(Math.max(0, text.length() - Math.min(200, text.length())));
+        log.warn("Failed to parse JSON from LLM response ({} chars): head={}... tail={}...",
+                text.length(), head, tail);
+        return null;
+    }
+
+    private String extractBalancedJsonObject(String text) {
+        int start = text.indexOf('{');
+        if (start < 0) {
+            return null;
+        }
+        boolean inString = false;
+        boolean escaped = false;
+        int depth = 0;
+        for (int i = start; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (c == '\\') {
+                escaped = true;
+                continue;
+            }
+            if (c == '"') {
+                inString = !inString;
+                continue;
+            }
+            if (inString) {
+                continue;
+            }
+            if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    return text.substring(start, i + 1);
+                }
+            }
+        }
         return null;
     }
 

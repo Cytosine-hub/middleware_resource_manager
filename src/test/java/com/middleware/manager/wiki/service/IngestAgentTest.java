@@ -23,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.Collections;
+import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -56,7 +57,7 @@ class IngestAgentTest {
         MockitoAnnotations.openMocks(this);
         ingestAgent = new IngestAgent(chatModel, pageMapper, sourceMapper, logMapper,
                 linkResolver, embeddingService, vectorStore, softwareTypeMapper,
-                new DocumentTypeClassifier(), new DocumentOutlineExtractor(), new WikiIngestQualityGate(), 50000);
+                new DocumentTypeClassifier(), new DocumentOutlineExtractor(), new WikiIngestQualityGate(), 50000, 2);
     }
 
     @Nested
@@ -64,14 +65,18 @@ class IngestAgentTest {
     class PlannedIngestValidation {
 
         @Test
-        @DisplayName("page_plan 漏掉 required section 时直接失败")
-        void failsWhenPagePlanMissesRequiredSection() {
+        @DisplayName("page_plan 漏掉 required section 时补充兜底计划继续编译")
+        void repairsPagePlanWhenRequiredSectionIsMissing() {
             JsonObject sectionFacts = new JsonObject();
             com.google.gson.JsonArray facts = new com.google.gson.JsonArray();
             JsonObject fact = new JsonObject();
             fact.addProperty("section_id", "sec-001");
             fact.addProperty("section_path", "配置说明");
             facts.add(fact);
+            JsonObject fact2 = new JsonObject();
+            fact2.addProperty("section_id", "sec-002");
+            fact2.addProperty("section_path", "配置说明/最大连接数");
+            facts.add(fact2);
             sectionFacts.add("section_facts", facts);
 
             JsonObject pagePlan = new JsonObject();
@@ -87,9 +92,11 @@ class IngestAgentTest {
 
             ChatResponse sectionFactsResponse = createChatResponse(gson.toJson(sectionFacts));
             ChatResponse pagePlanResponse = createChatResponse(gson.toJson(pagePlan));
+            ChatResponse pagesResponse = createChatResponse("{}");
             when(chatModel.chat(anyList()))
                     .thenReturn(sectionFactsResponse)
-                    .thenReturn(pagePlanResponse);
+                    .thenReturn(pagePlanResponse)
+                    .thenReturn(pagesResponse);
             when(softwareTypeMapper.findAllByOrderByCategoryAscNameAsc()).thenReturn(Collections.emptyList());
 
             WikiSource source = new WikiSource();
@@ -108,9 +115,15 @@ class IngestAgentTest {
 
             IngestAgent.IngestResult result = ingestAgent.ingestPlanned(source, 1L);
 
-            assertEquals("FAILED", result.getStatus());
-            assertTrue(result.getErrorMessage().contains("缺少必需章节"));
-            verify(pageMapper, never()).insert(any(WikiPage.class));
+            assertNotEquals("FAILED", result.getStatus());
+            ArgumentCaptor<WikiPage> pageCaptor = ArgumentCaptor.forClass(WikiPage.class);
+            verify(pageMapper, atLeast(2)).insert(pageCaptor.capture());
+            String mergedSourceRefs = pageCaptor.getAllValues().stream()
+                    .map(WikiPage::getSourceRefs)
+                    .filter(Objects::nonNull)
+                    .reduce("", String::concat);
+            assertTrue(mergedSourceRefs.contains("sec-001"));
+            assertTrue(mergedSourceRefs.contains("sec-002"));
             verify(logMapper).insert(any());
         }
 
@@ -239,6 +252,93 @@ class IngestAgentTest {
             assertNotEquals("FAILED", result.getStatus());
             verify(chatModel, times(2)).chat(anyList());
             verify(pageMapper).insert(any(WikiPage.class));
+        }
+
+        @Test
+        @DisplayName("页面生成单批异常时使用兜底页面继续编译")
+        void continuesWithFallbackPagesWhenOnePageGenerationBatchFails() {
+            JsonObject sectionFacts = new JsonObject();
+            com.google.gson.JsonArray facts = new com.google.gson.JsonArray();
+            for (int i = 1; i <= 5; i++) {
+                JsonObject fact = new JsonObject();
+                fact.addProperty("section_id", "sec-00" + i);
+                fact.addProperty("section_path", "章节 " + i);
+                fact.add("facts", new com.google.gson.JsonArray());
+                fact.add("operations", new com.google.gson.JsonArray());
+                fact.add("config_items", new com.google.gson.JsonArray());
+                fact.add("warnings", new com.google.gson.JsonArray());
+                fact.add("entities", new com.google.gson.JsonArray());
+                facts.add(fact);
+            }
+            sectionFacts.add("section_facts", facts);
+
+            JsonObject pagePlan = new JsonObject();
+            com.google.gson.JsonArray plans = new com.google.gson.JsonArray();
+            for (int i = 1; i <= 5; i++) {
+                JsonObject plan = new JsonObject();
+                plan.addProperty("planned_title", "BES 页面 " + i);
+                plan.addProperty("page_type", "STANDARD");
+                plan.addProperty("category", "中间件");
+                plan.addProperty("software", "BES");
+                com.google.gson.JsonArray covered = new com.google.gson.JsonArray();
+                covered.add("sec-00" + i);
+                plan.add("covered_section_ids", covered);
+                plan.addProperty("required", true);
+                plan.addProperty("merge_strategy", "CREATE_OR_PATCH");
+                plans.add(plan);
+            }
+            pagePlan.add("pages", plans);
+
+            JsonObject secondBatchPages = new JsonObject();
+            com.google.gson.JsonArray pages = new com.google.gson.JsonArray();
+            JsonObject page = new JsonObject();
+            page.addProperty("title", "BES 页面 5");
+            page.addProperty("page_type", "STANDARD");
+            page.addProperty("category", "中间件");
+            page.addProperty("software", "BES");
+            page.addProperty("summary", "BES 页面 5");
+            page.addProperty("content", longContent());
+            pages.add(page);
+            secondBatchPages.add("pages", pages);
+
+            when(chatModel.chat(anyList())).thenAnswer(invocation -> {
+                String prompt = invocation.getArgument(0).toString();
+                if (prompt.contains("章节事实抽取器")) {
+                    return createChatResponse(gson.toJson(sectionFacts));
+                }
+                if (prompt.contains("页面规划器")) {
+                    return createChatResponse(gson.toJson(pagePlan));
+                }
+                if (prompt.contains("Wiki 页面生成器") && prompt.contains("BES 页面 5")) {
+                    return createChatResponse(gson.toJson(secondBatchPages));
+                }
+                throw new RuntimeException("mock page batch failure");
+            });
+            when(softwareTypeMapper.findAllByOrderByCategoryAscNameAsc()).thenReturn(Collections.emptyList());
+
+            WikiSource source = new WikiSource();
+            source.setId(1L);
+            source.setTitle("config.md");
+            source.setSourceType("UPLOAD");
+            source.setCategory("中间件");
+            source.setSoftware("BES");
+            source.setContent("""
+                    # 章节 1
+                    内容 1。
+                    # 章节 2
+                    内容 2。
+                    # 章节 3
+                    内容 3。
+                    # 章节 4
+                    内容 4。
+                    # 章节 5
+                    内容 5。
+                    """);
+
+            IngestAgent.IngestResult result = ingestAgent.ingestPlanned(source, 1L);
+
+            assertNotEquals("FAILED", result.getStatus());
+            verify(pageMapper, atLeast(5)).insert(any(WikiPage.class));
         }
     }
 

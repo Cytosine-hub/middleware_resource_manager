@@ -26,7 +26,7 @@
     <sql id="columnsExcludingLargeJson">
         id, source_id, file_name, status, progress, step,
         total_chunks, completed_chunks, pages_created, pages_updated,
-        error_message, operator_id, created_at, updated_at
+        error_message, quality_report, operator_id, created_at, updated_at
     </sql>
 
     <select id="findById" resultMap="taskResultMap">
@@ -78,7 +78,8 @@
 
     <update id="updateResult">
         UPDATE wiki_ingest_tasks
-        SET pages_created=#{pagesCreated}, pages_updated=#{pagesUpdated}, status='COMPLETED', progress=100
+        SET pages_created=#{pagesCreated}, pages_updated=#{pagesUpdated}, status='COMPLETED',
+            progress=100, step='编译完成', completed_chunks=total_chunks
         WHERE id=#{id}
     </update>
 

@@ -32,7 +32,7 @@
 - `section_facts` 已从“整篇文档一次性 LLM 调用”改为“按 section 批次调用 LLM 后合并”，避免大文档在事实抽取阶段触发 `completion_tokens=4096` 输出截断。
 - 页面生成已从“整个 page_plan 一次性生成所有页面”改为“按 page_plan 批次生成页面”，每批只携带相关 section outline、section_facts 和计划页面。
 - `section_facts`、`page_plan` 和 planned page 生成均已增加解析失败兜底：单批 LLM JSON 截断或格式异常时，不直接让任务失败，而是用目录章节和已抽取事实生成保守 fallback，后续仍交给质量门禁判断 `SUCCESS/PARTIAL/FAILED`。
-- `page_plan` 已增加程序级覆盖校验，所有 required section 必须映射到计划页面，否则编译失败。
+- `page_plan` 已增加程序级覆盖校验；LLM planner 漏掉 required section 时先追加 deterministic fallback plan，再执行覆盖校验。
 - `IngestAgent` 新增 `ingestPlanned(...)`，编译链路已改为 `classify -> outline -> section_facts -> page_plan -> planned_pages -> quality_gate -> save -> link/vectorize`。
 - `IngestTaskService` 已切换到目录驱动编译，不再按 chunk 循环调用 `ingestContent(...)` 直接落页面。
 - 页面保存时已为 planned ingest 写入 `source_refs.sections`，包含 `source_id`、`source_title`、`source_type`、`section_id`、`section_path`、`char_range`、`paragraph_range`、`page_range`、`source_signal`。
@@ -49,8 +49,8 @@
 后续增强：
 
 - PDF 版式字号、双栏、OCR 噪声清洗和 Word 大纲级别可继续增强；当前第一版已接入 PDF 书签/目录文本、全角空格/点线目录、Word `.docx` Heading 样式和通用文本标题信号。
-- `section_facts` 和 `page_plan` 当前作为编译阶段产物落在 `IngestAgent` 内，尚未持久化中间产物。
-- `source_refs` 已覆盖 planned ingest 主路径；旧兼容方法 `ingest(...)`、`ingestContent(...)` 仍保留历史行为，生产任务入口已不再调用旧分段路径。
+- `section_facts` 和 `page_plan` 已持久化到 `wiki_ingest_tasks.section_facts`、`wiki_ingest_tasks.page_plan`；列表查询仍排除这两个大 JSON 字段，详情查询可查看完整中间产物。
+- `source_refs` 已覆盖 planned ingest 主路径；旧兼容方法 `ingest(...)`、`ingestContent(...)` 已删除，生产任务入口统一为 `ingestPlanned(...)`。
 - 合并策略已把 LLM 解析失败默认值从 `OVERWRITE` 改为 `APPEND`，并在 APPEND 分支按 Markdown heading block 做章节补丁；复杂冲突仍交给 LLM 和人工审核。
 - 质量报告目前已持久化到 `wiki_ingest_tasks.quality_report`，并已在来源详情展示覆盖率、必需章节、缺失章节、短页面、泛化标题、过度压缩页面、来源缺失页、任务详情和完整 JSON 报告。
 - 向量检索已新增 `VectorSearchFilter`，InMemory 和 Milvus 均支持同构过滤；Milvus 对旧 collection 会回退到 metadata 过滤。
@@ -66,23 +66,32 @@
 - 已完成标题-only section 本地事实生成：无正文、无表格/代码/列表的标题章节不再调用 `section_facts` LLM。
 - 已完成 planned ingest 阶段进度回写：目录抽取、章节事实批次、页面计划、页面生成批次、页面校验和质量门禁都会更新任务进度；批次阶段会同步更新 `total_chunks`，避免前端显示旧 chunk 分母。
 - 已完成阶段与批次耗时日志：记录 outline section 数、section_facts batch、localOnlySections、page_plan、page_generation batch 的耗时。
+- 已完成单任务内 `section_facts` 和 `page_generation` batch 并发，使用类级共享 `llmBatchExecutor`，并发数来自 `app.llm.max-concurrent`。
+- 已完成 batch 级异常隔离：单个 LLM batch 调用失败、重试耗尽或返回非法 JSON 时，仅该 batch 使用 deterministic fallback，不再导致整个阶段失败。
+- 已完成 JSON 解析增强：支持从响应文本中提取平衡 JSON 对象；解析失败日志输出 head/tail，方便判断截断、尾部解释文本或非法转义。
+- 已完成 page_plan 覆盖修补：LLM planner 漏掉 required section 时，保留已有计划并为缺失章节追加 deterministic fallback plan，然后再执行覆盖校验。
+- 已完成任务列表质量报告修复：`findAll/findByStatus` 保留 `quality_report`，继续排除 `section_facts/page_plan` 大 JSON。
+- 已完成完成态进度修复：任务结束前重新读取当前 `total_chunks`，避免把批次进度分母写回创建任务时的旧 chunk 数。
+- 已完成 facts-only section_facts 输入瘦身：章节事实抽取只发送 `id/path/required/sectionType/excerpt/blocks` 等必要字段。
+- 已完成低信息章节本地事实跳过第一版：短且不含操作、配置、命令、故障、监控等信号的章节使用 deterministic facts。
 - 已通过相关单元测试：`mvn test -Dtest=DocumentOutlineExtractorTest,IngestAgentTest,IngestTaskServiceTest -Dapp.vector.type=memory`，共 19 个测试通过。
-- 已通过全量测试：`mvn test -Dapp.vector.type=memory`，共 87 个测试通过。
-- 待完成：代码审查、服务重启验证、提交和推送。
+- 已通过全量测试：`mvn test -Dapp.vector.type=memory`，共 83 个测试通过。
+- 待完成：section_facts 阶段独立 `max_tokens`、基于固定长文档样例继续校准低信息章节跳过阈值、固定长文档样例端到端验收。
 
 本轮长 PDF 暴露的新问题：
 
 - 5.9M PDF 被抽出 468+ 个 section，`section_facts` 阶段运行 70 分钟仍未进入 `page_plan`。
 - 很多 section 只有标题，没有正文片段，LLM 最终只是把标题改写成 facts，成本高但信息增益很低。
-- 单文档内 `section_facts` 批次串行执行，一个任务通常只使用 1 个 LLM 槽位。
-- 后端没有在每个阶段和每个批次回写进度，前端长时间停留在 25%，用户无法判断是卡死还是慢跑。
+- 单文档内 `section_facts` 和 `page_generation` 已支持 batch 并发，但仍受模型供应商响应耗时、`app.llm.max-concurrent` 和单批 prompt 大小影响。
+- 后端已在每个批次完成时回写进度；如果长时间停在 `0/N`，通常表示第一批 LLM 仍未返回，后续应继续优化单批 prompt 大小和低信息章节跳过。
+- page_plan 可能漏掉前置 required section。当前策略是不直接失败，而是为缺失 required section 追加 fallback plan，再交给页面生成和质量门禁。
 
 新增执行策略：
 
 - 大纲过细时不追求“每个标题一个 section”，而是保留高层章节、必需章节、有正文内容的章节和高价值结构信号；弱标题、图题、目录碎片、只有标题的叶子章节应合并或降级，不单独进入 LLM。
 - `section_facts` 只让“有正文信息量”的 section 调用 LLM；标题-only section 使用本地 deterministic facts，避免为低价值标题消耗 1-2 分钟。
 - 编译阶段必须记录阶段耗时、批次数、已完成批次和当前 section 范围，并同步更新任务进度。
-- 单任务内批次并发作为第二步优化，先以大纲瘦身和跳过无效 LLM 为主，避免直接并发放大供应商限流和输出截断问题。
+- 单任务内批次并发已落地，并通过共享 executor 与 `PooledChatModel` 双层限制并发；后续继续以大纲瘦身和跳过无效 LLM 降低总调用量。
 
 ## 现状评估
 

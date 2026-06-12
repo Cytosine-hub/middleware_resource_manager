@@ -253,7 +253,8 @@ public class IngestTaskService {
             return;
         }
 
-        taskMapper.updateProgress(taskId, 90, "正在解析交叉引用并执行质量门禁...", totalChunks);
+        int latestTotalChunks = latestTotalChunks(taskId, totalChunks);
+        taskMapper.updateProgress(taskId, 90, "正在解析交叉引用并执行质量门禁...", latestTotalChunks);
         taskMapper.updateResult(taskId, result.getPagesCreated(), result.getPagesUpdated());
         if ("PARTIAL".equals(result.getStatus())) {
             taskMapper.updateStatus(taskId, "PARTIAL",
@@ -268,6 +269,14 @@ public class IngestTaskService {
         source.setIngested(false);
         source.setIngestedAt(null);
         sourceMapper.update(source);
+    }
+
+    private int latestTotalChunks(Long taskId, int fallback) {
+        IngestTask latest = taskMapper.findById(taskId);
+        if (latest == null || latest.getTotalChunks() == null || latest.getTotalChunks() <= 0) {
+            return fallback;
+        }
+        return latest.getTotalChunks();
     }
 
     private void markSourceCompiled(WikiSource source, IngestAgent.IngestResult result) {

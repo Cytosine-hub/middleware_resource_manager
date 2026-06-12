@@ -39,11 +39,30 @@ batch 1 (12 sections) → LLM (~100s) → batch 2 (7 sections) → LLM (~100s)
 
 ## 优化方案
 
+## 2026-06-12 实施进度
+
+已完成：
+
+- `section_facts` batch 并发执行：改为受控共享线程池，完成一个 batch 即合并结果并上报进度。
+- `page_generation` batch 并发执行：按完成顺序消费结果，最终按 batch index 合并，保证输出顺序稳定。
+- batch 级容错：单个 section_facts/page_generation batch 的 LLM 异常或 JSON 解析失败会使用 deterministic fallback，不再导致整个阶段失败。
+- JSON 解析增强：支持从前后混入说明文字的响应中提取平衡 JSON 对象；解析失败日志输出 head/tail，便于判断截断或尾部污染。
+- 进度修复：批次完成后立即更新 `completed_chunks`，不再等全部 future 完成后一次性刷新。
+- 任务列表质量报告修复：列表查询保留 `quality_report`，只排除较大的 `section_facts` 和 `page_plan`。
+- 完成态进度修复：任务结束前重新读取当前 `total_chunks`，避免用创建任务时的旧 chunk 数覆盖批次进度。
+- facts-only compact outline：`section_facts` 阶段只发送事实抽取所需字段，减少 prompt 输入体积。
+- 低信息章节本地跳过：短且不含操作、配置、故障、监控等信号的章节使用 deterministic facts，不再调用 LLM。
+
+待完成：
+
+- section_facts 阶段独立 `max_tokens` 配置。
+- 基于真实长文档样例继续校准低信息章节跳过阈值和关键词。
+
 ### 优化 1：section_facts batch 并发执行 [高收益]
 
 **改动文件**：`IngestAgent.java`
 
-**方案**：将 `generateSectionFacts()` 中的串行 for 循环改为 `CompletableFuture` 并发执行。
+**状态**：已完成。当前实现使用 `ExecutorCompletionService` 和类级共享 `llmBatchExecutor`，并发数来自 `app.llm.max-concurrent`。
 
 ```java
 // 伪代码
@@ -56,10 +75,10 @@ List<JsonArray> results = futures.stream().map(CompletableFuture::join).toList()
 ```
 
 **约束**：
-- 并发数不超过 `LLM_MAX_CONCURRENT`（默认 3），避免超出 PooledChatModel 信号量限制
+- 并发数不超过 `app.llm.max-concurrent`，避免超出 PooledChatModel 信号量限制
 - batch 结果按 section order 合并，保证 section_facts 顺序一致
-- 单批失败不影响其他批（已有 fallback 机制）
-- 不需要新线程池，复用 Spring 的 `@Async` 或 `ForkJoinPool.commonPool()`
+- 单批失败不影响其他批，失败批次使用 fallback section facts
+- 使用类级共享线程池，避免热路径重复创建线程池
 
 **预期收益**：2 batch 场景从 ~200s 降到 ~100s（减少 50%）。大文档（10+ batch）收益更大。
 
@@ -85,9 +104,11 @@ List<JsonArray> results = futures.stream().map(CompletableFuture::join).toList()
 
 **改动文件**：`IngestAgent.java`
 
+**状态**：已完成。
+
 **方案**：当前 `toCompactOutlineJson()` 为每个 section 输出了 10+ 个字段（id、path、level、order、pageRange、sourceSignal、required、sectionType、confidence、excerpt、blocks）。section_facts 只需要：`id`、`path`、`excerpt`、`sectionType`、`blocks`。
 
-新增一个 `toFactsOnlyOutlineJson()` 方法，只发送 section_facts 需要的字段。
+已新增 `toFactsOnlyOutlineJson()` 方法，只发送 section_facts 需要的字段，并将 excerpt 限制在较短长度内。
 
 **预期收益**：减少 prompt_tokens ~20%，LLM 处理更快。预估减少 5-10 秒/batch。
 
@@ -95,19 +116,23 @@ List<JsonArray> results = futures.stream().map(CompletableFuture::join).toList()
 
 **改动文件**：`IngestAgent.java`
 
+**状态**：已完成第一版，后续根据真实长文档样例继续调阈值。
+
 **方案**：扩展 `canUseLocalSectionFact()` 判定条件：
 
 1. excerpt 纯数字/纯编号（如 "1.1"、"- 1"）
 2. excerpt 全是重复标题文字 + 少量过渡句（如 "本章节描述了..."）
 3. excerpt 长度 < 50 字且不含参数、命令、指标等关键词
 
-新增一个 `isLowInformationSection()` 方法，和 `canUseLocalSectionFact()` 联合判定。
+已新增 `isLowInformationSection()` 方法，和 `canUseLocalSectionFact()` 联合判定；含操作、配置、命令、端口、故障、日志、监控等关键词的短章节仍会进入 LLM。
 
 **预期收益**：对长文档（50+ section）可能跳过 30-50% 的 LLM 调用。对 19 section 短文档效果有限。
 
 ### 优化 5：page_generation batch 并发执行 [中收益，不在 section_facts 内]
 
-**说明**：page_generation 阶段也是串行执行 batch。和优化 1 同样的方案，对 `generatePagesFromPlan()` 中的 batch 循环改为并发。
+**状态**：已完成。
+
+**说明**：page_generation 阶段使用与 section_facts 相同的共享线程池和完成即消费模式；单批 LLM 调用失败或返回非法 JSON 时，仅该批次使用 fallback 页面。
 
 **预期收益**：364K PDF 的 page_gen 从 ~146s 降到 ~77s（2 batch）。
 

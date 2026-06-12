@@ -996,6 +996,13 @@ async function selectPage(page) {
   selectedPage.value = page
   selectedSource.value = null
   try {
+    // 列表接口不含 content 大列，点击时单独获取完整页面
+    const fullPage = await request(`/api/wiki/pages/${page.id}`)
+    if (fullPage) selectedPage.value = fullPage
+  } catch {
+    // 保留列表数据作为降级
+  }
+  try {
     pageLinks.value = await request(`/api/wiki/pages/${page.id}/links`)
   } catch {
     pageLinks.value = []
