@@ -171,8 +171,8 @@ public class IngestPromptTemplates {
             ## 规划规则
             1. 每个 required section 必须映射到至少一个页面。
             2. 多个连续小节可以合并为一个页面，但不能把高价值章节压缩成泛泛概述。
-            3. 页面标题必须包含软件名和版本；无法识别版本时至少包含软件名。
-            4. 标题不能是“安装方式”“产品配置”“参数说明”“问题处理”这类泛标题。
+            3. 页面标题不要包含软件名和版本号（这些信息由 category/software 标签承载），标题只描述本页面核心内容。
+            4. 标题不能是”安装方式””产品配置””参数说明””问题处理”这类泛标题。
             5. 步骤类内容优先 RUNBOOK；参数和规范类内容优先 STANDARD；故障类内容优先 EXPERIENCE。
             6. 输出必须是合法 JSON，不要包含任何其他文字。
 
@@ -217,13 +217,15 @@ public class IngestPromptTemplates {
 
             ## 生成规则
             1. 只能生成 page_plan 中列出的页面，不要自由新增泛化页面。
-            2. 页面内容必须使用 Markdown，并保留操作步骤、参数、指标、故障处理和注意事项。
-            3. 用 [[页面名]] 标记同一软件下的强相关页面。
-            4. 每个页面必须写入 source_refs.sections，section_id 必须来自 page_plan.covered_section_ids。
-            5. 每个页面必须写入 coverage.section_ids，必须等于或覆盖 page_plan.covered_section_ids。
-            6. 不要编造原文没有的配置项、命令、指标或故障原因。
-            7. 如果原文或常用叫法中存在等价标题，可写入 alias_titles；没有就输出空数组。
-            8. 输出必须是合法 JSON，不要包含任何其他文字。
+            2. 页面标题不要包含软件名和版本号（这些信息由 category/software 标签承载），标题只描述本页面核心内容。
+            3. 页面内容必须使用 Markdown，并保留操作步骤、参数、指标、故障处理和注意事项。
+            4. 内容中的小标题（##、###）只写当前层级的标题，不要重复父级路径。例如：如果页面标题是"服务器实例管理"，内容小标题应该写"录入实例"而不是"集群管理/服务器管理/录入实例"。
+            5. 用 [[页面名]] 标记同一软件下的强相关页面。
+            6. 每个页面必须写入 source_refs.sections，section_id 必须来自 page_plan.covered_section_ids。
+            7. 每个页面必须写入 coverage.section_ids，必须等于或覆盖 page_plan.covered_section_ids。
+            8. 不要编造原文没有的配置项、命令、指标或故障原因。
+            9. 如果原文或常用叫法中存在等价标题，可写入 alias_titles；没有就输出空数组。
+            10. 输出必须是合法 JSON，不要包含任何其他文字。
 
             ## 输出 JSON 格式
             {

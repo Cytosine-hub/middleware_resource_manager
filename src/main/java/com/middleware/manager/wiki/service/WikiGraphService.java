@@ -226,7 +226,17 @@ public class WikiGraphService {
             idx++;
         }
 
-        List<Map<String, Object>> edges = new ArrayList<>();
+        // 后端限边：过滤低权重边，每节点最多保留 Top N
+        final double MIN_EDGE_WEIGHT = 3.0;
+        final int MAX_EDGES_PER_NODE = 10;
+        Set<String> directEdgeKeys = new HashSet<>();
+        for (WikiLink link : links) {
+            if (pageMap.containsKey(link.getFromPageId()) && pageMap.containsKey(link.getToPageId())) {
+                directEdgeKeys.add(edgeKey(link.getFromPageId(), link.getToPageId()));
+            }
+        }
+
+        List<Map<String, Object>> allEdges = new ArrayList<>();
         for (DefaultWeightedEdge edge : graph.edgeSet()) {
             long src = graph.getEdgeSource(edge);
             long tgt = graph.getEdgeTarget(edge);
@@ -239,9 +249,47 @@ public class WikiGraphService {
                 link.put("target", to);
                 link.put("weight", Math.round(weight * 100.0) / 100.0);
                 link.put("linkType", resolveLinkType(src, tgt, links));
-                edges.add(link);
+                link.put("direct", directEdgeKeys.contains(edgeKey(src, tgt)));
+                allEdges.add(link);
             }
         }
+
+        // 过滤低权重边
+        List<Map<String, Object>> filteredEdges = allEdges.stream()
+                .filter(e -> Boolean.TRUE.equals(e.get("direct"))
+                        || ((Number) e.get("weight")).doubleValue() >= MIN_EDGE_WEIGHT)
+                .collect(java.util.stream.Collectors.toList());
+
+        // 每节点最多保留 Top N 条边（按权重降序）
+        Map<Integer, List<Map<String, Object>>> edgesBySource = new HashMap<>();
+        Map<Integer, List<Map<String, Object>>> edgesByTarget = new HashMap<>();
+        for (Map<String, Object> e : filteredEdges) {
+            int src = (int) e.get("source");
+            int tgt = (int) e.get("target");
+            edgesBySource.computeIfAbsent(src, k -> new ArrayList<>()).add(e);
+            edgesByTarget.computeIfAbsent(tgt, k -> new ArrayList<>()).add(e);
+        }
+        List<Map<String, Object>> edges = new ArrayList<>();
+        Set<Map<String, Object>> kept = new HashSet<>();
+        for (Map<String, Object> edge : filteredEdges) {
+            if (Boolean.TRUE.equals(edge.get("direct"))) {
+                kept.add(edge);
+            }
+        }
+        for (int nodeId : nodeIdMap.values()) {
+            List<Map<String, Object>> nodeEdges = new ArrayList<>();
+            List<Map<String, Object>> srcEdges = edgesBySource.getOrDefault(nodeId, Collections.emptyList());
+            List<Map<String, Object>> tgtEdges = edgesByTarget.getOrDefault(nodeId, Collections.emptyList());
+            nodeEdges.addAll(srcEdges);
+            nodeEdges.addAll(tgtEdges);
+            nodeEdges.sort((a, b) -> Double.compare(
+                    ((Number) b.get("weight")).doubleValue(),
+                    ((Number) a.get("weight")).doubleValue()));
+            for (int i = 0; i < Math.min(MAX_EDGES_PER_NODE, nodeEdges.size()); i++) {
+                kept.add(nodeEdges.get(i));
+            }
+        }
+        edges.addAll(kept);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("nodes", nodes);

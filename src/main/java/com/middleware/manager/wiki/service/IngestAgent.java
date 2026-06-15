@@ -46,6 +46,9 @@ public class IngestAgent {
     private static final int TITLE_ONLY_EXCERPT_MAX_LENGTH = 120;
     private static final int LOW_INFORMATION_EXCERPT_MAX_LENGTH = 50;
     private static final int PAGE_GENERATION_BATCH_SIZE = 4;
+    private static final int SOURCE_VECTOR_CHUNK_CHARS = 1200;
+    private static final int SOURCE_VECTOR_CHUNK_OVERLAP = 120;
+    private static final int SOURCE_VECTOR_DELETE_LIMIT = 2048;
     private static final List<String> SECTION_FACT_OPERATION_SIGNALS = List.of(
             "配置", "安装", "启动", "停止", "部署", "验证", "创建", "删除", "更新", "修改",
             "命令", "参数", "端口", "路径", "文件", "脚本", "报错", "错误", "故障", "异常",
@@ -141,6 +144,16 @@ public class IngestAgent {
     };
 
     /**
+     * 暂停检查器：返回 true 表示任务已暂停，应停止执行。
+     */
+    @FunctionalInterface
+    public interface PauseChecker {
+        boolean isPaused();
+    }
+
+    private static final PauseChecker NO_PAUSE = () -> false;
+
+    /**
      * LLM 调用指标收集器，线程安全。
      */
     static class LlmMetrics {
@@ -172,12 +185,21 @@ public class IngestAgent {
     public IngestResult ingestPlanned(WikiSource source, Long operatorId,
                                        ProgressReporter progressReporter,
                                        java.util.function.BiConsumer<String, String> artifactSink) {
+        return ingestPlanned(source, operatorId, progressReporter, artifactSink, NO_PAUSE);
+    }
+
+    @Transactional
+    public IngestResult ingestPlanned(WikiSource source, Long operatorId,
+                                       ProgressReporter progressReporter,
+                                       java.util.function.BiConsumer<String, String> artifactSink,
+                                       PauseChecker pauseChecker) {
         long startTime = System.currentTimeMillis();
         IngestResult result = new IngestResult();
         WikiIngestLog ingestLog = new WikiIngestLog();
         ingestLog.setSourceId(source.getId());
         ingestLog.setOperatorId(operatorId);
         ProgressReporter progress = progressReporter == null ? NOOP_PROGRESS : progressReporter;
+        PauseChecker checker = pauseChecker == null ? NO_PAUSE : pauseChecker;
 
         try {
             String content = source.getContent();
@@ -188,7 +210,12 @@ public class IngestAgent {
                 return result;
             }
 
-            PlannedPages plannedPages = generatePlannedPages(source, content, progress, artifactSink);
+            PlannedPages plannedPages = generatePlannedPages(source, content, progress, artifactSink, checker);
+            if ("PAUSED".equals(plannedPages.report().getStatus())) {
+                result.setStatus("PAUSED");
+                result.setErrorMessage(ErrorMessages.WIKI_TASK_PAUSED);
+                return result;
+            }
             result.setQualityReport(gson.toJson(plannedPages.report()));
             if ("FAILED".equals(plannedPages.report().getStatus())) {
                 return failPlanned(result, ingestLog, startTime,
@@ -197,13 +224,18 @@ public class IngestAgent {
 
             SaveStats stats = savePages(plannedPages.pages(), source);
             int linksCreated = linkResolver.resolveLinks(stats.savedPages());
-            vectorizePages(stats.savedPages());
             completePlannedIngest(source, hash, plannedPages.report(), stats, linksCreated, result);
+            vectorizeSource(source);
             writePlannedLog(ingestLog, plannedPages.report(), stats, linksCreated, result, startTime);
 
             log.info("Planned ingest completed for '{}': status={}, created={}, updated={}, links={}",
                     source.getTitle(), result.getStatus(), stats.created(), stats.updated(), linksCreated);
         } catch (PlannedIngestException e) {
+            if (ErrorMessages.WIKI_TASK_PAUSED.equals(e.getMessage())) {
+                result.setStatus("PAUSED");
+                result.setErrorMessage(ErrorMessages.WIKI_TASK_PAUSED);
+                return result;
+            }
             return failPlanned(result, ingestLog, startTime, e.getMessage());
         } catch (Exception e) {
             log.error("Planned ingest failed for source '{}': {}", source.getTitle(), e.getMessage(), e);
@@ -218,9 +250,17 @@ public class IngestAgent {
     }
 
     private PlannedPages generatePlannedPages(WikiSource source, String content, ProgressReporter progress,
-                                               java.util.function.BiConsumer<String, String> artifactSink) {
+                                               java.util.function.BiConsumer<String, String> artifactSink,
+                                               PauseChecker pauseChecker) {
         long totalStart = System.currentTimeMillis();
         LlmMetrics llmMetrics = new LlmMetrics();
+
+        // 暂停检查
+        if (pauseChecker.isPaused()) {
+            WikiIngestQualityGate.QualityReport pausedReport = new WikiIngestQualityGate.QualityReport();
+            pausedReport.setStatus("PAUSED");
+            return new PlannedPages(new JsonArray(), pausedReport);
+        }
 
         long stepStart = System.currentTimeMillis();
         progress.report(10, "正在抽取文档类型和目录结构...", 0, 0);
@@ -234,13 +274,32 @@ public class IngestAgent {
         log.info("Planned ingest Step 0 completed for source '{}': sections={}, durationMs={}",
                 source.getTitle(), outline.getSections().size(), outlineMs);
 
+        // 暂停检查
+        if (pauseChecker.isPaused()) {
+            WikiIngestQualityGate.QualityReport pausedReport = new WikiIngestQualityGate.QualityReport();
+            pausedReport.setStatus("PAUSED");
+            return new PlannedPages(new JsonArray(), pausedReport);
+        }
+
         log.info("Planned ingest Step 1: Extracting section facts for source '{}'", source.getTitle());
         stepStart = System.currentTimeMillis();
-        JsonObject sectionFacts = generateSectionFacts(outline, progress, llmMetrics);
+        JsonObject sectionFacts = generateSectionFacts(outline, progress, llmMetrics, pauseChecker);
+        if (pauseChecker.isPaused()) {
+            WikiIngestQualityGate.QualityReport pausedReport = new WikiIngestQualityGate.QualityReport();
+            pausedReport.setStatus("PAUSED");
+            return new PlannedPages(new JsonArray(), pausedReport);
+        }
         String sectionFactsJson = gson.toJson(sectionFacts);
         long sectionFactsMs = System.currentTimeMillis() - stepStart;
         if (artifactSink != null) {
             artifactSink.accept("sectionFacts", sectionFactsJson);
+        }
+
+        // 暂停检查
+        if (pauseChecker.isPaused()) {
+            WikiIngestQualityGate.QualityReport pausedReport = new WikiIngestQualityGate.QualityReport();
+            pausedReport.setStatus("PAUSED");
+            return new PlannedPages(new JsonArray(), pausedReport);
         }
 
         stepStart = System.currentTimeMillis();
@@ -251,9 +310,23 @@ public class IngestAgent {
         }
         validatePagePlanCoverage(pagePlan, outline);
 
+        // 暂停检查
+        if (pauseChecker.isPaused()) {
+            WikiIngestQualityGate.QualityReport pausedReport = new WikiIngestQualityGate.QualityReport();
+            pausedReport.setStatus("PAUSED");
+            return new PlannedPages(new JsonArray(), pausedReport);
+        }
+
         stepStart = System.currentTimeMillis();
-        JsonArray pages = generatePagesFromPlan(source, outline, sectionFacts, pagePlan, progress, llmMetrics);
+        JsonArray pages = generatePagesFromPlan(source, outline, sectionFacts, pagePlan, progress, llmMetrics, pauseChecker);
         long pageGenerationMs = System.currentTimeMillis() - stepStart;
+
+        // 暂停检查
+        if (pauseChecker.isPaused()) {
+            WikiIngestQualityGate.QualityReport pausedReport = new WikiIngestQualityGate.QualityReport();
+            pausedReport.setStatus("PAUSED");
+            return new PlannedPages(new JsonArray(), pausedReport);
+        }
 
         progress.report(82, "正在补充来源引用并执行页面校验...", 0, 0);
         enrichPagesWithPlan(pages, pagePlan.getAsJsonArray("pages"), outline, source);
@@ -305,7 +378,7 @@ public class IngestAgent {
 
     private JsonArray generatePagesFromPlan(WikiSource source, DocumentOutlineExtractor.DocumentOutline outline,
                                             JsonObject sectionFacts, JsonObject pagePlan, ProgressReporter progress,
-                                            LlmMetrics llmMetrics) {
+                                            LlmMetrics llmMetrics, PauseChecker pauseChecker) {
         log.info("Planned ingest Step 3: Generating planned pages for source '{}'", source.getTitle());
         JsonArray plans = pagePlan.getAsJsonArray("pages");
         if (plans == null || plans.isEmpty()) {
@@ -316,16 +389,24 @@ public class IngestAgent {
 
         Map<Integer, JsonArray> resultsByIndex = new LinkedHashMap<>();
         CompletionService<BatchPagesResult> completionService = new ExecutorCompletionService<>(llmBatchExecutor);
+        List<Future<BatchPagesResult>> futures = new ArrayList<>();
         for (int i = 0; i < planBatches.size(); i++) {
+            if (pauseChecker != null && pauseChecker.isPaused()) {
+                throw new PlannedIngestException(ErrorMessages.WIKI_TASK_PAUSED);
+            }
             final int batchIndex = i;
             final JsonArray planBatch = planBatches.get(batchIndex);
-            completionService.submit(() -> generatePageBatch(source, outline, sectionFacts, planBatch,
-                    batchIndex, planBatches.size(), llmMetrics));
+            futures.add(completionService.submit(() -> generatePageBatch(source, outline, sectionFacts, planBatch,
+                    batchIndex, planBatches.size(), llmMetrics)));
         }
 
         int completed = 0;
         try {
             for (int i = 0; i < planBatches.size(); i++) {
+                if (pauseChecker != null && pauseChecker.isPaused()) {
+                    cancelFutures(futures);
+                    throw new PlannedIngestException(ErrorMessages.WIKI_TASK_PAUSED);
+                }
                 Future<BatchPagesResult> future = completionService.take();
                 BatchPagesResult result = future.get();
                 resultsByIndex.put(result.batchIndex(), result.pages());
@@ -357,6 +438,14 @@ public class IngestAgent {
         }
         progress.report(80, "页面生成完成，正在校验质量...", planBatches.size(), planBatches.size());
         return generatedPages;
+    }
+
+    private void cancelFutures(List<? extends Future<?>> futures) {
+        for (Future<?> future : futures) {
+            if (future != null && !future.isDone()) {
+                future.cancel(true);
+            }
+        }
     }
 
     private BatchPagesResult generatePageBatch(WikiSource source,
@@ -397,7 +486,7 @@ public class IngestAgent {
     }
 
     private JsonObject generateSectionFacts(DocumentOutlineExtractor.DocumentOutline outline, ProgressReporter progress,
-                                            LlmMetrics llmMetrics) {
+                                            LlmMetrics llmMetrics, PauseChecker pauseChecker) {
         long start = System.currentTimeMillis();
         List<List<DocumentOutlineExtractor.DocumentSection>> batches = partitionSectionFacts(outline.getSections());
         progress.report(25, "正在生成章节事实 0/" + batches.size(), 0, batches.size());
@@ -409,6 +498,10 @@ public class IngestAgent {
 
         // 先处理本地 batch（无需 LLM）
         for (int i = 0; i < batches.size(); i++) {
+            // 暂停检查
+            if (pauseChecker.isPaused()) {
+                throw new PlannedIngestException(ErrorMessages.WIKI_TASK_PAUSED);
+            }
             List<DocumentOutlineExtractor.DocumentSection> batch = batches.get(i);
             if (batch.stream().allMatch(this::canUseLocalSectionFact)) {
                 JsonArray facts = new JsonArray();
@@ -427,6 +520,10 @@ public class IngestAgent {
         if (!llmBatchIndices.isEmpty()) {
             CompletionService<BatchSectionFactsResult> completionService = new ExecutorCompletionService<>(llmBatchExecutor);
             for (int batchIndex : llmBatchIndices) {
+                // 暂停检查
+                if (pauseChecker.isPaused()) {
+                    throw new PlannedIngestException(ErrorMessages.WIKI_TASK_PAUSED);
+                }
                 final List<DocumentOutlineExtractor.DocumentSection> batch = batches.get(batchIndex);
                 completionService.submit(() -> generateSectionFactsBatch(outline, batch, batchIndex, batches.size(), llmMetrics));
             }
@@ -1301,6 +1398,332 @@ public class IngestAgent {
         return refs;
     }
 
+    /**
+     * 重编译过度压缩页面：只重新生成 overCompressedPages 列表中的页面，复用已持久化的 section_facts。
+     */
+    @Transactional
+    public IngestResult recompileCompressedPages(WikiSource source, Long operatorId,
+                                                  String qualityReportJson, String sectionFactsJson,
+                                                  String pagePlanJson, ProgressReporter progressReporter) {
+        long startTime = System.currentTimeMillis();
+        IngestResult result = new IngestResult();
+        ProgressReporter progress = progressReporter == null ? NOOP_PROGRESS : progressReporter;
+
+        try {
+            // 1. 解析质量报告，获取过度压缩页面标题
+            JsonObject qualityReport = parseJson(qualityReportJson);
+            if (qualityReport == null || !qualityReport.has("overCompressedPages")) {
+                result.setStatus("SKIPPED");
+                result.setErrorMessage(ErrorMessages.WIKI_NO_COMPRESSED_PAGES);
+                return result;
+            }
+            JsonArray overCompressedTitles = qualityReport.getAsJsonArray("overCompressedPages");
+            if (overCompressedTitles.isEmpty()) {
+                result.setStatus("SKIPPED");
+                result.setErrorMessage(ErrorMessages.WIKI_NO_COMPRESSED_PAGES);
+                return result;
+            }
+            Set<String> compressedTitles = new HashSet<>();
+            for (JsonElement elem : overCompressedTitles) {
+                compressedTitles.add(elem.getAsString());
+            }
+            log.info("Recompile compressed: {} pages to regenerate for source '{}'",
+                    compressedTitles.size(), source.getTitle());
+
+            // 2. 解析 section_facts 和 page_plan
+            JsonObject sectionFacts = parseJson(sectionFactsJson);
+            JsonObject pagePlan = parseJson(pagePlanJson);
+            if (sectionFacts == null || pagePlan == null) {
+                result.setStatus("FAILED");
+                result.setErrorMessage(ErrorMessages.WIKI_MISSING_ARTIFACTS);
+                return result;
+            }
+
+            // 3. 从 page_plan 中筛选过度压缩页面的计划
+            JsonArray allPlans = pagePlan.getAsJsonArray("pages");
+            JsonArray compressedPlans = new JsonArray();
+            for (JsonElement elem : allPlans) {
+                JsonObject plan = elem.getAsJsonObject();
+                String title = getAsString(plan, "planned_title");
+                if (title != null && compressedTitles.contains(title)) {
+                    compressedPlans.add(plan);
+                }
+            }
+            if (compressedPlans.isEmpty()) {
+                result.setStatus("SKIPPED");
+                result.setErrorMessage(ErrorMessages.WIKI_NO_MATCHING_COMPRESSED_PLANS);
+                return result;
+            }
+            log.info("Recompile compressed: found {} matching plans", compressedPlans.size());
+
+            // 4. 重新生成过度压缩页面
+            progress.report(10, "正在重新生成过度压缩页面...", 0, compressedPlans.size());
+            DocumentTypeClassifier.Classification classification =
+                    documentTypeClassifier.classify(source.getTitle(), source.getContent());
+            DocumentOutlineExtractor.DocumentOutline outline = documentOutlineExtractor.extract(
+                    source.getTitle(), source.getContent(), source.getCategory(), source.getSoftware(), classification);
+
+            JsonArray recompiledPages = new JsonArray();
+            LlmMetrics llmMetrics = new LlmMetrics();
+            int completed = 0;
+            for (JsonElement planElem : compressedPlans) {
+                JsonObject plan = planElem.getAsJsonObject();
+                JsonArray singlePlan = new JsonArray();
+                singlePlan.add(plan);
+                try {
+                    Set<String> sectionIds = coveredSectionIds(singlePlan);
+                    String outlineJson = toCompactOutlineJson(outline, sectionsByIds(outline, sectionIds), 500);
+                    String sectionFactsJsonFiltered = gson.toJson(filterSectionFacts(sectionFacts, sectionIds));
+                    JsonObject batchPlan = new JsonObject();
+                    batchPlan.add("pages", singlePlan.deepCopy());
+                    String pagesJson = callLlm(IngestPromptTemplates.buildPlannedPageGenerationPrompt(
+                            outlineJson, sectionFactsJsonFiltered, gson.toJson(batchPlan),
+                            buildSourceMetaJson(source)), llmMetrics);
+                    JsonObject pagesResult = parseJson(pagesJson);
+                    if (pagesResult != null && pagesResult.has("pages") && pagesResult.get("pages").isJsonArray()) {
+                        for (JsonElement p : pagesResult.getAsJsonArray("pages")) {
+                            recompiledPages.add(p);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Recompile compressed page failed: {}", e.getMessage());
+                }
+                completed++;
+                progress.report(progressBetween(10, 80, completed, compressedPlans.size()),
+                        "正在重新生成过度压缩页面 " + completed + "/" + compressedPlans.size(),
+                        completed, compressedPlans.size());
+            }
+
+            if (recompiledPages.isEmpty()) {
+                result.setStatus("FAILED");
+                result.setErrorMessage(ErrorMessages.WIKI_RECOMPILE_FAILED);
+                return result;
+            }
+
+            // 5. 补充来源引用
+            progress.report(80, "正在补充来源引用...", 0, 0);
+            enrichPagesWithPlan(recompiledPages, compressedPlans, outline, source);
+
+            // 6. 保存页面
+            progress.report(85, "正在保存页面...", 0, 0);
+            SaveStats stats = savePages(recompiledPages, source);
+            int linksCreated = linkResolver.resolveLinks(stats.savedPages());
+
+            // 7. 重新执行质量门禁（拉取 source 关联的所有页面）
+            progress.report(90, "正在重新执行质量门禁...", 0, 0);
+            List<WikiPage> allPages = pageMapper.findByCategoryOrSoftware(
+                    source.getCategory(), source.getSoftware(), 500);
+            JsonArray allPagesJson = pagesToJsonArray(allPages, source.getId());
+            WikiIngestQualityGate.QualityReport report = qualityGate.evaluate(outline, allPagesJson);
+            result.setQualityReport(gson.toJson(report));
+            result.setPagesCreated(stats.created());
+            result.setPagesUpdated(stats.updated());
+            result.setLinksCreated(linksCreated);
+            result.setStatus(report.getStatus());
+
+            log.info("Recompile compressed completed for '{}': status={}, created={}, updated={}, links={}, durationMs={}",
+                    source.getTitle(), report.getStatus(), stats.created(), stats.updated(), linksCreated,
+                    System.currentTimeMillis() - startTime);
+        } catch (Exception e) {
+            log.error("Recompile compressed failed for source '{}': {}", source.getTitle(), e.getMessage(), e);
+            result.setStatus("FAILED");
+            result.setErrorMessage(ErrorMessages.WIKI_RECOMPILE_ERROR + ": " + e.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * 重编译缺失章节：只重新生成 missingSections 对应的页面，复用已持久化的 section_facts。
+     */
+    @Transactional
+    public IngestResult recompileMissingSections(WikiSource source, Long operatorId,
+                                                  String qualityReportJson, String sectionFactsJson,
+                                                  String pagePlanJson, ProgressReporter progressReporter) {
+        long startTime = System.currentTimeMillis();
+        IngestResult result = new IngestResult();
+        ProgressReporter progress = progressReporter == null ? NOOP_PROGRESS : progressReporter;
+
+        try {
+            // 1. 解析质量报告，获取缺失章节 ID
+            JsonObject qualityReport = parseJson(qualityReportJson);
+            if (qualityReport == null || !qualityReport.has("missingSections")) {
+                result.setStatus("SKIPPED");
+                result.setErrorMessage(ErrorMessages.WIKI_NO_MISSING_SECTIONS);
+                return result;
+            }
+            JsonArray missingSectionIds = qualityReport.getAsJsonArray("missingSections");
+            if (missingSectionIds.isEmpty()) {
+                result.setStatus("SKIPPED");
+                result.setErrorMessage(ErrorMessages.WIKI_NO_MISSING_SECTIONS);
+                return result;
+            }
+            Set<String> missingIds = new HashSet<>();
+            for (JsonElement elem : missingSectionIds) {
+                missingIds.add(elem.getAsString());
+            }
+            log.info("Recompile missing: {} missing sections for source '{}'",
+                    missingIds.size(), source.getTitle());
+
+            // 2. 解析 section_facts 和 page_plan
+            JsonObject sectionFacts = parseJson(sectionFactsJson);
+            JsonObject pagePlan = parseJson(pagePlanJson);
+            if (sectionFacts == null || pagePlan == null) {
+                result.setStatus("FAILED");
+                result.setErrorMessage(ErrorMessages.WIKI_MISSING_ARTIFACTS);
+                return result;
+            }
+
+            // 3. 从 page_plan 中筛选覆盖缺失章节的页面计划
+            JsonArray allPlans = pagePlan.getAsJsonArray("pages");
+            JsonArray missingPlans = new JsonArray();
+            for (JsonElement elem : allPlans) {
+                JsonObject plan = elem.getAsJsonObject();
+                if (plan.has("covered_section_ids") && plan.get("covered_section_ids").isJsonArray()) {
+                    for (JsonElement sectionId : plan.getAsJsonArray("covered_section_ids")) {
+                        if (missingIds.contains(sectionId.getAsString())) {
+                            missingPlans.add(plan);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (missingPlans.isEmpty()) {
+                result.setStatus("SKIPPED");
+                result.setErrorMessage(ErrorMessages.WIKI_NO_MATCHING_MISSING_PLANS);
+                return result;
+            }
+            log.info("Recompile missing: found {} plans covering missing sections", missingPlans.size());
+
+            // 4. 重新生成缺失章节对应的页面
+            progress.report(10, "正在重新生成缺失章节页面...", 0, missingPlans.size());
+            DocumentTypeClassifier.Classification classification =
+                    documentTypeClassifier.classify(source.getTitle(), source.getContent());
+            DocumentOutlineExtractor.DocumentOutline outline = documentOutlineExtractor.extract(
+                    source.getTitle(), source.getContent(), source.getCategory(), source.getSoftware(), classification);
+
+            JsonArray recompiledPages = new JsonArray();
+            LlmMetrics llmMetrics = new LlmMetrics();
+            int completed = 0;
+            for (JsonElement planElem : missingPlans) {
+                JsonObject plan = planElem.getAsJsonObject();
+                JsonArray singlePlan = new JsonArray();
+                singlePlan.add(plan);
+                try {
+                    Set<String> sectionIds = coveredSectionIds(singlePlan);
+                    String outlineJson = toCompactOutlineJson(outline, sectionsByIds(outline, sectionIds), 500);
+                    String sectionFactsJsonFiltered = gson.toJson(filterSectionFacts(sectionFacts, sectionIds));
+                    JsonObject batchPlan = new JsonObject();
+                    batchPlan.add("pages", singlePlan.deepCopy());
+                    String pagesJson = callLlm(IngestPromptTemplates.buildPlannedPageGenerationPrompt(
+                            outlineJson, sectionFactsJsonFiltered, gson.toJson(batchPlan),
+                            buildSourceMetaJson(source)), llmMetrics);
+                    JsonObject pagesResult = parseJson(pagesJson);
+                    if (pagesResult != null && pagesResult.has("pages") && pagesResult.get("pages").isJsonArray()) {
+                        for (JsonElement p : pagesResult.getAsJsonArray("pages")) {
+                            recompiledPages.add(p);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Recompile missing page failed: {}", e.getMessage());
+                }
+                completed++;
+                progress.report(progressBetween(10, 80, completed, missingPlans.size()),
+                        "正在重新生成缺失章节页面 " + completed + "/" + missingPlans.size(),
+                        completed, missingPlans.size());
+            }
+
+            if (recompiledPages.isEmpty()) {
+                result.setStatus("FAILED");
+                result.setErrorMessage(ErrorMessages.WIKI_RECOMPILE_FAILED);
+                return result;
+            }
+
+            // 5. 补充来源引用
+            progress.report(80, "正在补充来源引用...", 0, 0);
+            enrichPagesWithPlan(recompiledPages, missingPlans, outline, source);
+
+            // 6. 保存页面
+            progress.report(85, "正在保存页面...", 0, 0);
+            SaveStats stats = savePages(recompiledPages, source);
+            int linksCreated = linkResolver.resolveLinks(stats.savedPages());
+
+            // 7. 重新执行质量门禁（拉取 source 关联的所有页面）
+            progress.report(90, "正在重新执行质量门禁...", 0, 0);
+            List<WikiPage> allPages = pageMapper.findByCategoryOrSoftware(
+                    source.getCategory(), source.getSoftware(), 500);
+            JsonArray allPagesJson = pagesToJsonArray(allPages, source.getId());
+            WikiIngestQualityGate.QualityReport report = qualityGate.evaluate(outline, allPagesJson);
+            result.setQualityReport(gson.toJson(report));
+            result.setPagesCreated(stats.created());
+            result.setPagesUpdated(stats.updated());
+            result.setLinksCreated(linksCreated);
+            result.setStatus(report.getStatus());
+
+            log.info("Recompile missing completed for '{}': status={}, created={}, updated={}, links={}, durationMs={}",
+                    source.getTitle(), report.getStatus(), stats.created(), stats.updated(), linksCreated,
+                    System.currentTimeMillis() - startTime);
+        } catch (Exception e) {
+            log.error("Recompile missing failed for source '{}': {}", source.getTitle(), e.getMessage(), e);
+            result.setStatus("FAILED");
+            result.setErrorMessage(ErrorMessages.WIKI_RECOMPILE_ERROR + ": " + e.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * 将 WikiPage 列表转为 JsonArray（供质量门禁使用）。
+     */
+    private JsonArray pagesToJsonArray(List<WikiPage> pages, Long sourceId) {
+        JsonArray arr = new JsonArray();
+        for (WikiPage p : pages) {
+            JsonObject sourceRefs = parseJson(p.getSourceRefs());
+            if (sourceId != null && !sourceRefsMatch(sourceRefs, sourceId)) {
+                continue;
+            }
+            JsonObject obj = new JsonObject();
+            obj.addProperty("title", p.getTitle());
+            obj.addProperty("page_type", p.getPageType());
+            obj.addProperty("content", p.getContent() != null ? p.getContent() : "");
+            obj.addProperty("summary", p.getSummary());
+            if (sourceRefs != null) {
+                obj.add("source_refs", sourceRefs);
+                obj.add("coverage", coverageFromSourceRefs(sourceRefs));
+            }
+            arr.add(obj);
+        }
+        return arr;
+    }
+
+    private boolean sourceRefsMatch(JsonObject sourceRefs, Long sourceId) {
+        if (sourceRefs == null || sourceId == null || !sourceRefs.has("source_id")) {
+            return false;
+        }
+        try {
+            return sourceId.equals(sourceRefs.get("source_id").getAsLong());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private JsonObject coverageFromSourceRefs(JsonObject sourceRefs) {
+        JsonObject coverage = new JsonObject();
+        JsonArray sectionIds = new JsonArray();
+        if (sourceRefs != null && sourceRefs.has("sections") && sourceRefs.get("sections").isJsonArray()) {
+            for (JsonElement sectionElement : sourceRefs.getAsJsonArray("sections")) {
+                if (!sectionElement.isJsonObject()) {
+                    continue;
+                }
+                JsonObject section = sectionElement.getAsJsonObject();
+                if (section.has("section_id") && !section.get("section_id").isJsonNull()) {
+                    sectionIds.add(section.get("section_id").getAsString());
+                }
+            }
+        }
+        coverage.add("section_ids", sectionIds);
+        coverage.add("evidence_quotes", new JsonArray());
+        return coverage;
+    }
+
     private SaveStats savePages(JsonArray pages, WikiSource source) {
         int created = 0, updated = 0, contradictions = 0;
         List<WikiPage> savedPages = new ArrayList<>();
@@ -1566,8 +1989,11 @@ public class IngestAgent {
 
     private record SaveStats(int created, int updated, int contradictions, List<WikiPage> savedPages) {}
 
+    /**
+     * Wiki 页面是结构化编译结果，向量主索引使用源文档片段，避免用 LLM 摘要丢失原文细节。
+     */
     public void vectorizePages(List<WikiPage> pages) {
-        if (!"milvus".equals(vectorType) || pages == null) {
+        if (pages == null) {
             return;
         }
         for (WikiPage page : pages) {
@@ -1575,30 +2001,126 @@ public class IngestAgent {
                 continue;
             }
             try {
-                String text = page.getTitle() + "\n" + (page.getSummary() != null ? page.getSummary() : "");
-                float[] vector = embeddingService.embed(text);
-                String vectorId = "wiki_" + page.getId();
-                Map<String, String> metadata = new HashMap<>();
-                metadata.put("source", "wiki");
-                metadata.put("pageId", String.valueOf(page.getId()));
-                metadata.put("title", page.getTitle());
-                metadata.put("pageType", page.getPageType());
-                if (page.getCategory() != null) metadata.put("category", page.getCategory());
-                if (page.getSoftware() != null) metadata.put("software", page.getSoftware());
-                if (page.getStatus() != null) metadata.put("status", page.getStatus());
-                metadata.put("content", text);
-                metadata.put("sourceTitle", page.getTitle());
-                try {
+                if ("milvus".equals(vectorType)) {
+                    String vectorId = "wiki_" + page.getId();
                     vectorStore.delete(vectorId);
-                } catch (Exception e) {
-                    log.debug("Vector delete before wiki upsert ignored pageId={}: {}", page.getId(), e.getMessage());
                 }
-                vectorStore.add(vectorId, vector, metadata);
             } catch (Exception e) {
-                log.warn("Vectorization failed pageId={}: {}", page.getId(), e.getMessage());
+                log.debug("Legacy wiki page vector delete ignored pageId={}: {}", page.getId(), e.getMessage());
             }
         }
     }
+
+    public void vectorizeSource(WikiSource source) {
+        if (!"milvus".equals(vectorType) || source == null || source.getId() == null
+                || source.getContent() == null || source.getContent().isBlank()) {
+            return;
+        }
+        try {
+            DocumentTypeClassifier.Classification classification =
+                    documentTypeClassifier.classify(source.getTitle(), source.getContent());
+            DocumentOutlineExtractor.DocumentOutline outline = documentOutlineExtractor.extract(
+                    source.getTitle(), source.getContent(), source.getCategory(), source.getSoftware(), classification);
+            List<SourceVectorChunk> chunks = sourceVectorChunks(source, outline);
+            deleteExistingSourceVectors(source.getId());
+            int indexed = 0;
+            for (SourceVectorChunk chunk : chunks) {
+                try {
+                    float[] vector = embeddingService.embed(chunk.content());
+                    Map<String, String> metadata = new HashMap<>();
+                    metadata.put("source", "wiki_source");
+                    metadata.put("sourceType", source.getSourceType() != null ? source.getSourceType() : "wiki");
+                    metadata.put("sourceId", String.valueOf(source.getId()));
+                    metadata.put("sourceTitle", source.getTitle());
+                    metadata.put("chunkIndex", String.valueOf(chunk.index()));
+                    metadata.put("content", chunk.content());
+                    metadata.put("sectionId", chunk.sectionId());
+                    metadata.put("sectionPath", chunk.sectionPath());
+                    if (source.getCategory() != null) metadata.put("category", source.getCategory());
+                    if (source.getSoftware() != null) metadata.put("software", source.getSoftware());
+                    metadata.put("status", Boolean.TRUE.equals(source.getIngested()) ? "ACTIVE" : "DRAFT");
+                    vectorStore.add(sourceVectorId(source.getId(), chunk.index()), vector, metadata);
+                    indexed++;
+                } catch (Exception e) {
+                    log.warn("Source vector chunk failed sourceId={}, chunkIndex={}: {}",
+                            source.getId(), chunk.index(), e.getMessage());
+                }
+            }
+            log.info("Source vectorization completed sourceId={}, chunks={}", source.getId(), indexed);
+        } catch (Exception e) {
+            log.warn("Source vectorization failed sourceId={}: {}", source.getId(), e.getMessage());
+        }
+    }
+
+    private List<SourceVectorChunk> sourceVectorChunks(WikiSource source, DocumentOutlineExtractor.DocumentOutline outline) {
+        List<SourceVectorChunk> chunks = new ArrayList<>();
+        String content = source.getContent();
+        int index = 0;
+        if (outline != null && outline.getSections() != null && !outline.getSections().isEmpty()) {
+            for (DocumentOutlineExtractor.DocumentSection section : outline.getSections()) {
+                String text = sectionText(content, section);
+                if (text.isBlank()) {
+                    continue;
+                }
+                for (String part : splitVectorText(text)) {
+                    chunks.add(new SourceVectorChunk(index++, section.getId(), section.getPath(), part));
+                }
+            }
+        }
+        if (chunks.isEmpty()) {
+            for (String part : splitVectorText(content)) {
+                chunks.add(new SourceVectorChunk(index++, "source", source.getTitle(), part));
+            }
+        }
+        return chunks;
+    }
+
+    private String sectionText(String content, DocumentOutlineExtractor.DocumentSection section) {
+        if (content == null || section == null) {
+            return "";
+        }
+        int start = Math.max(0, Math.min(section.getCharStart(), content.length()));
+        int end = Math.max(start, Math.min(section.getCharEnd(), content.length()));
+        String text = end > start ? content.substring(start, end) : section.getExcerpt();
+        return text == null ? "" : text.trim();
+    }
+
+    private List<String> splitVectorText(String text) {
+        List<String> chunks = new ArrayList<>();
+        if (text == null) {
+            return chunks;
+        }
+        String normalized = text.replaceAll("\\n{3,}", "\n\n").trim();
+        int pos = 0;
+        while (pos < normalized.length()) {
+            int end = Math.min(normalized.length(), pos + SOURCE_VECTOR_CHUNK_CHARS);
+            String chunk = normalized.substring(pos, end).trim();
+            if (!chunk.isBlank()) {
+                chunks.add(chunk);
+            }
+            if (end == normalized.length()) {
+                break;
+            }
+            pos = Math.max(end - SOURCE_VECTOR_CHUNK_OVERLAP, pos + 1);
+        }
+        return chunks;
+    }
+
+    private void deleteExistingSourceVectors(Long sourceId) {
+        for (int i = 0; i < SOURCE_VECTOR_DELETE_LIMIT; i++) {
+            try {
+                vectorStore.delete(sourceVectorId(sourceId, i));
+            } catch (Exception e) {
+                log.debug("Source vector delete ignored sourceId={}, chunkIndex={}: {}", sourceId, i, e.getMessage());
+            }
+        }
+    }
+
+    private String sourceVectorId(Long sourceId, int chunkIndex) {
+        return "wiki_source_" + sourceId + "_" + chunkIndex;
+    }
+
+    private record SourceVectorChunk(int index, String sectionId, String sectionPath, String content) {}
 
     private void validateGeneratedPages(JsonArray pages) {
         if (pages == null || pages.isEmpty()) {

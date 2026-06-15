@@ -1,6 +1,5 @@
 package com.middleware.manager.wiki.web;
 
-import com.middleware.manager.knowledge.embedding.EmbeddingService;
 import com.middleware.manager.knowledge.loader.DocumentLoader;
 import com.middleware.manager.knowledge.store.VectorStore;
 import com.middleware.manager.repository.AdminAccountMapper;
@@ -38,7 +37,6 @@ class WikiControllerTest {
     @Mock private IngestTaskService taskService;
     @Mock private IngestTaskMapper taskMapper;
     @Mock private WikiIngestLogMapper ingestLogMapper;
-    @Mock private EmbeddingService embeddingService;
     @Mock private VectorStore vectorStore;
     @Mock private WikiSearchService wikiSearchService;
 
@@ -52,7 +50,7 @@ class WikiControllerTest {
                 exportService, importService, graphService,
                 Collections.emptyList(), adminAccountMapper, auditLogMapper,
                 lintAgent, lintResultMapper, wikiPermissionService, pagePermissionMapper,
-                taskService, taskMapper, ingestLogMapper, embeddingService, vectorStore);
+                taskService, taskMapper, ingestLogMapper, vectorStore);
     }
 
     @Nested

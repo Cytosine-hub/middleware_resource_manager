@@ -215,9 +215,19 @@
             内容哈希: <code>{{ selectedSource.contentHash?.substring(0, 16) }}...</code>
           </div>
           <div class="source-actions">
-            <button v-if="getSourceTask(selectedSource.id)" class="action-btn" @click="showSourceTask(selectedSource.id)">
-              查看编译进度 ({{ getSourceTask(selectedSource.id)?.progress || 0 }}%)
-            </button>
+            <template v-if="getSourceTask(selectedSource.id)">
+              <button class="action-btn" @click="showSourceTask(selectedSource.id)">
+                查看编译进度 ({{ getSourceTask(selectedSource.id)?.progress || 0 }}%)
+              </button>
+              <button v-if="getSourceTask(selectedSource.id)?.status === 'PROCESSING'"
+                      class="action-btn" @click="pauseTask(getSourceTask(selectedSource.id)?.id)">
+                暂停
+              </button>
+              <button v-if="getSourceTask(selectedSource.id)?.status === 'PAUSED'"
+                      class="action-btn primary" @click="resumeTask(getSourceTask(selectedSource.id)?.id)">
+                继续
+              </button>
+            </template>
             <button v-else-if="!selectedSource.ingested" class="action-btn primary" @click="reingestSource">编译此文档</button>
             <button class="action-btn danger" @click="deleteSource">删除此文档</button>
           </div>
@@ -283,7 +293,10 @@
               {{ latestSourceTask.errorMessage }}
             </div>
             <div v-if="qualityArray(selectedSourceQualityReport, 'missingSections', 'missing_sections').length && !isSourceCompiling(selectedSource.id)" class="quality-actions">
-              <button class="action-btn primary" @click="reingestSource">重新编译缺失章节</button>
+              <button class="action-btn primary" @click="recompileMissing">重新编译缺失章节</button>
+            </div>
+            <div v-if="qualityArray(selectedSourceQualityReport, 'overCompressedPages', 'over_compressed_pages').length && !isSourceCompiling(selectedSource.id)" class="quality-actions">
+              <button class="action-btn" @click="recompileCompressed">重编译压缩页面</button>
             </div>
             <details class="quality-detail">
               <summary>完整质量报告</summary>
@@ -951,6 +964,108 @@ async function reingestSource() {
   }
 }
 
+async function recompileCompressed() {
+  if (!selectedSource.value || !latestSourceTask.value) return
+  ingesting.value = true
+  ingestProgress.value = 0
+  ingestStep.value = '正在提交重编译任务...'
+  try {
+    await request(`/api/wiki/ingest/tasks/${latestSourceTask.value.id}/recompile-compressed`, { method: 'POST' })
+    ingestStep.value = '重编译任务已创建，正在处理...'
+    const poll = setInterval(async () => {
+      try {
+        const task = await request(`/api/wiki/ingest/tasks/${latestSourceTask.value.id}`)
+        ingestProgress.value = task.progress || 0
+        ingestStep.value = task.step || '处理中...'
+        if (task.status === 'COMPLETED' || task.status === 'FAILED' || task.status === 'PARTIAL') {
+          clearInterval(poll)
+          ingesting.value = false
+          loadSources()
+          loadPages()
+          const ok = task.status === 'COMPLETED'
+          const partial = task.status === 'PARTIAL'
+          props.notify?.(ok ? '重编译完成' : partial ? '重编译部分通过: ' + (task.errorMessage || '') : '重编译失败: ' + task.errorMessage,
+            ok ? 'success' : partial ? 'warning' : 'error')
+        }
+      } catch {
+        clearInterval(poll)
+        ingesting.value = false
+      }
+    }, 2000)
+  } catch (e) {
+    props.notify?.('重编译失败: ' + e.message, 'error')
+    ingesting.value = false
+  }
+}
+
+async function recompileMissing() {
+  if (!selectedSource.value || !latestSourceTask.value) return
+  ingesting.value = true
+  ingestProgress.value = 0
+  ingestStep.value = '正在提交重编译任务...'
+  try {
+    await request(`/api/wiki/ingest/tasks/${latestSourceTask.value.id}/recompile-missing`, { method: 'POST' })
+    ingestStep.value = '重编译任务已创建，正在处理...'
+    const poll = setInterval(async () => {
+      try {
+        const task = await request(`/api/wiki/ingest/tasks/${latestSourceTask.value.id}`)
+        ingestProgress.value = task.progress || 0
+        ingestStep.value = task.step || '处理中...'
+        if (task.status === 'COMPLETED' || task.status === 'FAILED' || task.status === 'PARTIAL') {
+          clearInterval(poll)
+          ingesting.value = false
+          loadSources()
+          loadPages()
+          const ok = task.status === 'COMPLETED'
+          const partial = task.status === 'PARTIAL'
+          props.notify?.(ok ? '重编译完成' : partial ? '重编译部分通过: ' + (task.errorMessage || '') : '重编译失败: ' + task.errorMessage,
+            ok ? 'success' : partial ? 'warning' : 'error')
+        }
+      } catch {
+        clearInterval(poll)
+        ingesting.value = false
+      }
+    }, 2000)
+  } catch (e) {
+    props.notify?.('重编译失败: ' + e.message, 'error')
+    ingesting.value = false
+  }
+}
+
+async function pauseTask(taskId) {
+  if (!taskId) return
+  try {
+    await request(`/api/wiki/ingest/tasks/${taskId}/pause`, { method: 'POST' })
+    props.notify?.('任务已暂停', 'success')
+    loadSources()
+  } catch (e) {
+    props.notify?.('暂停失败: ' + e.message, 'error')
+  }
+}
+
+async function resumeTask(taskId) {
+  if (!taskId) return
+  try {
+    await request(`/api/wiki/ingest/tasks/${taskId}/resume`, { method: 'POST' })
+    props.notify?.('任务已继续', 'success')
+    // 轮询任务状态
+    const poll = setInterval(async () => {
+      try {
+        const task = await request(`/api/wiki/ingest/tasks/${taskId}`)
+        if (task.status === 'COMPLETED' || task.status === 'FAILED' || task.status === 'PARTIAL') {
+          clearInterval(poll)
+          loadSources()
+          loadPages()
+        }
+      } catch {
+        clearInterval(poll)
+      }
+    }, 2000)
+  } catch (e) {
+    props.notify?.('继续失败: ' + e.message, 'error')
+  }
+}
+
 // --- Lint ---
 function lintCount(severity) {
   return lintResults.value.filter(r => r.severity === severity && !r.resolved).length
@@ -962,11 +1077,11 @@ function lintTypeLabel(type) {
 }
 
 async function loadLintResults() {
+  if (lintRunning.value) return // 并发防护
   try {
-    // 自动运行 lint，避免显示过期数据
     await runLint()
   } catch (e) {
-    console.error('Failed to load lint results:', e)
+    props.notify?.('Lint 失败: ' + e.message, 'error')
   }
 }
 
@@ -1436,7 +1551,13 @@ async function submitTextIngest() {
 }
 async function loadGraph() {
   try {
-    graphData.value = await request('/api/wiki/graph')
+    const raw = await request('/api/wiki/graph')
+    // 过滤低权重边，避免同软件/同来源的弱关联边淹没图谱
+    const MIN_EDGE_WEIGHT = 3.0
+    graphData.value = {
+      ...raw,
+      links: (raw.links || []).filter(l => (l.weight || 0) >= MIN_EDGE_WEIGHT)
+    }
     await nextTick()
     await new Promise(r => setTimeout(r, 100))
     initGraph()

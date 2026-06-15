@@ -240,7 +240,15 @@ public class IngestTaskService {
                     } else if ("pagePlan".equals(type)) {
                         progressHelper.updatePagePlan(taskId, json);
                     }
-                });
+                },
+                () -> isTaskPaused(taskId));
+
+        // PAUSED 状态：保留已有进度，不标记完成
+        if ("PAUSED".equals(result.getStatus())) {
+            log.info("Ingest task {} paused", taskId);
+            return;
+        }
+
         persistQualityReport(taskId, result);
         if ("FAILED".equals(result.getStatus())) {
             markSourceNotIngested(source);
@@ -308,6 +316,188 @@ public class IngestTaskService {
 
     public void insertTask(IngestTask task) {
         taskMapper.insert(task);
+    }
+
+    /**
+     * 重编译过度压缩页面：只重新生成 quality_report.overCompressedPages 中的页面。
+     * 复用已持久化的 section_facts 和 page_plan，跳过最耗时的步骤。
+     */
+    @Async
+    public void recompileCompressed(Long taskId) {
+        IngestTask task = taskMapper.findById(taskId);
+        if (task == null) return;
+
+        WikiSource source = sourceMapper.findById(task.getSourceId());
+        if (source == null) {
+            taskMapper.updateStatus(taskId, "FAILED", "源文档不存在");
+            return;
+        }
+
+        compileSemaphore.acquireUninterruptibly();
+        try {
+            progressHelper.updateProgress(taskId, 5, "正在准备重编译过度压缩页面...", 0);
+
+            IngestAgent.IngestResult result = ingestAgent.recompileCompressedPages(
+                    source, task.getOperatorId(),
+                    task.getQualityReport(), task.getSectionFacts(), task.getPagePlan(),
+                    (progress, step, completedUnits, totalUnits) -> {
+                        if (totalUnits > 0) {
+                            progressHelper.updateProgressWithTotal(taskId, progress, step, completedUnits, totalUnits);
+                        } else {
+                            progressHelper.updateProgress(taskId, progress, step, completedUnits);
+                        }
+                    });
+
+            if ("FAILED".equals(result.getStatus())) {
+                taskMapper.updateStatus(taskId, "FAILED", result.getErrorMessage());
+                return;
+            }
+            if ("SKIPPED".equals(result.getStatus())) {
+                progressHelper.updateProgress(taskId, safeProgress(task), result.getErrorMessage(), safeCompletedChunks(task));
+                taskMapper.updateStatus(taskId, restoreStatus(task), result.getErrorMessage());
+                return;
+            }
+
+            progressHelper.updateProgress(taskId, 95, "正在更新质量报告...", 0);
+            persistQualityReport(taskId, result);
+            taskMapper.updateResult(taskId, result.getPagesCreated(), result.getPagesUpdated());
+            if ("PARTIAL".equals(result.getStatus())) {
+                taskMapper.updateStatus(taskId, "PARTIAL", failureMessage(result, ErrorMessages.WIKI_QUALITY_GATE_PARTIAL));
+            }
+            markSourceCompiled(source, result);
+            log.info("Recompile compressed task {} completed: status={}, created={}, updated={}",
+                    taskId, result.getStatus(), result.getPagesCreated(), result.getPagesUpdated());
+        } catch (Exception e) {
+            log.error("Recompile compressed task {} failed: {}", taskId, e.getMessage(), e);
+            taskMapper.updateStatus(taskId, "FAILED", ErrorMessages.WIKI_RECOMPILE_ERROR);
+        } finally {
+            compileSemaphore.release();
+        }
+    }
+
+    /**
+     * 重编译缺失章节：只重新生成 quality_report.missingSections 对应的页面。
+     * 复用已持久化的 section_facts 和 page_plan，跳过最耗时的步骤。
+     */
+    @Async
+    public void recompileMissing(Long taskId) {
+        IngestTask task = taskMapper.findById(taskId);
+        if (task == null) return;
+
+        WikiSource source = sourceMapper.findById(task.getSourceId());
+        if (source == null) {
+            taskMapper.updateStatus(taskId, "FAILED", "源文档不存在");
+            return;
+        }
+
+        compileSemaphore.acquireUninterruptibly();
+        try {
+            progressHelper.updateProgress(taskId, 5, "正在准备重编译缺失章节...", 0);
+
+            IngestAgent.IngestResult result = ingestAgent.recompileMissingSections(
+                    source, task.getOperatorId(),
+                    task.getQualityReport(), task.getSectionFacts(), task.getPagePlan(),
+                    (progress, step, completedUnits, totalUnits) -> {
+                        if (totalUnits > 0) {
+                            progressHelper.updateProgressWithTotal(taskId, progress, step, completedUnits, totalUnits);
+                        } else {
+                            progressHelper.updateProgress(taskId, progress, step, completedUnits);
+                        }
+                    });
+
+            if ("FAILED".equals(result.getStatus())) {
+                taskMapper.updateStatus(taskId, "FAILED", result.getErrorMessage());
+                return;
+            }
+            if ("SKIPPED".equals(result.getStatus())) {
+                progressHelper.updateProgress(taskId, safeProgress(task), result.getErrorMessage(), safeCompletedChunks(task));
+                taskMapper.updateStatus(taskId, restoreStatus(task), result.getErrorMessage());
+                return;
+            }
+
+            progressHelper.updateProgress(taskId, 95, "正在更新质量报告...", 0);
+            persistQualityReport(taskId, result);
+            taskMapper.updateResult(taskId, result.getPagesCreated(), result.getPagesUpdated());
+            if ("PARTIAL".equals(result.getStatus())) {
+                taskMapper.updateStatus(taskId, "PARTIAL", failureMessage(result, ErrorMessages.WIKI_QUALITY_GATE_PARTIAL));
+            }
+            markSourceCompiled(source, result);
+            log.info("Recompile missing task {} completed: status={}, created={}, updated={}",
+                    taskId, result.getStatus(), result.getPagesCreated(), result.getPagesUpdated());
+        } catch (Exception e) {
+            log.error("Recompile missing task {} failed: {}", taskId, e.getMessage(), e);
+            taskMapper.updateStatus(taskId, "FAILED", ErrorMessages.WIKI_RECOMPILE_ERROR);
+        } finally {
+            compileSemaphore.release();
+        }
+    }
+
+    /**
+     * 暂停任务：更新状态为 PAUSED，IngestAgent 在批次间检查此状态后自动暂停。
+     */
+    public void pauseTask(Long taskId) {
+        IngestTask task = taskMapper.findById(taskId);
+        if (task == null || !"PROCESSING".equals(task.getStatus())) {
+            throw new com.middleware.manager.exception.BusinessException(
+                    com.middleware.manager.constant.ErrorCode.PARAM_INVALID, "只能暂停正在执行的任务");
+        }
+        taskMapper.updateStatus(taskId, "PAUSED", null);
+        log.info("Task {} paused", taskId);
+    }
+
+    /**
+     * 继续任务：从暂停点继续执行，复用已有的 section_facts 和 page_plan。
+     */
+    @Async
+    public void resumeTask(Long taskId) {
+        IngestTask task = taskMapper.findById(taskId);
+        if (task == null || !"PAUSED".equals(task.getStatus())) {
+            return;
+        }
+
+        WikiSource source = sourceMapper.findById(task.getSourceId());
+        if (source == null) {
+            taskMapper.updateStatus(taskId, "FAILED", "源文档不存在");
+            return;
+        }
+
+        compileSemaphore.acquireUninterruptibly();
+        try {
+            // 恢复为 PROCESSING 状态
+            taskMapper.updateStatus(taskId, "PROCESSING", null);
+            progressHelper.updateProgress(taskId, task.getProgress(), "正在继续执行...", task.getCompletedChunks());
+
+            // 重新触发编译（会从头开始，但复用已有的 section_facts）
+            executePlannedTask(taskId, task, source);
+        } catch (Exception e) {
+            log.error("Resume task {} failed: {}", taskId, e.getMessage(), e);
+            taskMapper.updateStatus(taskId, "FAILED", "继续执行失败");
+        } finally {
+            compileSemaphore.release();
+        }
+    }
+
+    /**
+     * 检查任务是否已暂停（供 IngestAgent 在批次间调用）。
+     */
+    public boolean isTaskPaused(Long taskId) {
+        IngestTask task = taskMapper.findById(taskId);
+        return task != null && "PAUSED".equals(task.getStatus());
+    }
+
+    private int safeProgress(IngestTask task) {
+        return task != null && task.getProgress() != null ? task.getProgress() : 0;
+    }
+
+    private int safeCompletedChunks(IngestTask task) {
+        return task != null && task.getCompletedChunks() != null ? task.getCompletedChunks() : 0;
+    }
+
+    private String restoreStatus(IngestTask task) {
+        if (task == null || task.getStatus() == null || "PROCESSING".equals(task.getStatus())) {
+            return "PARTIAL";
+        }
+        return task.getStatus();
     }
 
     private DocumentLoader resolveLoader(String fileName) {

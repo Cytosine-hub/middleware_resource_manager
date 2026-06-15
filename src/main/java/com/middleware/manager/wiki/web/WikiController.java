@@ -8,7 +8,6 @@ import com.middleware.manager.exception.BusinessException;
 import com.middleware.manager.knowledge.loader.DocumentLoader;
 import com.middleware.manager.repository.AdminAccountMapper;
 import org.springframework.beans.factory.annotation.Autowired;
-import com.middleware.manager.knowledge.embedding.EmbeddingService;
 import com.middleware.manager.wiki.service.WikiSearchService;
 import com.middleware.manager.knowledge.store.VectorStore;
 import com.middleware.manager.wiki.repository.WikiPagePermissionMapper;
@@ -61,7 +60,6 @@ public class WikiController {
     private final AdminAccountMapper adminAccountMapper;
     private final WikiAuditLogMapper auditLogMapper;
     private final LintAgent lintAgent;
-    private final EmbeddingService embeddingService;
     private final VectorStore vectorStore;
 
     @Autowired
@@ -91,7 +89,6 @@ public class WikiController {
                           IngestTaskService taskService,
                           IngestTaskMapper taskMapper,
                           WikiIngestLogMapper ingestLogMapper,
-                          EmbeddingService embeddingService,
                           VectorStore vectorStore) {
         this.pageMapper = pageMapper;
         this.linkMapper = linkMapper;
@@ -107,7 +104,6 @@ public class WikiController {
         this.lintResultMapper = lintResultMapper;
         this.wikiPermissionService = wikiPermissionService;
         this.pagePermissionMapper = pagePermissionMapper;
-        this.embeddingService = embeddingService;
         this.vectorStore = vectorStore;
         this.taskService = taskService;
         this.taskMapper = taskMapper;
@@ -164,36 +160,18 @@ public class WikiController {
 
     @PostMapping("/pages/reindex")
     public ResponseEntity<Map<String, Object>> reindexPages() {
-        List<WikiPage> pages = pageMapper.findAllExcludingContent();
+        List<WikiSource> sources = sourceMapper.findByIngested(true);
         int success = 0, failed = 0;
-        for (WikiPage page : pages) {
+        for (WikiSource source : sources) {
             try {
-                String vectorId = "wiki_" + page.getId();
-                // 先删除旧向量
-                try {
-                    vectorStore.delete(vectorId);
-                } catch (Exception ignored) {}
-                // 插入新向量
-                String text = page.getTitle() + "\n" + (page.getSummary() != null ? page.getSummary() : "");
-                float[] vector = embeddingService.embed(text);
-                Map<String, String> metadata = new HashMap<>();
-                metadata.put("source", "wiki");
-                metadata.put("pageId", String.valueOf(page.getId()));
-                metadata.put("title", page.getTitle());
-                metadata.put("pageType", page.getPageType());
-                if (page.getCategory() != null) metadata.put("category", page.getCategory());
-                if (page.getSoftware() != null) metadata.put("software", page.getSoftware());
-                if (page.getStatus() != null) metadata.put("status", page.getStatus());
-                metadata.put("content", page.getSummary() != null ? page.getSummary() : page.getTitle());
-                metadata.put("sourceTitle", page.getTitle());
-                vectorStore.add(vectorId, vector, metadata);
+                ingestAgent.vectorizeSource(source);
                 success++;
             } catch (Exception e) {
-                log.warn("Failed to vectorize page {}: {}", page.getId(), e.getMessage());
+                log.warn("Failed to vectorize source {}: {}", source.getId(), e.getMessage());
                 failed++;
             }
         }
-        return ResponseEntity.ok(Map.of("total", pages.size(), "success", success, "failed", failed));
+        return ResponseEntity.ok(Map.of("total", sources.size(), "success", success, "failed", failed));
     }
 
     @PutMapping("/pages-batch-category")
@@ -327,6 +305,86 @@ public class WikiController {
     public ResponseEntity<IngestTask> getTask(@PathVariable Long id) {
         IngestTask task = taskService.getTask(id);
         return task != null ? ResponseEntity.ok(task) : ResponseEntity.notFound().build();
+    }
+
+    @PostMapping("/ingest/tasks/{id}/recompile-compressed")
+    public ResponseEntity<Map<String, Object>> recompileCompressed(@PathVariable Long id,
+                                                                    Authentication authentication,
+                                                                    HttpServletRequest request) {
+        try {
+            if (!canAdministerTask(authentication, id)) {
+                recordAudit("ACCESS_DENIED", "TASK", id, authentication, request,
+                        taskAuditDetail("WIKI_RECOMPILE_COMPRESSED", id));
+                return ResponseEntity.status(403).build();
+            }
+            taskService.recompileCompressed(id);
+            recordAudit("WIKI_RECOMPILE_COMPRESSED", "TASK", id, authentication, request,
+                    taskAuditDetail(null, id));
+            return ResponseEntity.ok(Map.of("status", "started", "taskId", id));
+        } catch (Exception e) {
+            log.error("Recompile compressed failed for task {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PostMapping("/ingest/tasks/{id}/recompile-missing")
+    public ResponseEntity<Map<String, Object>> recompileMissing(@PathVariable Long id,
+                                                                 Authentication authentication,
+                                                                 HttpServletRequest request) {
+        try {
+            if (!canAdministerTask(authentication, id)) {
+                recordAudit("ACCESS_DENIED", "TASK", id, authentication, request,
+                        taskAuditDetail("WIKI_RECOMPILE_MISSING", id));
+                return ResponseEntity.status(403).build();
+            }
+            taskService.recompileMissing(id);
+            recordAudit("WIKI_RECOMPILE_MISSING", "TASK", id, authentication, request,
+                    taskAuditDetail(null, id));
+            return ResponseEntity.ok(Map.of("status", "started", "taskId", id));
+        } catch (Exception e) {
+            log.error("Recompile missing failed for task {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PostMapping("/ingest/tasks/{id}/pause")
+    public ResponseEntity<Map<String, Object>> pauseTask(@PathVariable Long id,
+                                                          Authentication authentication,
+                                                          HttpServletRequest request) {
+        try {
+            if (!canAdministerTask(authentication, id)) {
+                recordAudit("ACCESS_DENIED", "TASK", id, authentication, request,
+                        taskAuditDetail("WIKI_PAUSE_TASK", id));
+                return ResponseEntity.status(403).build();
+            }
+            taskService.pauseTask(id);
+            recordAudit("WIKI_PAUSE_TASK", "TASK", id, authentication, request,
+                    taskAuditDetail(null, id));
+            return ResponseEntity.ok(Map.of("status", "paused", "taskId", id));
+        } catch (Exception e) {
+            log.error("Pause task {} failed: {}", id, e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PostMapping("/ingest/tasks/{id}/resume")
+    public ResponseEntity<Map<String, Object>> resumeTask(@PathVariable Long id,
+                                                           Authentication authentication,
+                                                           HttpServletRequest request) {
+        try {
+            if (!canAdministerTask(authentication, id)) {
+                recordAudit("ACCESS_DENIED", "TASK", id, authentication, request,
+                        taskAuditDetail("WIKI_RESUME_TASK", id));
+                return ResponseEntity.status(403).build();
+            }
+            taskService.resumeTask(id);
+            recordAudit("WIKI_RESUME_TASK", "TASK", id, authentication, request,
+                    taskAuditDetail(null, id));
+            return ResponseEntity.ok(Map.of("status", "resumed", "taskId", id));
+        } catch (Exception e) {
+            log.error("Resume task {} failed: {}", id, e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     @GetMapping("/export")
@@ -595,6 +653,27 @@ public class WikiController {
         if (category == null || category.isBlank()) return false;
         String managedCategory = wikiPermissionService.getManagedCategory(authentication);
         return category.equals(managedCategory);
+    }
+
+    private boolean canAdministerTask(Authentication authentication, Long taskId) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+        IngestTask task = taskMapper.findById(taskId);
+        if (task == null) {
+            return false;
+        }
+        WikiSource source = sourceMapper.findById(task.getSourceId());
+        return source != null && canAdministerWiki(authentication, source.getCategory());
+    }
+
+    private String taskAuditDetail(String action, Long taskId) {
+        JsonObject detail = new JsonObject();
+        if (action != null) {
+            detail.addProperty("action", action);
+        }
+        detail.addProperty("taskId", taskId);
+        return gson.toJson(detail);
     }
 
     private void recordAudit(String action, String targetType, Long targetId,

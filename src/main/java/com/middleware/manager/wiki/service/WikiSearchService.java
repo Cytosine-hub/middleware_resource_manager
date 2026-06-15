@@ -1,12 +1,17 @@
 package com.middleware.manager.wiki.service;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.middleware.manager.knowledge.embedding.EmbeddingService;
 import com.middleware.manager.knowledge.store.VectorStore;
 import com.middleware.manager.knowledge.store.VectorSearchFilter;
 import com.middleware.manager.wiki.entity.WikiLink;
 import com.middleware.manager.wiki.entity.WikiPage;
+import com.middleware.manager.wiki.entity.WikiSource;
 import com.middleware.manager.wiki.repository.WikiLinkMapper;
 import com.middleware.manager.wiki.repository.WikiPageMapper;
+import com.middleware.manager.wiki.repository.WikiSourceMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
@@ -27,6 +32,8 @@ public class WikiSearchService {
 
     private final WikiPageMapper pageMapper;
     private final WikiLinkMapper linkMapper;
+    private final WikiSourceMapper sourceMapper;
+    private final Gson gson = new Gson();
 
     @Autowired(required = false)
     private VectorStore vectorStore;
@@ -54,9 +61,10 @@ public class WikiSearchService {
 
     private ExecutorService searchExecutor;
 
-    public WikiSearchService(WikiPageMapper pageMapper, WikiLinkMapper linkMapper) {
+    public WikiSearchService(WikiPageMapper pageMapper, WikiLinkMapper linkMapper, WikiSourceMapper sourceMapper) {
         this.pageMapper = pageMapper;
         this.linkMapper = linkMapper;
+        this.sourceMapper = sourceMapper;
     }
 
     @PostConstruct
@@ -296,19 +304,17 @@ public class WikiSearchService {
             try {
                 float[] queryVec = embeddingService.embed(query);
                 log.debug("Vector search (attempt {}): query='{}', dim={}, topK={}", attempt, query, queryVec.length, topK * 2);
-                VectorSearchFilter filter = VectorSearchFilter.none().addSource("wiki");
+                VectorSearchFilter filter = VectorSearchFilter.none().addSource("wiki_source");
                 List<VectorStore.VectorSearchResult> vecResults = vectorStore.search(queryVec, topK * 2, filter);
                 log.debug("Vector search returned {} results", vecResults.size());
                 List<WikiPage> pages = new ArrayList<>();
+                Set<Long> added = new HashSet<>();
                 for (VectorStore.VectorSearchResult vr : vecResults) {
                     if (vr.getScore() < VECTOR_SCORE_THRESHOLD) break;
                     Map<String, String> meta = vr.getMetadata();
-                    if (meta != null && "wiki".equals(meta.get("source"))) {
-                        String pageIdStr = meta.get("pageId");
-                        if (pageIdStr != null) {
-                            Long pageId = Long.parseLong(pageIdStr);
-                            WikiPage page = pageMapper.findById(pageId);
-                            if (page != null && "ACTIVE".equals(page.getStatus())) {
+                    if (meta != null && "wiki_source".equals(meta.get("source"))) {
+                        for (WikiPage page : pagesForSourceHit(meta)) {
+                            if (page.getId() != null && added.add(page.getId())) {
                                 pages.add(page);
                             }
                         }
@@ -325,5 +331,89 @@ public class WikiSearchService {
             }
         }
         return Collections.emptyList();
+    }
+
+    private List<WikiPage> pagesForSourceHit(Map<String, String> metadata) {
+        String sourceIdValue = metadata.get("sourceId");
+        if (sourceIdValue == null || sourceIdValue.isBlank()) {
+            return Collections.emptyList();
+        }
+        Long sourceId;
+        try {
+            sourceId = Long.parseLong(sourceIdValue);
+        } catch (NumberFormatException e) {
+            return Collections.emptyList();
+        }
+        WikiSource source = sourceMapper.findById(sourceId);
+        if (source == null) {
+            return Collections.emptyList();
+        }
+        List<WikiPage> candidates = pageMapper.findByCategoryOrSoftware(source.getCategory(), source.getSoftware(), 100);
+        List<WikiPage> matches = new ArrayList<>();
+        String sectionId = metadata.get("sectionId");
+        for (WikiPage candidate : candidates) {
+            if (!"ACTIVE".equals(candidate.getStatus()) || !sourceRefsMatch(candidate.getSourceRefs(), sourceId, sectionId)) {
+                continue;
+            }
+            matches.add(copyPageWithSourceSnippet(candidate, metadata));
+            if (matches.size() >= 3) {
+                break;
+            }
+        }
+        return matches;
+    }
+
+    private boolean sourceRefsMatch(String sourceRefsJson, Long sourceId, String sectionId) {
+        if (sourceRefsJson == null || sourceRefsJson.isBlank()) {
+            return false;
+        }
+        try {
+            JsonObject refs = gson.fromJson(sourceRefsJson, JsonObject.class);
+            if (refs == null || !refs.has("source_id") || refs.get("source_id").isJsonNull()
+                    || !sourceId.equals(refs.get("source_id").getAsLong())) {
+                return false;
+            }
+            if (sectionId == null || sectionId.isBlank() || !refs.has("sections") || !refs.get("sections").isJsonArray()) {
+                return true;
+            }
+            for (JsonElement sectionElement : refs.getAsJsonArray("sections")) {
+                if (!sectionElement.isJsonObject()) {
+                    continue;
+                }
+                JsonObject section = sectionElement.getAsJsonObject();
+                if (section.has("section_id") && sectionId.equals(section.get("section_id").getAsString())) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private WikiPage copyPageWithSourceSnippet(WikiPage page, Map<String, String> metadata) {
+        WikiPage copy = new WikiPage();
+        copy.setId(page.getId());
+        copy.setTitle(page.getTitle());
+        copy.setPageType(page.getPageType());
+        copy.setCategory(page.getCategory());
+        copy.setSoftware(page.getSoftware());
+        copy.setVersion(page.getVersion());
+        copy.setCanonicalTitle(page.getCanonicalTitle());
+        copy.setAliasTitles(page.getAliasTitles());
+        copy.setSummary(page.getSummary());
+        copy.setSourceRefs(page.getSourceRefs());
+        copy.setStatus(page.getStatus());
+        copy.setCompiledBy(page.getCompiledBy());
+        copy.setCompiledAt(page.getCompiledAt());
+        copy.setCreatedAt(page.getCreatedAt());
+        copy.setUpdatedAt(page.getUpdatedAt());
+        String snippet = metadata.get("content");
+        if (snippet != null && !snippet.isBlank()) {
+            copy.setContent("来源文档片段：" + metadata.getOrDefault("sourceTitle", "") + "\n\n" + snippet);
+        } else {
+            copy.setContent(page.getContent());
+        }
+        return copy;
     }
 }

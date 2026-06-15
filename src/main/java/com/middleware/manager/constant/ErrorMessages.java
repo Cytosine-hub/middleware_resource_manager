@@ -97,6 +97,14 @@ public final class ErrorMessages {
     public static final String WIKI_PAGE_GENERATION_FAILED = "页面生成失败";
     public static final String WIKI_QUALITY_GATE_FAILED = "质量门禁失败";
     public static final String WIKI_QUALITY_GATE_PARTIAL = "质量门禁部分通过";
+    public static final String WIKI_NO_COMPRESSED_PAGES = "无过度压缩页面";
+    public static final String WIKI_NO_MISSING_SECTIONS = "无缺失章节";
+    public static final String WIKI_MISSING_ARTIFACTS = "缺少 section_facts 或 page_plan";
+    public static final String WIKI_NO_MATCHING_COMPRESSED_PLANS = "page_plan 中未找到匹配的过度压缩页面";
+    public static final String WIKI_NO_MATCHING_MISSING_PLANS = "page_plan 中未找到覆盖缺失章节的页面";
+    public static final String WIKI_RECOMPILE_FAILED = "重新生成失败";
+    public static final String WIKI_RECOMPILE_ERROR = "重编译失败";
+    public static final String WIKI_TASK_PAUSED = "任务已暂停";
 
     // 基础设施
     public static final String SHA256_UNAVAILABLE = "SHA-256 算法不可用";
