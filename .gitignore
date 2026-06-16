@@ -21,3 +21,11 @@
 /mysql/
 /.m2/
 /logs/
+/.codegraph/
+/.codex/
+*.png
+*.jpg
+*.xlsx
+/frontend/.claude/
+/docs/.DS_Store
+/src/.DS_Store
