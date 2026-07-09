@@ -47,10 +47,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers("/error").permitAll()
-                        // 图片文件公开访问
-                        .requestMatchers("/files/images/**").permitAll()
-                        // 文件下载：需登录
-                        .requestMatchers("/files/**").authenticated()
+                        // 文件下载与图片：对所有人公开，无需登录
+                        .requestMatchers("/files/**").permitAll()
                         // 论坛：个人中心需认证，其余读公开，写需登录
                         .requestMatchers("/api/forum/my-posts").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/forum/**").permitAll()

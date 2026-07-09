@@ -23,7 +23,7 @@
           <div><dt>文件大小</dt><dd>{{ formatBytes(selectedRelease.fileSize) }}</dd></div>
           <div><dt>下载次数</dt><dd>{{ selectedRelease.downloadCount }}</dd></div>
         </dl>
-        <a class="primary-link" href="#" @click.prevent="handleDownload(selectedRelease.downloadUrl, selectedRelease.originalFileName)">下载文件</a>
+        <a class="primary-link" :href="selectedRelease.downloadUrl" :download="selectedRelease.originalFileName">下载文件</a>
       </article>
     </div>
 
@@ -40,7 +40,7 @@
               <span>{{ formatBytes(release.fileSize) }}</span>
               <div class="card-actions">
                 <button class="ghost" @click="openDetail(release.downloadToken)">详情</button>
-                <a class="download-button" href="#" @click.prevent="handleDownload(release.downloadUrl, release.originalFileName)">下载</a>
+                <a class="download-button" :href="release.downloadUrl" :download="release.originalFileName">下载</a>
               </div>
             </div>
           </article>
@@ -77,22 +77,6 @@ async function openDetail(token) {
 function changePage(p) {
   filters.page = p
   loadData()
-}
-
-async function handleDownload(url, fileName) {
-  try {
-    const res = await fetch(url)
-    if (!res.ok) throw new Error('下载失败')
-    const blob = await res.blob()
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = fileName || 'download'
-    a.click()
-    URL.revokeObjectURL(a.href)
-  } catch {
-    // fallback: 直接打开链接
-    window.open(url, '_blank')
-  }
 }
 
 onMounted(loadData)
