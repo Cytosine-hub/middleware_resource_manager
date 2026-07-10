@@ -1,3 +1,65 @@
+# Release v1.4.1-20260710
+
+**日期**: 2026-07-10
+**分支**: feature/ops-agent
+**发布范围**: frontend
+**类型**: 增量发布
+
+## 自 v1.4.0-20260709 以来的变更
+
+- e8ce74d 优化下载中心展示
+
+## 本次更新说明
+
+- **下载中心展示优化（frontend）**：下载卡片标题显示软件名称和版本标签，便于区分同一软件的多个版本。
+- **下载中心分页修复（frontend）**：调整下载页布局，分页固定在列表区域右下方，改善 Windows 下显示位置。
+- **顶部标题统一（frontend）**：未登录和登录状态均按当前页面显示标题，例如 `运营集成中心 · 下载中心`；首页显示 `运营集成中心`。
+
+## 变更记录检查
+
+以下变更已包含在本次发布中：
+- 无 DB/CONFIG 变更记录。
+
+## 文件清单
+
+| 文件 | 大小 |
+|------|------|
+| frontend/ | 3.4M |
+
+---
+
+# Release v1.4.0-20260709
+
+**日期**: 2026-07-09
+**分支**: feature/ops-agent
+**发布范围**: frontend + backend + db
+**类型**: 增量发布
+
+## 自 v1.3.0-20260612 以来的变更
+
+- 6baaf54 fix: 文件下载开放公开访问，修复生产环境下载 401
+- 7875910 chore: remove unnecessary files and update .gitignore
+- 7385c38 feat: wiki quality optimization v2 - recompile, pause/resume, graph edge limit
+- c964e06 fix: auto-run lint when clicking Lint tab instead of loading stale results
+- 3e8a06e fix: add api_audit_log table to v1.3.0 migration
+
+## 本次更新说明
+
+- **文件下载 401 修复（backend + frontend）**：`/files/**` 由需登录改为公开访问；下载改用普通 `<a href download>` 直连，大文件流式下载不占内存。**需重新部署后端 jar。**
+- **Wiki 质量优化 v2（backend + frontend）**：重编译、导入任务暂停/恢复、图谱边数限制等。
+- **DB 增量**：wiki_ingest_tasks 状态枚举新增 PAUSED；补充 api_audit_log 审计表（均幂等）。
+
+## 文件清单
+
+| 文件 | 大小 |
+|------|------|
+| backend/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar | 107M |
+| backend/application.yml.example | 4K |
+| frontend/ | 3.4M |
+| db/upgrade-v1.4.0-20260709.sql | 4K |
+
+---
+
 # Release v1.2.1-20260611
 
 **日期**: 2026-06-11
