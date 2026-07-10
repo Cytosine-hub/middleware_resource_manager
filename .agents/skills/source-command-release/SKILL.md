@@ -80,8 +80,12 @@ sed -n '/<!-- CHANGES_START -->/,/<!-- CHANGES_END -->/p' .claude/changes.md | g
 
 ```bash
 cd /Users/zhushihao/Projects/middleware_resource_manager
-# 根据发布范围删除对应目录，打包前统一重建
-rm -rf release/backend release/frontend release/db release/docs
+# 只删除本次发布范围内需要重建的目录，不要删除或重建未发布模块
+# frontend 发布：rm -rf release/frontend
+# backend 发布：rm -rf release/backend
+# db 发布：rm -rf release/db
+# docs 发布：rm -rf release/docs
+# full 发布：rm -rf release/backend release/frontend release/db release/docs
 ```
 
 ## 第六步：按需构建
@@ -181,12 +185,30 @@ cp /Users/zhushihao/Projects/middleware_resource_manager/docs/production-deploy.
 
 ## 第八步：打包
 
+**只打包本次发布范围内的模块**，并始终包含 `release.md`。禁止在 frontend-only、backend-only 等增量发布包中混入未更新的旧目录。
+
 ```bash
 cd /Users/zhushihao/Projects/middleware_resource_manager
-tar -czf release/middleware-resource-manager-<version>.tar.gz \
-  -C release \
-  backend frontend db docs release.md
+# frontend-only 示例
+tar -czf release/middleware-resource-manager-<version>.tar.gz -C release frontend release.md
+
+# backend + frontend 示例
+tar -czf release/middleware-resource-manager-<version>.tar.gz -C release backend frontend release.md
+
+# full 示例
+tar -czf release/middleware-resource-manager-<version>.tar.gz -C release backend frontend db docs release.md
 ```
+
+打包后必须检查 tar 内容，确认没有包含发布范围外的模块：
+
+```bash
+tar -tzf release/middleware-resource-manager-<version>.tar.gz | sed -n '1,80p'
+```
+
+如果发布范围是 `frontend`，tar 内容只能包含：
+- `frontend/`
+- `release.md`
+- 可选的变更记录备份文件（仅当明确需要随包交付时）
 
 ## 第九步：备份并重置变更记录
 
@@ -227,6 +249,6 @@ EOF
 - tar 包也在 .gitignore 中
 - 增量发布时只更新有变更的部分
 - nginx.conf 首次发布时生成，后续不变则不更新
-- 打包时 tar 包含 release 目录下所有子目录，即使某些目录未更新
+- 打包时 tar 包只包含本次发布范围内的目录和 `release.md`；不要包含未更新的旧目录
 - DB 增量脚本使用 `CREATE TABLE IF NOT EXISTS` / `INSERT IGNORE` 保证重复执行安全
 - **变更记录是发布安全网**：如果变更记录中有遗漏，必须在发布前补充或告知用户
