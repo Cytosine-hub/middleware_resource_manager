@@ -27,12 +27,16 @@ src/main/java/com/middleware/manager/
   web/controller/    Thymeleaf 视图控制器（/login、/admin/** 等 SSR 页）
   knowledge/         独立的知识库 + AI 排查模块，用 JdbcTemplate（非 JPA），勿与上面混用
     config client loader splitter embedding store retriever entity agent repository service web
+  module/            岗位模块（编码独立，见 §4b）。module/common：岗位统一契约 PortalRole +
+    common/command/  可复用的「常用命令」通用能力（CommonCommand 实体/仓库/服务/控制器，按 category 隔离）
 src/main/resources/
   application.yml    唯一配置文件（DB / langchain4j / app.ai）
   db/knowledge_ddl.sql  知识库表需手动执行的 DDL
 frontend/src/
   App.vue            SPA 外壳：hash 路由（route.name 分支）、部分旧页面内联于此
   components/*.vue    抽出的功能面板（ForumPostList、KnowledgePanel… 新功能进这里，见 §4）
+                      公共/岗位复用组件：RoleNav（左侧岗位导航）、CommonCommandPanel（常用命令）、
+                      RoleModulePanel（岗位模块页，五岗位共用）——改一处全岗位一致（见 §4b）
   api.js             fetch 封装（HTTP Basic Auth，前端 SHA-256 处理密码）
 ```
 
@@ -86,6 +90,31 @@ public class AdminSoftwareTypeApiController {
 `KnowledgePanel.vue`：`props` 收 `:auth`/`:notify`，`$emit` 抛事件），然后在 `App.vue` 里**只加一处**：
 一个 `route.name === 'xxx'` 分支挂载 `<XxxPanel>`。**不要把大段新页面内联进 App.vue**——多个需求
 同时改 App.vue 必冲突（这正是门户独立分支要避免的）。
+
+## 4b. 门户结构与岗位模块（页面结构优化，Issue #5）
+
+门户首页按**布局**划分为两大区域（靠分组/间距/卡片区分，不写生硬的分区标题）：
+
+- **公共区域**：软件下载、标准发布、infra 论坛。三个模块页面统一在**左侧提供岗位导航**
+  （复用 `RoleNav.vue`），按岗位（category）快速筛选；无数据岗位展示友好空状态。
+- **岗位专属区域**：中间件、数据库、主机、网络、网络安全五大岗位入口，点击进入各自岗位模块页。
+
+**① 岗位模块编码独立。** 五大岗位在编码层面各自独立、可单独维护，不与其他岗位业务代码强耦合：
+- 后端独立包：`com.middleware.manager.module.<角色>/`（共享契约放 `module/common/`）。
+- 前端独立组件：岗位页面用独立组件挂载（参 §4 前端配方），只在 `App.vue` 加一处路由分支。
+- **接口可配置**：岗位模块既可**连接自己的独立后端服务**，也可使用**门户后端**（`/api/module/**`）；
+  单个岗位模块的接口配置变化**不得影响**其他岗位模块访问。
+
+**② 通用能力代码复用 + UI 一致。** 不同岗位的通用需求（如**常用命令**、列表筛选、详情查看、复制、
+空状态、错误提示）**必须复用公共组件/公共方法/共享模块**，禁止在各岗位重复实现核心逻辑；复用同一套
+组件天然保证 **UI 风格一致**。公共组件改一处，相关岗位页面表现一致。
+- 岗位统一契约：`module/common/PortalRole`（id/label/category，网络安全→数据分类「安全」），
+  前端首页入口与各公共模块左侧岗位导航共用同一数据源，保证顺序、标识、名称一致。
+- 常用命令：`module/common/command/`（`CommonCommand*`）是**可复用的按 category 隔离**的通用能力，
+  各岗位共用同一 Service/接口/组件；当前门户「常用命令」已归入**中间件**岗位模块（category=中间件）。
+
+**③ 岗位数据范围沿用核心 category 隔离（见 §3）。** 五大岗位 category 固定为
+`中间件/数据库/主机/网络/安全`；「网络安全」为展示名，数据范围用既有「安全」分类。
 
 ## 5. 命名与约定
 

@@ -61,6 +61,26 @@ public class StandardDocumentService {
         return docs;
     }
 
+    /** 公开标准文档列表，支持按岗位分类筛选（category 为空表示全部岗位）。 */
+    public List<StandardDocument> listPublishedStandards(String category) {
+        return filterByCategory(listPublishedStandards(), category);
+    }
+
+    /** 全部公开文档列表，支持按岗位分类筛选（category 为空表示全部岗位）。 */
+    public List<StandardDocument> listAllPublic(String category) {
+        return filterByCategory(listAllPublic(), category);
+    }
+
+    private List<StandardDocument> filterByCategory(List<StandardDocument> documents, String category) {
+        if (category == null || category.trim().isEmpty()) {
+            return documents;
+        }
+        String target = category.trim();
+        return documents.stream()
+                .filter(doc -> target.equals(doc.getCategory()))
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     public List<StandardDocument> listPublishedRelatedDocuments(Long standardDocumentId) {
         return repository.findByRelatedStandardDocumentIdAndStatusOrderByPublishedAtDescUpdatedAtDesc(standardDocumentId, "PUBLISHED");
     }

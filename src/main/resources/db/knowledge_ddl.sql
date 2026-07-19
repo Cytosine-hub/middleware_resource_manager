@@ -65,3 +65,31 @@ DELETE FROM standard_documents WHERE document_type = 'STANDARD';
 -- ALTER TABLE parameter_standards ADD COLUMN pending_review_record_id BIGINT COMMENT '待审核记录ID';
 -- ALTER TABLE parameter_standards ADD COLUMN previous_content TEXT COMMENT '修改前内容备份';
 -- ALTER TABLE parameter_standards ADD COLUMN version VARCHAR(20) COMMENT '版本号';
+
+-- ========== 门户页面结构优化（Issue #5）==========
+-- 常用命令：按岗位 category 隔离的通用能力，中间件岗位承接原门户「常用命令」
+CREATE TABLE IF NOT EXISTS common_commands (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    category VARCHAR(40) NOT NULL COMMENT '岗位分类：中间件/数据库/主机/网络/安全',
+    title VARCHAR(120) NOT NULL COMMENT '命令标题',
+    command VARCHAR(2000) NOT NULL COMMENT '命令内容',
+    description VARCHAR(500) COMMENT '说明',
+    tag VARCHAR(60) COMMENT '标签',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_common_command_category (category)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='岗位常用命令';
+
+-- 论坛帖子增加岗位分类列（用于按岗位筛选，列不存在时执行）
+ALTER TABLE forum_posts ADD COLUMN IF NOT EXISTS category VARCHAR(40) COMMENT '岗位分类';
+
+-- 中间件岗位常用命令初始数据（幂等，避免重复插入）
+INSERT INTO common_commands (category, title, command, description, tag, created_at, updated_at)
+SELECT '中间件', '查看Nginx进程', 'ps -ef | grep nginx', '定位 nginx 主/工作进程', 'nginx', NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM common_commands WHERE category = '中间件' AND title = '查看Nginx进程');
+INSERT INTO common_commands (category, title, command, description, tag, created_at, updated_at)
+SELECT '中间件', '重载Nginx配置', 'nginx -t && nginx -s reload', '校验并热加载配置，不中断服务', 'nginx', NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM common_commands WHERE category = '中间件' AND title = '重载Nginx配置');
+INSERT INTO common_commands (category, title, command, description, tag, created_at, updated_at)
+SELECT '中间件', '查看Tomcat端口', 'netstat -anp | grep 8080', '确认 Tomcat 监听端口与连接', 'tomcat', NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM common_commands WHERE category = '中间件' AND title = '查看Tomcat端口');

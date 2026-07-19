@@ -49,6 +49,12 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- H2：仅测试用的内存数据库，让 JPA 切片测试无需依赖真实 MySQL -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
 
         <!-- OkHttp：HTTP 客户端，用于调用本地大模型 API（MiMo-v2.5 等 OpenAI 兼容接口） -->
         <dependency>

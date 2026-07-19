@@ -31,9 +31,10 @@ public class PublicReleaseApiController {
     @GetMapping
     public PageResponse<ReleaseResponse> list(@RequestParam(defaultValue = "") String keyword,
                                               @RequestParam(defaultValue = "") String platform,
+                                              @RequestParam(defaultValue = "") String category,
                                               @RequestParam(defaultValue = "0") int page,
                                               @RequestParam(defaultValue = "12") int size) {
-        Page<ReleaseAsset> releasesPage = releaseService.listPublishedReleases(keyword, platform, page, normalizeSize(size));
+        Page<ReleaseAsset> releasesPage = releaseService.listPublishedReleases(keyword, platform, category, page, normalizeSize(size));
         List<ReleaseResponse> content = releasesPage.getContent().stream()
                 .map(ReleaseResponse::from)
                 .collect(Collectors.toList());

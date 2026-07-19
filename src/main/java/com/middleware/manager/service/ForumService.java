@@ -37,8 +37,20 @@ public class ForumService {
     }
 
     public Page<ForumPost> listPosts(String keyword, String tag, int page, int size) {
+        return listPosts(keyword, tag, null, page, size);
+    }
+
+    /**
+     * 帖子列表，支持按岗位分类（category）筛选。
+     * 指定 category 时走 JPQL 岗位筛选（关键字用 LIKE）；未指定时保持原有全文检索/标签行为不变。
+     */
+    public Page<ForumPost> listPosts(String keyword, String tag, String category, int page, int size) {
         int s = Math.min(Math.max(size, 1), 50);
         PageRequest pr = PageRequest.of(Math.max(page, 0), s, Sort.by(Sort.Direction.DESC, "createdAt"));
+        if (StringUtils.hasText(category)) {
+            String kw = StringUtils.hasText(keyword) ? keyword.trim() : null;
+            return postRepo.findByCategory(category.trim(), kw, pr);
+        }
         if (StringUtils.hasText(keyword) || StringUtils.hasText(tag)) {
             String kw = StringUtils.hasText(keyword) ? sanitizeFulltext(keyword.trim()) : null;
             String tg = StringUtils.hasText(tag) ? tag.trim() : null;
@@ -54,9 +66,16 @@ public class ForumService {
     @Transactional
     public ForumPost createPost(String title, String content, List<String> tagNames,
                                  String authorUsername, String authorDisplayName) {
+        return createPost(title, content, tagNames, null, authorUsername, authorDisplayName);
+    }
+
+    @Transactional
+    public ForumPost createPost(String title, String content, List<String> tagNames, String category,
+                                 String authorUsername, String authorDisplayName) {
         ForumPost post = new ForumPost();
         post.setTitle(title);
         post.setContent(content);
+        post.setCategory(normalizeCategory(category));
         post.setAuthorUsername(authorUsername);
         post.setAuthorDisplayName(authorDisplayName);
         post.setStatus("PUBLISHED");
@@ -66,13 +85,25 @@ public class ForumService {
 
     @Transactional
     public ForumPost updatePost(Long id, String title, String content, List<String> tagNames, String username) {
+        return updatePost(id, title, content, tagNames, null, username);
+    }
+
+    @Transactional
+    public ForumPost updatePost(Long id, String title, String content, List<String> tagNames, String category, String username) {
         ForumPost post = getPost(id);
         if (!post.getAuthorUsername().equals(username))
             throw new IllegalArgumentException("只能编辑自己的文章");
         post.setTitle(title);
         post.setContent(content);
+        if (StringUtils.hasText(category)) {
+            post.setCategory(normalizeCategory(category));
+        }
         updateTags(post, tagNames);
         return postRepo.save(post);
+    }
+
+    private String normalizeCategory(String category) {
+        return StringUtils.hasText(category) ? category.trim() : null;
     }
 
     @Transactional

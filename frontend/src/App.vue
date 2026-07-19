@@ -62,6 +62,7 @@
           </div>
         </div>
 
+        <section class="portal-region portal-public">
         <div class="portal-grid">
           <article class="portal-card primary" @click="goPublic()">
             <div class="portal-icon">软</div>
@@ -99,6 +100,25 @@
             <button>进入论坛</button>
           </article>
         </div>
+        </section>
+
+        <section class="portal-region portal-roles">
+          <div class="portal-grid role-grid">
+            <article
+              v-for="role in roleModules"
+              :key="role.id"
+              class="portal-card role-card"
+              @click="goRoleModule(role.id)"
+            >
+              <div class="portal-icon role-icon">{{ role.label.slice(0, 1) }}</div>
+              <div>
+                <h3>{{ role.label }}</h3>
+                <p>进入{{ role.label }}岗位专属工作台，聚合本岗位常用命令与资源。</p>
+              </div>
+              <button>进入岗位</button>
+            </article>
+          </div>
+        </section>
 
         <div class="section-heading portal-tools-heading">
           <div>
@@ -150,7 +170,9 @@
         </section>
       </section>
 
-      <section v-else-if="route.name === 'public'" class="workspace">
+      <section v-else-if="route.name === 'public'" class="workspace module-with-rolenav">
+        <RoleNav v-model="publicFilters.category" @change="onPublicRoleChange" />
+        <div class="module-main">
         <div class="toolbar">
           <div class="filters">
             <input v-model.trim="publicFilters.keyword" placeholder="搜索名称、版本、说明" @keyup.enter="loadPublic()" />
@@ -197,6 +219,7 @@
           </div>
           <Pagination :page="publicPage" @change="changePublicPage" />
         </template>
+        </div>
       </section>
 
       <section v-else-if="route.name === 'standards'" class="workspace standards-page">
@@ -255,6 +278,9 @@
         </div>
 
         <template v-else>
+          <div class="module-with-rolenav">
+          <RoleNav v-model="standardsRole" @change="onStandardsRoleChange" />
+          <div class="module-main">
           <div class="standards-grid">
             <section v-for="group in publicStandardGroups" :key="group.category" class="standard-category-section">
               <div class="standard-category-head">
@@ -289,16 +315,34 @@
                 </article>
               </div>
             </section>
-            <p v-if="publicStandards.length === 0" class="empty-state">暂无已发布标准。</p>
+            <p v-if="publicStandards.length === 0" class="empty-state">该岗位暂无已发布标准。</p>
+          </div>
+          </div>
           </div>
         </template>
       </section>
 
-      <section v-else-if="route.name === 'forum'" class="workspace">
-        <ForumPostList
+      <section v-else-if="route.name === 'forum'" class="workspace module-with-rolenav">
+        <RoleNav v-model="forumRole" @change="onForumRoleChange" />
+        <div class="module-main">
+          <ForumPostList
+            :auth="auth"
+            :category="forumRole"
+            @open-post="goForumPost"
+            @new-post="goForumNew"
+          />
+        </div>
+      </section>
+
+      <section v-else-if="route.name === 'roleModule'" class="workspace">
+        <RoleModulePanel
+          :role-id="route.roleId"
           :auth="auth"
-          @open-post="goForumPost"
-          @new-post="goForumNew"
+          :notify="notify"
+          @home="goHome"
+          @open-downloads="openDownloadsForRole"
+          @open-standards="openStandardsForRole"
+          @open-forum="openForumForRole"
         />
       </section>
       <section v-else-if="route.name === 'forumDetail'" class="workspace">
@@ -1060,6 +1104,8 @@ import CryptoJS from 'crypto-js'
 import Pagination from './components/Pagination.vue'
 import DocumentEditor from './components/DocumentEditor.vue'
 import ForumPostList from './components/ForumPostList.vue'
+import RoleNav from './components/RoleNav.vue'
+import RoleModulePanel from './components/RoleModulePanel.vue'
 import ForumPostDetail from './components/ForumPostDetail.vue'
 import ForumPostEditor from './components/ForumPostEditor.vue'
 import KnowledgePanel from './components/KnowledgePanel.vue'
@@ -1070,7 +1116,7 @@ function sha256(str) {
 }
 
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true })
-const route = reactive(Object.assign({ documentId: null, postId: null, standardType: null }, parseRoute()))
+const route = reactive(Object.assign({ documentId: null, postId: null, standardType: null, roleId: null }, parseRoute()))
 const notice = ref('')
 const confirmDialog = ref(null) // { message, onConfirm }
 const auth = reactive({ token: '', user: null })
@@ -1137,7 +1183,10 @@ const selectedReviewDiff = ref('')
 const reviewFilters = reactive({ status: '' })
 const reviewPage = reactive({ page: 0, size: 10 })
 
-const publicFilters = reactive({ keyword: '', platform: '', page: 0, size: 12 })
+const publicFilters = reactive({ keyword: '', platform: '', category: '', page: 0, size: 12 })
+// 公共区域左侧岗位导航共享的选中岗位（'' 表示全部），三个公共模块统一使用
+const standardsRole = ref('')
+const forumRole = ref('')
 const adminFilters = reactive({ keyword: '', platform: '', published: '', page: 0, size: 10 })
 const typeFilters = reactive({ category: '', name: '', page: 0, size: 10 })
 const standardFilters = reactive({ keyword: '', category: '', software: '', status: '', page: 0, size: 10 })
@@ -1185,8 +1234,19 @@ const adminSectionLabel = computed(() => {
   if (adminSection.value === 'reviews') return { eyebrow: 'Reviews', title: '审核管理' }
   return { eyebrow: 'Admin', title: '用户管理' }
 })
+const roleModules = [
+  { id: 'middleware', label: '中间件', category: '中间件' },
+  { id: 'database', label: '数据库', category: '数据库' },
+  { id: 'host', label: '主机', category: '主机' },
+  { id: 'network', label: '网络', category: '网络' },
+  { id: 'security', label: '网络安全', category: '安全' }
+]
 const pageTitle = computed(() => {
   if (route.name === 'home') return '运营集成中心门户'
+  if (route.name === 'roleModule') {
+    const role = roleModules.find(r => r.id === route.roleId)
+    return role ? `${role.label}岗位` : '岗位模块'
+  }
   if (route.name === 'public') return '软件下载'
   if (route.name === 'standards') return '标准发布'
   if (route.name === 'documentEditor') return '文档编辑'
@@ -1473,6 +1533,8 @@ function parseRoute() {
     return { name: 'documentEditor', documentId: editorMatch ? editorMatch[1] : null }
   }
   if (hash.startsWith('/admin')) return { name: 'admin', token: null }
+  const moduleMatch = hash.match(/^\/module\/([a-z]+)$/)
+  if (moduleMatch) return { name: 'roleModule', roleId: moduleMatch[1] }
   if (hash.startsWith('/forum/new')) return { name: 'forumEditor', postId: null }
   const forumEditMatch = hash.match(/^\/forum\/edit\/(\d+)$/)
   if (forumEditMatch) return { name: 'forumEditor', postId: forumEditMatch[1] }
@@ -1499,7 +1561,11 @@ function syncRoute() {
   route.standardType = next.standardType
   route.documentId = next.documentId
   route.postId = next.postId
+  route.roleId = next.roleId
   updateDocumentTitle()
+  if (route.name === 'roleModule') {
+    return
+  }
   if (route.name === 'documentEditor' || route.name === 'forum' || route.name === 'forumDetail' || route.name === 'forumEditor') {
     if (route.name === 'documentEditor' && auth.token) {
       loadSoftwareTypes()
@@ -1557,7 +1623,9 @@ async function loadDetail(token) {
 }
 
 async function loadPublicStandards() {
-  publicStandards.value = await request('/api/public/parameter-standards?size=100', { token: null })
+  const params = new URLSearchParams({ size: 100 })
+  if (standardsRole.value) params.set('category', standardsRole.value)
+  publicStandards.value = await request(`/api/public/parameter-standards?${params}`, { token: null })
 }
 
 async function loadPublicDocuments() {
@@ -1733,6 +1801,15 @@ function goLogin() {
 }
 
 function goForum() { window.location.hash = '#/forum' }
+function goRoleModule(id) { window.location.hash = `#/module/${id}` }
+// 公共区域左侧岗位导航的筛选回调（三个模块交互一致）
+function onPublicRoleChange() { publicFilters.page = 0; loadPublic() }
+function onStandardsRoleChange() { loadPublicStandards() }
+function onForumRoleChange(category) { forumRole.value = category }
+// 从岗位模块页跳转到「本岗位」的公共模块，并预置岗位筛选
+function openDownloadsForRole(category) { publicFilters.category = category; window.location.hash = '#/downloads' }
+function openStandardsForRole(category) { standardsRole.value = category; window.location.hash = '#/standards' }
+function openForumForRole(category) { forumRole.value = category; window.location.hash = '#/forum' }
 function goForumPost(id) { window.location.hash = `#/forum/post/${id}` }
 function goForumNew() {
   if (!auth.token) { goLogin(); return }

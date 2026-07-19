@@ -30,8 +30,8 @@ public class PublicParameterStandardController {
     }
 
     @GetMapping
-    public List<ParameterStandardResponse> list() {
-        return service.listPublicStandards().stream().map(doc -> {
+    public List<ParameterStandardResponse> list(@RequestParam(defaultValue = "") String category) {
+        return service.listPublicStandards(category).stream().map(doc -> {
             ParameterStandardResponse resp = ParameterStandardResponse.from(doc, service.render(doc));
             List<StandardDocumentResponse> relatedDocs = documentService.listPublishedRelatedDocuments(doc.getId())
                     .stream()

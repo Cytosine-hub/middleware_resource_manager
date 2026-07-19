@@ -30,4 +30,17 @@ public interface ForumPostRepository extends JpaRepository<ForumPost, Long> {
     @Modifying
     @Query(value = "ALTER TABLE forum_posts ADD FULLTEXT INDEX ft_forum_posts_title_content (title, content)", nativeQuery = true)
     void addFulltextIndex();
+
+    /**
+     * 按岗位分类 + 可选关键字筛选帖子（JPQL，非全文索引），供论坛左侧岗位导航使用。
+     * 关键字为空表示只按岗位筛选。
+     */
+    @Query("SELECT p FROM ForumPost p "
+            + "WHERE p.status = 'PUBLISHED' AND p.category = :category "
+            + "AND (:keyword IS NULL "
+            + "     OR LOWER(p.title) LIKE LOWER(CONCAT('%', :keyword, '%'))) "
+            + "ORDER BY p.createdAt DESC")
+    Page<ForumPost> findByCategory(@Param("category") String category,
+                                   @Param("keyword") String keyword,
+                                   Pageable pageable);
 }

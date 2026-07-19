@@ -56,6 +56,18 @@ public class ParameterStandardService {
         return standards;
     }
 
+    /** 公开参数标准列表，支持按岗位分类筛选（category 为空表示全部岗位）。 */
+    public List<ParameterStandard> listPublicStandards(String category) {
+        List<ParameterStandard> standards = listPublicStandards();
+        if (category == null || category.trim().isEmpty()) {
+            return standards;
+        }
+        String target = category.trim();
+        return standards.stream()
+                .filter(s -> target.equals(s.getCategory()))
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     public ParameterStandard get(Long id) {
         return repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("参数标准不存在"));

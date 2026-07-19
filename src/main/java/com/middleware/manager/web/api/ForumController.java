@@ -25,9 +25,10 @@ public class ForumController {
     @GetMapping("/posts")
     public Map<String, Object> list(@RequestParam(defaultValue = "") String keyword,
                                      @RequestParam(defaultValue = "") String tag,
+                                     @RequestParam(defaultValue = "") String category,
                                      @RequestParam(defaultValue = "0") int page,
                                      @RequestParam(defaultValue = "12") int size) {
-        Page<ForumPost> p = forumService.listPosts(keyword, tag, page, size);
+        Page<ForumPost> p = forumService.listPosts(keyword, tag, category, page, size);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("content", p.getContent().stream().map(this::toSummary).collect(Collectors.toList()));
         result.put("page", p.getNumber());
@@ -51,7 +52,7 @@ public class ForumController {
     public Map<String, Object> create(@RequestBody CreatePostRequest req, Authentication auth) {
         if (req.title == null || req.title.trim().length() < 2) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "标题不能为空");
         if (req.content == null || req.content.trim().isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "内容不能为空");
-        ForumPost post = forumService.createPost(req.title, req.content, req.tags,
+        ForumPost post = forumService.createPost(req.title, req.content, req.tags, req.category,
                 auth.getName(), getDisplayName(auth));
         return toDetail(post);
     }
@@ -60,7 +61,7 @@ public class ForumController {
     public Map<String, Object> update(@PathVariable Long id, @RequestBody CreatePostRequest req, Authentication auth) {
         if (req.title == null || req.title.trim().length() < 2) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "标题不能为空");
         if (req.content == null || req.content.trim().isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "内容不能为空");
-        ForumPost post = forumService.updatePost(id, req.title, req.content, req.tags, auth.getName());
+        ForumPost post = forumService.updatePost(id, req.title, req.content, req.tags, req.category, auth.getName());
         return toDetail(post);
     }
 
@@ -99,6 +100,7 @@ public class ForumController {
     private Map<String, Object> toSummary(ForumPost p) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", p.getId()); m.put("title", p.getTitle());
+        m.put("category", p.getCategory());
         m.put("authorDisplayName", p.getAuthorDisplayName());
         m.put("viewCount", p.getViewCount()); m.put("likeCount", p.getLikeCount());
         m.put("commentCount", p.getCommentCount());
@@ -141,6 +143,7 @@ public class ForumController {
     static class CreatePostRequest {
         public String title;
         public String content;
+        public String category;
         public List<String> tags;
     }
 
