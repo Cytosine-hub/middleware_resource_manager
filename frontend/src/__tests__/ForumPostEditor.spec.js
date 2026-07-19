@@ -45,6 +45,26 @@ describe('论坛发帖/编辑 ForumPostEditor', () => {
     expect(postCall[1].body.category).toBe('中间件')
   })
 
+  it('TC-03/TC-04 编辑改选“不限岗位”提交 category=null 以清空原岗位', async () => {
+    vi.mocked(request).mockImplementation((path) => {
+      if (path.includes('portal/roles')) return Promise.reject(new Error('no server'))
+      if (path === '/api/forum/posts/9') {
+        return Promise.resolve({ title: '旧帖', content: '内容', category: '数据库', tags: [] })
+      }
+      return Promise.resolve({})
+    })
+    const wrapper = mountEditor({ postId: 9 })
+    await flushPromises()
+    // 回显原岗位后改选“不限岗位”（value=""）
+    await wrapper.find('select.meta-category').setValue('')
+    await wrapper.findAll('.toolbar-actions button').at(-1).trigger('click')
+    await flushPromises()
+
+    const putCall = vi.mocked(request).mock.calls.find(c => c[0] === '/api/forum/posts/9' && c[1] && c[1].method === 'PUT')
+    expect(putCall).toBeTruthy()
+    expect(putCall[1].body.category).toBeNull()
+  })
+
   it('TC-03 编辑时回显帖子岗位到岗位选择框', async () => {
     vi.mocked(request).mockImplementation((path) => {
       if (path.includes('portal/roles')) return Promise.reject(new Error('no server'))

@@ -64,6 +64,32 @@ class ForumCategoryFilterTest {
     }
 
     @Test
+    void TC_03_编辑帖子改选不限岗位应清空原岗位不再被该岗位筛出() {
+        forumService.createPost("中间件调优", "内容", List.of(), "中间件", "alice", "Alice");
+        Long id = forumService.listPosts("", "", "中间件", 0, 12).getContent().get(0).getId();
+
+        // 编辑时改选“不限岗位”（前端提交 category=null），应真正清空旧岗位
+        forumService.updatePost(id, "中间件调优", "内容", List.of(), null, "alice");
+
+        assertThat(forumService.getPost(id).getCategory()).isNull();
+        // 不再被原“中间件”岗位导航筛出
+        assertThat(forumService.listPosts("", "", "中间件", 0, 12).getTotalElements()).isZero();
+        // 仍存在于全部帖子中
+        assertThat(forumService.listPosts("", "", "", 0, 12).getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    void TC_03_编辑帖子可从一个岗位切换到另一个岗位() {
+        forumService.createPost("跨岗位帖", "内容", List.of(), "中间件", "alice", "Alice");
+        Long id = forumService.listPosts("", "", "中间件", 0, 12).getContent().get(0).getId();
+
+        forumService.updatePost(id, "跨岗位帖", "内容", List.of(), "数据库", "alice");
+
+        assertThat(forumService.listPosts("", "", "中间件", 0, 12).getTotalElements()).isZero();
+        assertThat(forumService.listPosts("", "", "数据库", 0, 12).getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
     void TC_04_论坛无数据与单条数据岗位的边界处理() {
         post("唯一网络帖", "网络");
 

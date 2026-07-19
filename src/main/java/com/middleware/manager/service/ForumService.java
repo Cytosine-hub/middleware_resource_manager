@@ -96,9 +96,9 @@ public class ForumService {
             throw new IllegalArgumentException("只能编辑自己的文章");
         post.setTitle(title);
         post.setContent(content);
-        if (StringUtils.hasText(category)) {
-            post.setCategory(normalizeCategory(category));
-        }
+        // 编辑时始终以提交值为准：选择“不限岗位”会提交 null，需真正清空旧岗位，
+        // 否则帖子仍被旧岗位的左侧导航筛出（TC-03/TC-04）。
+        post.setCategory(normalizeCategory(category));
         updateTags(post, tagNames);
         return postRepo.save(post);
     }
