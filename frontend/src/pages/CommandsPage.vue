@@ -59,7 +59,6 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { request } from '../api'
 import { formatDetail } from '../utils'
 import FormModal from '../components/ui/FormModal.vue'
 
@@ -68,6 +67,7 @@ const props = defineProps({
   isSysAdmin: Boolean,
   managedCategory: String,
   softwareTypes: { type: Array, default: () => [] },
+  moduleRequest: { type: Function, required: true },
   notify: { type: Function, default: () => {} },
   confirm: { type: Function, default: () => {} }
 })
@@ -143,30 +143,39 @@ function openEditDialog(cmd) {
   showDialog.value = true
 }
 
-async function loadTypes() { try { const res = await fetch('/api/middleware-commands/types'); if (res.ok) types.value = await res.json() } catch {} }
-async function loadCommands() { try { const res = await fetch('/api/middleware-commands'); if (res.ok) commands.value = (await res.json()).map(c => ({ ...c, _expanded: false })) } catch {} }
+async function loadTypes() {
+  try { types.value = await props.moduleRequest('/middleware-commands/types') || [] }
+  catch (error) { props.notify(error.message, 'error') }
+}
+async function loadCommands() {
+  try { commands.value = (await props.moduleRequest('/middleware-commands') || []).map(command => ({ ...command, _expanded: false })) }
+  catch (error) { props.notify(error.message, 'error') }
+}
 
 async function saveCmd() {
   const cats = form.categories ? JSON.stringify(form.categories.split(/[,，]/).map(s => s.trim()).filter(Boolean)) : null
   const body = { softwareTypeId: form.softwareTypeId, commandFormat: form.commandFormat, briefDescription: form.briefDescription, detailedDescription: form.detailedDescription, categories: cats, sortOrder: 0 }
   const isEdit = !!form.id
   try {
-    const res = await fetch(isEdit ? `/api/middleware-commands/${form.id}` : '/api/middleware-commands', {
+    await props.moduleRequest(isEdit ? `/middleware-commands/${form.id}` : '/middleware-commands', {
       method: isEdit ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: props.auth?.token ? `Bearer ${props.auth.token}` : '' },
-      body: JSON.stringify(body)
+      body
     })
-    if (res.ok) { props.notify('命令已保存'); showDialog.value = false; await loadTypes(); await loadCommands() }
-    else { const err = await res.json().catch(() => ({})); props.notify(err.message || '保存失败', 'error') }
-  } catch { props.notify('网络错误', 'error') }
+    props.notify('命令已保存')
+    showDialog.value = false
+    await loadTypes()
+    await loadCommands()
+  } catch (error) { props.notify(error.message, 'error') }
 }
 
 async function deleteCmd(cmd) {
   props.confirm(`确定删除命令：${cmd.briefDescription}？`, async () => {
     try {
-      const res = await fetch(`/api/middleware-commands/${cmd.id}`, { method: 'DELETE', headers: { Authorization: props.auth?.token ? `Bearer ${props.auth.token}` : '' } })
-      if (res.ok) { props.notify('已删除'); await loadTypes(); await loadCommands() }
-    } catch { props.notify('网络错误', 'error') }
+      await props.moduleRequest(`/middleware-commands/${cmd.id}`, { method: 'DELETE' })
+      props.notify('已删除')
+      await loadTypes()
+      await loadCommands()
+    } catch (error) { props.notify(error.message, 'error') }
   })
 }
 

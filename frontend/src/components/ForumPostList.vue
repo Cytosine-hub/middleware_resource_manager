@@ -1,5 +1,7 @@
 <template>
-  <div class="forum-page">
+  <div class="forum-page public-module-layout">
+    <JobNavigation :model-value="selectedJob" @update:model-value="selectJob" />
+    <div class="public-module-content">
     <div class="forum-hero">
       <p>沉淀基础设施实践经验，支持问题讨论、方案交流和知识共享</p>
       <div class="forum-hero-bar">
@@ -12,8 +14,8 @@
 
     <div class="forum-body">
       <div class="forum-main" ref="scrollContainer" @scroll="onScroll">
-        <template v-if="posts.length > 0 || loading">
-          <article v-for="post in posts" :key="post.id" class="forum-card" @click="$emit('openPost', post.id)">
+        <template v-if="filteredPosts.length > 0 || loading">
+          <article v-for="post in filteredPosts" :key="post.id" class="forum-card" @click="$emit('openPost', post.id)">
             <div class="forum-card-body">
               <h3>{{ post.title }}</h3>
               <p class="forum-card-summary">{{ post.summary }}</p>
@@ -33,10 +35,10 @@
             <div class="spinner"></div>
             <span>加载中...</span>
           </div>
-          <p v-if="!hasMore && posts.length > 0" class="forum-no-more">— 已加载全部文章 —</p>
+          <p v-if="!hasMore && filteredPosts.length > 0" class="forum-no-more">— 已加载全部文章 —</p>
         </template>
         <div v-if="loading && posts.length === 0" class="loading-panel"><div class="spinner"></div><p>加载中...</p></div>
-        <p v-if="!loading && posts.length === 0" class="empty-state">暂无文章，快来发表第一篇吧！</p>
+        <p v-if="!loading && filteredPosts.length === 0" class="empty-state">当前岗位暂无文章，可切换其他岗位或发表第一篇内容。</p>
       </div>
 
       <aside class="forum-sidebar">
@@ -51,12 +53,16 @@
         </div>
       </aside>
     </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { request } from '../api'
+import JobNavigation from '../shared/jobs/JobNavigation.vue'
+import { filterItemsByJob } from '../shared/jobs/jobFilter.js'
+import { useJobFilter } from '../shared/jobs/useJobFilter.js'
 
 const PAGE_SIZE = 10
 const SCROLL_THRESHOLD = 100
@@ -74,6 +80,8 @@ const hasMore = ref(true)
 const loading = ref(false)
 const loadingMore = ref(false)
 const scrollContainer = ref(null)
+const { selectedJob, selectJob } = useJobFilter()
+const filteredPosts = computed(() => filterItemsByJob(posts.value, selectedJob.value, (post) => post.tags || []))
 
 async function loadPosts(reset = false) {
   if (reset) {
@@ -128,7 +136,9 @@ watch(() => props.auth.token, () => { loadPosts(true) })
 </script>
 
 <style scoped>
-.forum-page { }
+.forum-page { padding-top: var(--space-xl); }
+.public-module-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--space-xl); }
+.public-module-content { min-width: 0; }
 .forum-hero {
   background: linear-gradient(120deg, #1a3650, #1a4a6e);
   color: #fff; padding: var(--space-xl) var(--space-lg) var(--space-lg); border-radius: var(--radius-lg); margin-bottom: var(--space-lg);
@@ -175,4 +185,5 @@ watch(() => props.auth.token, () => { loadPosts(true) })
   text-align: center; padding: var(--space-lg) 0; color: var(--color-text-tertiary); font-size: var(--text-sm);
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 760px) { .public-module-layout { grid-template-columns: 1fr; } }
 </style>

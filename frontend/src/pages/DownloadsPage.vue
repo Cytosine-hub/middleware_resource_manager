@@ -1,5 +1,8 @@
 <template>
   <section class="workspace downloads-page">
+    <div class="public-module-layout">
+      <JobNavigation :model-value="selectedJob" @update:model-value="selectJob" />
+      <div class="public-module-content">
     <div class="toolbar">
       <div class="filters">
         <input v-model.trim="filters.keyword" placeholder="搜索名称、版本、说明" @keyup.enter="loadData()" />
@@ -30,7 +33,7 @@
     <template v-else>
       <div class="release-list-container">
         <div class="release-grid">
-          <article v-for="release in page.content" :key="release.downloadToken" class="release-card">
+          <article v-for="release in filteredReleases" :key="release.downloadToken" class="release-card">
             <div>
               <h2 class="release-title">
                 <span>{{ release.middlewareName }}</span>
@@ -47,24 +50,32 @@
               </div>
             </div>
           </article>
+          <p v-if="filteredReleases.length === 0" class="empty-state">当前岗位暂无可下载软件，可切换其他岗位查看。</p>
         </div>
         <div class="release-pagination">
           <Pagination :page="page" @change="changePage" />
         </div>
       </div>
     </template>
+      </div>
+    </div>
   </section>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { request } from '../api'
 import { formatBytes } from '../utils'
 import Pagination from '../components/Pagination.vue'
+import JobNavigation from '../shared/jobs/JobNavigation.vue'
+import { filterItemsByJob } from '../shared/jobs/jobFilter.js'
+import { useJobFilter } from '../shared/jobs/useJobFilter.js'
 
 const filters = reactive({ keyword: '', platform: '', page: 0, size: 12 })
 const page = reactive({ content: [], page: 0, size: 12, totalElements: 0, totalPages: 0, first: true, last: true })
 const selectedRelease = ref(null)
+const { selectedJob, selectJob } = useJobFilter()
+const filteredReleases = computed(() => filterItemsByJob(page.content, selectedJob.value, (release) => release.softwareTypeCategory))
 
 async function loadData() {
   const query = new URLSearchParams(filters).toString()
@@ -93,6 +104,8 @@ onMounted(loadData)
   min-height: 0;
   padding-top: var(--space-lg);
 }
+.public-module-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--space-xl); min-height: 0; }
+.public-module-content { display: flex; flex-direction: column; gap: var(--space-md); min-width: 0; min-height: 0; }
 .release-list-container {
   display: flex;
   flex-direction: column;
@@ -135,6 +148,7 @@ onMounted(loadData)
 }
 
 @media (max-width: 760px) {
+  .public-module-layout { grid-template-columns: 1fr; }
   .downloads-page {
     height: auto;
     min-height: 0;
