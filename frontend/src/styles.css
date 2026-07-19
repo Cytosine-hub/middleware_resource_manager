@@ -383,6 +383,27 @@ label {
   margin-top: 18px;
 }
 
+/* 首页两大区域：公共区域 / 岗位专属区域（靠间距与分组区分，不写生硬标题） */
+.portal-region { margin-top: 22px; }
+.portal-region + .portal-region { margin-top: 28px; }
+.portal-roles .role-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.role-card { min-height: 200px; }
+.role-card .role-icon { background: #33507a; }
+
+/* 公共模块统一的左侧岗位导航 + 主内容布局 */
+.module-with-rolenav {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.module-with-rolenav .module-main { min-width: 0; }
+
+@media (max-width: 900px) {
+  .portal-roles .role-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .module-with-rolenav { grid-template-columns: 1fr; }
+}
+
 .portal-card {
   display: grid;
   grid-template-rows: auto 1fr auto;

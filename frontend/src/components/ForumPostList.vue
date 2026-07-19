@@ -57,7 +57,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { request } from '../api'
 
-const props = defineProps({ auth: Object })
+const props = defineProps({ auth: Object, category: { type: String, default: '' } })
 const emit = defineEmits(['openPost', 'newPost'])
 
 const posts = ref([])
@@ -72,7 +72,7 @@ const loading = ref(false)
 async function loadPosts() {
   loading.value = true
   try {
-    const params = new URLSearchParams({ keyword: keyword.value, tag: activeTag.value, page: page.value, size: 12 })
+    const params = new URLSearchParams({ keyword: keyword.value, tag: activeTag.value, category: props.category || '', page: page.value, size: 12 })
     const data = await request(`/api/forum/posts?${params}`, { token: null })
     posts.value = Array.isArray(data?.content) ? data.content : []
     totalPages.value = data?.totalPages || 0
@@ -93,6 +93,7 @@ function formatDate(v) { return v ? String(v).slice(0, 10) : '' }
 
 onMounted(() => { loadPosts(); loadTags() })
 watch(() => props.auth.token, () => { loadPosts() })
+watch(() => props.category, () => { page.value = 0; activeTag.value = ''; loadPosts() })
 </script>
 
 <style scoped>

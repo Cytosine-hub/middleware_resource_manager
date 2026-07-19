@@ -26,6 +26,10 @@ public class ForumPost {
     @Column(nullable = false, length = 20)
     private String status = "PUBLISHED";
 
+    /** 岗位分类（中间件/数据库/主机/网络/安全），用于论坛按岗位筛选；为空表示未归属具体岗位。 */
+    @Column(length = 40)
+    private String category;
+
     @Column(nullable = false)
     private int viewCount;
 
@@ -68,6 +72,8 @@ public class ForumPost {
     public void setAuthorDisplayName(String authorDisplayName) { this.authorDisplayName = authorDisplayName; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
     public int getViewCount() { return viewCount; }
     public void setViewCount(int viewCount) { this.viewCount = viewCount; }
     public int getLikeCount() { return likeCount; }

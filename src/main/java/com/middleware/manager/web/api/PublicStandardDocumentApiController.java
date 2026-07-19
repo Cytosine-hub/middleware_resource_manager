@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -24,8 +25,8 @@ public class PublicStandardDocumentApiController {
     }
 
     @GetMapping
-    public List<PublicStandardDocumentResponse> list() {
-        return service.listPublishedStandards().stream()
+    public List<PublicStandardDocumentResponse> list(@RequestParam(defaultValue = "") String category) {
+        return service.listPublishedStandards(category).stream()
                 .map(standard -> PublicStandardDocumentResponse.from(
                         standard,
                         null,
@@ -36,8 +37,8 @@ public class PublicStandardDocumentApiController {
     }
 
     @GetMapping("/all")
-    public List<PublicStandardDocumentResponse> listAllPublished() {
-        return service.listAllPublic().stream()
+    public List<PublicStandardDocumentResponse> listAllPublished(@RequestParam(defaultValue = "") String category) {
+        return service.listAllPublic(category).stream()
                 .map(doc -> PublicStandardDocumentResponse.from(doc, null, java.util.Collections.emptyList()))
                 .collect(Collectors.toList());
     }

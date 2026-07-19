@@ -38,6 +38,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/forum/**").authenticated()
                         // 公开接口
                         .requestMatchers("/api/public/**").permitAll()
+                        // 岗位模块通用能力（常用命令等）：读公开，写需登录并按岗位限权
+                        .requestMatchers(HttpMethod.GET, "/api/module/**").permitAll()
+                        .requestMatchers("/api/module/**").authenticated()
                         // 登录
                         .requestMatchers("/api/auth/**").authenticated()
                         // 用户管理：仅系统管理员

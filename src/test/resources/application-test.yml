@@ -1,0 +1,23 @@
+# 测试 profile：用 H2 内存库替代 MySQL，让 JPA 切片/上下文测试脱离真实数据库运行。
+# 通过 @ActiveProfiles("test") 激活；profile 配置覆盖 application.yml 基础配置。
+spring:
+  datasource:
+    # NON_KEYWORDS=VALUE：H2 默认把 VALUE 当保留字，而 standard_parameters.value 是合法列名（MySQL 不保留），
+    # 不放行会导致 ddl-auto:create-drop 建表语法报错。这里放行保持与生产 MySQL 一致。
+    url: jdbc:h2:mem:testdb;MODE=MYSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;NON_KEYWORDS=VALUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: never
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+app:
+  vector:
+    type: memory

@@ -6,6 +6,12 @@
           <span class="meta-label">标题</span>
           <input v-model.trim="form.title" placeholder="文章标题" maxlength="200" class="meta-title" />
           <span class="meta-sep">/</span>
+          <span class="meta-label">岗位</span>
+          <select v-model="form.category" class="meta-category">
+            <option value="">不限岗位</option>
+            <option v-for="role in roles" :key="role.id" :value="role.category">{{ role.label }}</option>
+          </select>
+          <span class="meta-sep">/</span>
           <span class="meta-label">标签</span>
           <input v-model.trim="tagInput" placeholder="逗号分隔" class="meta-tags-input" @keyup.enter="addTag" />
           <span v-for="(tag, i) in form.tags" :key="i" class="meta-tag">
@@ -39,8 +45,12 @@
 <script setup>
 import { onMounted, reactive, ref, watch } from 'vue'
 import { request } from '../api'
+import { ROLE_FALLBACK, fetchRoles } from '../roles'
 import MarkdownHelp from './MarkdownHelp.vue'
 import { handleEditorKeydown, handleEditorPaste } from '../editor-utils'
+
+// 岗位清单统一来自共享数据源，保证发帖岗位与左侧岗位导航一致，新帖可被岗位筛选检出
+const roles = ref([...ROLE_FALLBACK])
 
 const onEditorKeydown = handleEditorKeydown
 const onEditorPaste = handleEditorPaste
@@ -50,7 +60,7 @@ const showHelp = ref(false)
 const props = defineProps({ auth: Object, postId: [String, Number], markdown: Object, notify: { type: Function, default: (msg, type) => type === 'error' ? alert(msg) : null } })
 const emit = defineEmits(['saved', 'cancel'])
 
-const form = reactive({ title: '', content: '', tags: [] })
+const form = reactive({ title: '', content: '', category: '', tags: [] })
 const tagInput = ref('')
 const saving = ref(false)
 const isEdit = ref(false)
@@ -78,7 +88,7 @@ function onContentChange() {
 async function save() {
   saving.value = true
   try {
-    const body = { title: form.title, content: form.content, tags: form.tags }
+    const body = { title: form.title, content: form.content, category: form.category || null, tags: form.tags }
     if (isEdit.value) {
       await request(`/api/forum/posts/${props.postId}`, { method: 'PUT', body })
     } else {
@@ -94,14 +104,18 @@ async function load() {
   isEdit.value = true
   try {
     const data = await request(`/api/forum/posts/${props.postId}`, { token: null })
-    form.title = data.title; form.content = data.content; form.tags = data.tags || []
+    form.title = data.title; form.content = data.content
+    form.category = data.category || ''; form.tags = data.tags || []
     renderPreview()
   } catch {}
 }
 
-onMounted(() => load())
+onMounted(async () => {
+  roles.value = await fetchRoles()
+  load()
+})
 watch(() => props.postId, () => {
-  Object.assign(form, { title: '', content: '', tags: [] })
+  Object.assign(form, { title: '', content: '', category: '', tags: [] })
   isEdit.value = false
   load()
 })
@@ -121,6 +135,8 @@ watch(() => props.postId, () => {
 .meta-sep { color: #c4cdd6; font-weight: 300; }
 .meta-title { border: none; background: transparent; font-size: 18px; font-weight: 700; color: #182033; padding: 2px 4px; min-width: 200px; max-width: 360px; border-radius: 4px; }
 .meta-title:hover, .meta-title:focus { background: #f0f3f7; outline: none; }
+.meta-category { border: 1px solid #d5ddeb; background: #fff; font-size: 13px; color: #4a5568; padding: 3px 6px; border-radius: 4px; cursor: pointer; }
+.meta-category:focus { outline: none; border-color: #2356a5; }
 .meta-tags-input { border: none; background: transparent; font-size: 14px; color: #4a5568; padding: 2px 4px; width: 100px; border-radius: 4px; }
 .meta-tags-input:focus { background: #f0f3f7; outline: none; }
 .meta-tag {

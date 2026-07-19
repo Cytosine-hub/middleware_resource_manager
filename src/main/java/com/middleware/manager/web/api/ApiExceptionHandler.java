@@ -15,7 +15,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-@RestControllerAdvice(basePackages = "com.middleware.manager.web.api")
+@RestControllerAdvice(basePackages = {"com.middleware.manager.web.api", "com.middleware.manager.module"})
 public class ApiExceptionHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(ApiExceptionHandler.class);
 

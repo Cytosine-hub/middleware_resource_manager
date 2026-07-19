@@ -53,7 +53,12 @@ public class ReleaseService {
     }
 
     public Page<ReleaseAsset> listPublishedReleases(String keyword, String platform, int page, int size) {
-        return repository.findAll(publishedSpecification(keyword, platform), pageRequest(page, size));
+        return listPublishedReleases(keyword, platform, null, page, size);
+    }
+
+    /** 公开资源列表，支持按岗位分类（softwareType.category）筛选。 */
+    public Page<ReleaseAsset> listPublishedReleases(String keyword, String platform, String category, int page, int size) {
+        return repository.findAll(publishedSpecification(keyword, platform, category), pageRequest(page, size));
     }
 
     public ReleaseAsset getAdminRelease(Long id) {
@@ -329,10 +334,15 @@ public class ReleaseService {
         return specification;
     }
 
-    private Specification<ReleaseAsset> publishedSpecification(String keyword, String platform) {
-        return Specification.<ReleaseAsset>where((root, query, cb) -> cb.isTrue(root.get("published")))
+    private Specification<ReleaseAsset> publishedSpecification(String keyword, String platform, String category) {
+        Specification<ReleaseAsset> specification = Specification.<ReleaseAsset>where((root, query, cb) -> cb.isTrue(root.get("published")))
                 .and(keywordSpecification(keyword))
                 .and(platformSpecification(platform));
+        if (category != null && !category.isEmpty()) {
+            specification = specification.and((root, query, cb) ->
+                    cb.equal(root.join("softwareType").get("category"), category));
+        }
+        return specification;
     }
 
     private Specification<ReleaseAsset> keywordSpecification(String keyword) {
