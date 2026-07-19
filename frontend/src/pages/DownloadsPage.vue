@@ -33,7 +33,7 @@
     <template v-else>
       <div class="release-list-container">
         <div class="release-grid">
-          <article v-for="release in filteredReleases" :key="release.downloadToken" class="release-card">
+          <article v-for="release in page.content" :key="release.downloadToken" class="release-card">
             <div>
               <h2 class="release-title">
                 <span>{{ release.middlewareName }}</span>
@@ -50,7 +50,7 @@
               </div>
             </div>
           </article>
-          <EmptyState v-if="filteredReleases.length === 0" message="当前岗位暂无可下载软件，可切换其他岗位查看。" />
+          <EmptyState v-if="page.content.length === 0" message="当前岗位暂无可下载软件，可切换其他岗位查看。" />
         </div>
         <div class="release-pagination">
           <Pagination :page="page" @change="changePage" />
@@ -63,26 +63,34 @@
 </template>
 
 <script setup>
-import { computed, ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { request } from '../api'
 import { formatBytes } from '../utils'
 import Pagination from '../components/Pagination.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 import JobNavigation from '../shared/jobs/JobNavigation.vue'
-import { filterItemsByJob } from '../shared/jobs/jobFilter.js'
+import { getJobCategory } from '../shared/jobs/jobFilter.js'
 import { useJobFilter } from '../shared/jobs/useJobFilter.js'
 
 const filters = reactive({ keyword: '', platform: '', page: 0, size: 12 })
 const page = reactive({ content: [], page: 0, size: 12, totalElements: 0, totalPages: 0, first: true, last: true })
 const selectedRelease = ref(null)
-const { selectedJob, selectJob } = useJobFilter()
-const filteredReleases = computed(() => filterItemsByJob(page.content, selectedJob.value, (release) => release.softwareTypeCategory))
+const { selectedJob, selectJob: persistSelectedJob } = useJobFilter()
 
 async function loadData() {
-  const query = new URLSearchParams(filters).toString()
+  const queryFilters = { ...filters }
+  const category = getJobCategory(selectedJob.value)
+  if (category) queryFilters.category = category
+  const query = new URLSearchParams(queryFilters).toString()
   const data = await request(`/api/public/releases?${query}`, { token: null })
   Object.assign(page, data)
   selectedRelease.value = null
+}
+
+function selectJob(jobId) {
+  persistSelectedJob(jobId)
+  filters.page = 0
+  loadData()
 }
 
 async function openDetail(token) {

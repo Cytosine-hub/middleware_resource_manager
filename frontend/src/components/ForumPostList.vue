@@ -14,8 +14,8 @@
 
     <div class="forum-body">
       <div class="forum-main" ref="scrollContainer" @scroll="onScroll">
-        <template v-if="filteredPosts.length > 0 || loading">
-          <article v-for="post in filteredPosts" :key="post.id" class="forum-card" @click="$emit('openPost', post.id)">
+        <template v-if="posts.length > 0 || loading">
+          <article v-for="post in posts" :key="post.id" class="forum-card" @click="$emit('openPost', post.id)">
             <div class="forum-card-body">
               <h3>{{ post.title }}</h3>
               <p class="forum-card-summary">{{ post.summary }}</p>
@@ -35,10 +35,10 @@
             <div class="spinner"></div>
             <span>加载中...</span>
           </div>
-          <p v-if="!hasMore && filteredPosts.length > 0" class="forum-no-more">— 已加载全部文章 —</p>
+          <p v-if="!hasMore && posts.length > 0" class="forum-no-more">— 已加载全部文章 —</p>
         </template>
         <div v-if="loading && posts.length === 0" class="loading-panel"><div class="spinner"></div><p>加载中...</p></div>
-        <EmptyState v-if="!loading && filteredPosts.length === 0" message="当前岗位暂无文章，可切换其他岗位或发表第一篇内容。" />
+        <EmptyState v-if="!loading && posts.length === 0" message="当前岗位暂无文章，可切换其他岗位或发表第一篇内容。" />
       </div>
 
       <aside class="forum-sidebar">
@@ -58,11 +58,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { request } from '../api'
 import EmptyState from './ui/EmptyState.vue'
 import JobNavigation from '../shared/jobs/JobNavigation.vue'
-import { filterItemsByJob } from '../shared/jobs/jobFilter.js'
+import { getJobCategory } from '../shared/jobs/jobFilter.js'
 import { useJobFilter } from '../shared/jobs/useJobFilter.js'
 
 const PAGE_SIZE = 10
@@ -81,8 +81,7 @@ const hasMore = ref(true)
 const loading = ref(false)
 const loadingMore = ref(false)
 const scrollContainer = ref(null)
-const { selectedJob, selectJob } = useJobFilter()
-const filteredPosts = computed(() => filterItemsByJob(posts.value, selectedJob.value, (post) => post.tags || []))
+const { selectedJob, selectJob: persistSelectedJob } = useJobFilter()
 
 async function loadPosts(reset = false) {
   if (reset) {
@@ -96,7 +95,13 @@ async function loadPosts(reset = false) {
   else loadingMore.value = true
 
   try {
-    const params = new URLSearchParams({ keyword: keyword.value, tag: activeTag.value, page: page.value, size: PAGE_SIZE })
+    const params = new URLSearchParams({
+      keyword: keyword.value,
+      tag: activeTag.value,
+      job: getJobCategory(selectedJob.value),
+      page: page.value,
+      size: PAGE_SIZE
+    })
     const data = await request(`/api/forum/posts?${params}`, { token: null })
     const newPosts = Array.isArray(data?.content) ? data.content : []
     if (page.value === 0) {
@@ -104,7 +109,7 @@ async function loadPosts(reset = false) {
     } else {
       posts.value = [...posts.value, ...newPosts]
     }
-    hasMore.value = !data?.last && newPosts.length === PAGE_SIZE
+    hasMore.value = !data?.last
   } catch {
     if (page.value === 0) posts.value = []
   } finally {
@@ -119,6 +124,7 @@ async function loadTags() {
 
 function search() { loadPosts(true) }
 function filterByTag(tag) { activeTag.value = activeTag.value === tag ? '' : tag; loadPosts(true) }
+function selectJob(jobId) { persistSelectedJob(jobId); loadPosts(true) }
 
 function onScroll() {
   const el = scrollContainer.value

@@ -52,15 +52,21 @@ function jsonResponse(data) {
 
 function installPublicApiMock() {
   vi.stubGlobal('fetch', vi.fn((input) => {
-    const url = String(input)
-    if (url.includes('/api/public/releases')) {
-      return jsonResponse({ content: releases, totalElements: releases.length, totalPages: 1, first: true, last: true })
+    const url = new URL(String(input), 'http://localhost')
+    if (url.pathname === '/api/public/releases') {
+      const category = url.searchParams.get('category')
+      const content = category ? releases.filter((release) => release.softwareTypeCategory === category) : releases
+      return jsonResponse({ content, totalElements: content.length, totalPages: content.length ? 1 : 0, first: true, last: true })
     }
-    if (url.includes('/api/public/parameter-standards')) return jsonResponse({ content: standards })
-    if (url.includes('/api/forum/posts')) return jsonResponse({ content: posts, last: true })
-    if (url.includes('/api/forum/tags')) return jsonResponse([])
-    if (url.includes('/middleware-commands/types')) return jsonResponse([{ id: 10, name: 'Redis', category: '中间件' }])
-    if (url.includes('/middleware-commands')) {
+    if (url.pathname === '/api/public/parameter-standards') return jsonResponse({ content: standards })
+    if (url.pathname === '/api/forum/posts') {
+      const job = url.searchParams.get('job')
+      const content = job ? posts.filter((post) => post.tags.includes(job)) : posts
+      return jsonResponse({ content, last: true })
+    }
+    if (url.pathname === '/api/forum/tags') return jsonResponse([])
+    if (url.pathname.includes('/middleware-commands/types')) return jsonResponse([{ id: 10, name: 'Redis', category: '中间件' }])
+    if (url.pathname.includes('/middleware-commands')) {
       return jsonResponse([{ id: 20, softwareTypeId: 10, commandFormat: 'redis-cli info', briefDescription: '查看 Redis 信息' }])
     }
     return jsonResponse([])
@@ -144,6 +150,67 @@ describe('门户页面结构优化验收', () => {
     expect(wrapper.findAll(itemSelector)).toHaveLength(1)
     expect(wrapper.text()).toContain(expected)
     expect(wrapper.text()).not.toContain(excluded)
+  })
+
+  test('TC-PORTAL-003 (TC-03) 软件下载岗位筛选从服务端第一页返回筛选后分页数据', async () => {
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = new URL(String(input), 'http://localhost')
+      if (url.pathname === '/api/public/releases' && url.searchParams.get('category') === '网络') {
+        return jsonResponse({ content: [releases[0]], page: 0, size: 12, totalElements: 1, totalPages: 1, first: true, last: true })
+      }
+      if (url.pathname === '/api/public/releases') {
+        return jsonResponse({ content: [releases[1]], page: 1, size: 12, totalElements: 13, totalPages: 2, first: false, last: true })
+      }
+      return jsonResponse([])
+    })
+
+    const wrapper = track(mount(DownloadsPage))
+    await flushPromises()
+    await selectJob(wrapper, '网络')
+
+    const releaseRequest = vi.mocked(fetch).mock.calls
+      .map(([input]) => new URL(String(input), 'http://localhost'))
+      .find((url) => url.pathname === '/api/public/releases' && url.searchParams.get('category') === '网络')
+    expect(releaseRequest?.searchParams.get('page')).toBe('0')
+    expect(wrapper.findAll('.release-card')).toHaveLength(1)
+    expect(wrapper.text()).toContain('Network Toolkit')
+    expect(wrapper.text()).toContain('共 1 条')
+  })
+
+  test('TC-PORTAL-004 (TC-04) infra论坛岗位筛选重拉第一页且后续滚动沿用岗位标签', async () => {
+    const secondNetworkPost = { id: 4, title: 'Network Post Page 2', summary: 'network page 2', tags: ['网络'], authorDisplayName: 'D' }
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = new URL(String(input), 'http://localhost')
+      if (url.pathname === '/api/forum/posts' && url.searchParams.get('job') === '网络') {
+        const content = url.searchParams.get('page') === '1' ? [secondNetworkPost] : [posts[0]]
+        return jsonResponse({ content, page: Number(url.searchParams.get('page')), last: url.searchParams.get('page') === '1' })
+      }
+      if (url.pathname === '/api/forum/posts') return jsonResponse({ content: [posts[1]], page: 0, last: false })
+      if (url.pathname === '/api/forum/tags') return jsonResponse([])
+      return jsonResponse([])
+    })
+
+    const wrapper = track(mount(ForumPostList, { props: { auth: {} } }))
+    await flushPromises()
+    await selectJob(wrapper, '网络')
+
+    expect(wrapper.text()).toContain('Network Post')
+    expect(wrapper.text()).not.toContain('Security Post')
+    const scrollContainer = wrapper.find('.forum-main').element
+    Object.defineProperties(scrollContainer, {
+      scrollTop: { value: 100, configurable: true },
+      clientHeight: { value: 100, configurable: true },
+      scrollHeight: { value: 150, configurable: true }
+    })
+    await wrapper.find('.forum-main').trigger('scroll')
+    await flushPromises()
+
+    const forumRequests = vi.mocked(fetch).mock.calls
+      .map(([input]) => new URL(String(input), 'http://localhost'))
+      .filter((url) => url.pathname === '/api/forum/posts' && url.searchParams.get('job') === '网络')
+    expect(forumRequests.map((url) => url.searchParams.get('page'))).toEqual(['0', '1'])
+    expect(wrapper.findAll('.forum-card')).toHaveLength(2)
+    expect(wrapper.text()).toContain('Network Post Page 2')
   })
 
   test('TC-PORTAL-004 (TC-04) 岗位筛选处理无数据、单条数据、清除与刷新保留', async () => {

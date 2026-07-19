@@ -69,11 +69,11 @@ public class ReleaseService {
         return new PageInfo<>(list);
     }
 
-    public PageInfo<ReleaseAsset> listPublishedReleases(String keyword, String platform, int page, int size) {
+    public PageInfo<ReleaseAsset> listPublishedReleases(String keyword, String platform, String category, int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
         PageHelper.startPage(safePage + 1, safeSize);
-        List<ReleaseAsset> list = releaseAssetMapper.findWithFilter(true, keyword, null, platform);
+        List<ReleaseAsset> list = releaseAssetMapper.findWithFilter(true, keyword, category, platform);
         return new PageInfo<>(list);
     }
 

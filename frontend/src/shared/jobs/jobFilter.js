@@ -8,6 +8,14 @@ export const jobAliases = {
   'network-security': ['network-security', 'network security', '网络安全', '安全']
 }
 
+export const jobCategories = {
+  middleware: '中间件',
+  database: '数据库',
+  host: '主机',
+  network: '网络',
+  'network-security': '网络安全'
+}
+
 export function normalizeJobId(jobId) {
   return jobId === ALL_JOBS_ID || Object.hasOwn(jobAliases, jobId) ? jobId : ALL_JOBS_ID
 }
@@ -20,6 +28,10 @@ export function matchesJob(value, jobId) {
     const normalized = String(item || '').trim().toLowerCase()
     return aliases.includes(normalized)
   })
+}
+
+export function getJobCategory(jobId) {
+  return jobCategories[normalizeJobId(jobId)] || ''
 }
 
 export function filterItemsByJob(items, jobId, categoryAccessor) {

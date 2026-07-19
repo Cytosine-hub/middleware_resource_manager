@@ -5,12 +5,19 @@
     <select id="findByStatusOrderByCreatedAtDesc" resultType="ForumPost">SELECT * FROM forum_posts WHERE status = #{status} ORDER BY created_at DESC</select>
     <select id="findByAuthorUsernameOrderByCreatedAtDesc" resultType="ForumPost">SELECT * FROM forum_posts WHERE author_username = #{authorUsername} ORDER BY created_at DESC</select>
     <select id="search" resultType="ForumPost">
-        SELECT DISTINCT p.* FROM forum_posts p
-        LEFT JOIN forum_post_tags fpt ON p.id = fpt.post_id
-        LEFT JOIN forum_tags t ON fpt.tag_id = t.id
+        SELECT p.* FROM forum_posts p
         WHERE p.status = 'PUBLISHED'
         AND (#{keyword} IS NULL OR MATCH(p.title, p.content) AGAINST(#{keyword} IN BOOLEAN MODE))
-        AND (#{tag} IS NULL OR LOWER(t.name) = LOWER(#{tag}))
+        AND (#{tag} IS NULL OR EXISTS (
+            SELECT 1 FROM forum_post_tags fpt
+            INNER JOIN forum_tags t ON fpt.tag_id = t.id
+            WHERE fpt.post_id = p.id AND LOWER(t.name) = LOWER(#{tag})
+        ))
+        AND (#{job} IS NULL OR EXISTS (
+            SELECT 1 FROM forum_post_tags fpt_job
+            INNER JOIN forum_tags t_job ON fpt_job.tag_id = t_job.id
+            WHERE fpt_job.post_id = p.id AND LOWER(t_job.name) = LOWER(#{job})
+        ))
         ORDER BY p.created_at DESC
     </select>
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">

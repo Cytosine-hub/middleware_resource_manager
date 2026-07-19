@@ -33,9 +33,10 @@ public class PublicReleaseApiController {
     @GetMapping
     public PageResult<ReleaseResponse> list(@RequestParam(defaultValue = "") String keyword,
                                               @RequestParam(defaultValue = "") String platform,
+                                              @RequestParam(defaultValue = "") String category,
                                               @RequestParam(defaultValue = "0") int page,
                                               @RequestParam(defaultValue = "12") int size) {
-        var pageInfo = releaseService.listPublishedReleases(keyword, platform, page, normalizeSize(size));
+        var pageInfo = releaseService.listPublishedReleases(keyword, platform, category, page, normalizeSize(size));
         PageResult<ReleaseResponse> result = new PageResult<>();
         result.setContent(pageInfo.getList().stream()
                 .map(a -> ReleaseResponse.from(a, loadSoftwareType(a)))

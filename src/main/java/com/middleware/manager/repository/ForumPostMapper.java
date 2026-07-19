@@ -17,7 +17,9 @@ public interface ForumPostMapper {
      * Fulltext search with optional tag filter.
      * Uses MATCH(...) AGAINST(...) IN BOOLEAN MODE for keyword search.
      */
-    List<ForumPost> search(@Param("keyword") String keyword, @Param("tag") String tag);
+    List<ForumPost> search(@Param("keyword") String keyword,
+                           @Param("tag") String tag,
+                           @Param("job") String job);
 
     ForumPost findById(Long id);
 

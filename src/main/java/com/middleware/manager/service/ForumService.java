@@ -36,14 +36,15 @@ public class ForumService {
         this.postLikeMapper = postLikeMapper;
     }
 
-    public PageInfo<ForumPost> listPosts(String keyword, String tag, int page, int size) {
+    public PageInfo<ForumPost> listPosts(String keyword, String tag, String job, int page, int size) {
         int s = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         PageHelper.startPage(page + 1, s);
         List<ForumPost> posts;
-        if (StringUtils.hasText(keyword) || StringUtils.hasText(tag)) {
+        if (StringUtils.hasText(keyword) || StringUtils.hasText(tag) || StringUtils.hasText(job)) {
             String kw = StringUtils.hasText(keyword) ? sanitizeFulltext(keyword.trim()) : null;
             String tg = StringUtils.hasText(tag) ? tag.trim() : null;
-            posts = postMapper.search(kw, tg);
+            String jobTag = StringUtils.hasText(job) ? job.trim() : null;
+            posts = postMapper.search(kw, tg, jobTag);
         } else {
             posts = postMapper.findByStatusOrderByCreatedAtDesc(STATUS_PUBLISHED);
         }
