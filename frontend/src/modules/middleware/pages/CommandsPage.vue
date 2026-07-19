@@ -33,7 +33,7 @@
               <div v-html="formatDetail(cmd.detailedDescription)"></div>
             </div>
           </article>
-          <p v-if="filteredCommands.length === 0" class="empty-state">暂无匹配的命令。</p>
+          <EmptyState v-if="filteredCommands.length === 0" message="暂无匹配的命令。" />
         </div>
       </main>
     </div>
@@ -59,8 +59,9 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { formatDetail } from '../utils'
-import FormModal from '../components/ui/FormModal.vue'
+import { formatDetail } from '../../../utils'
+import EmptyState from '../../../components/ui/EmptyState.vue'
+import FormModal from '../../../components/ui/FormModal.vue'
 
 const props = defineProps({
   auth: Object,

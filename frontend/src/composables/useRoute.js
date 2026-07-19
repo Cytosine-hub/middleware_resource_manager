@@ -27,7 +27,9 @@ export function parseHashRoute(hashValue = '') {
   if (hash.startsWith('/knowledge')) return { name: 'knowledge' }
   if (hash.startsWith('/wiki')) return { name: 'wiki' }
   if (hash.startsWith('/diagnostics')) return { name: 'diagnostics' }
-  if (hash.startsWith('/data-migration')) return { name: 'dataMigration' }
+  if (hash.startsWith('/data-migration')) {
+    return { name: 'jobModule', jobId: 'database', feature: 'data-migration', legacy: true }
+  }
   const jobMatch = hash.match(/^\/jobs\/([^/]+)(?:\/([^/]+))?$/)
   if (jobMatch && getJobModule(jobMatch[1])) {
     return { name: 'jobModule', jobId: jobMatch[1], feature: jobMatch[2] || null }

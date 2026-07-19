@@ -10,7 +10,7 @@
           <button :class="{ active: false }" @click="navigate('home')">首页</button>
           <button v-if="auth.token" :class="{ active: route.name === 'standards' }" @click="navigate('standards')">标准发布</button>
           <button v-if="auth.token" :class="{ active: route.name === 'public' }" @click="navigate('downloads')">下载中心</button>
-          <button v-if="auth.token" :class="{ active: route.name === 'dataMigration' }" @click="navigate('data-migration')">数据迁移</button>
+          <button v-if="auth.token" :class="{ active: route.name === 'jobModule' && route.jobId === 'database' && route.feature === 'data-migration' }" @click="navigate('data-migration')">数据迁移</button>
           <button v-if="auth.token" :class="{ active: route.name?.startsWith('forum') }" @click="navigate('forum')">论坛</button>
           <button v-if="auth.token && siteConfig.knowledgeEnabled" :class="{ active: route.name === 'knowledge' }" @click="navigate('knowledge')">知识库</button>
           <button v-if="auth.token && siteConfig.wikiEnabled" :class="{ active: route.name === 'wiki' }" @click="navigate('wiki')">Wiki</button>
@@ -77,27 +77,14 @@
 
       <StandardsPage v-else-if="route.name === 'standards'" />
 
-      <DataMigrationPage v-else-if="route.name === 'dataMigration'" />
-
-      <JobWorkspace
+      <component
         v-else-if="route.name === 'jobModule' && currentJob"
+        :is="currentJob.entryComponent"
         :job="currentJob"
         :feature="route.feature"
+        :context="jobModuleContext"
         @navigate="navigate"
-      >
-        <CommandsPage
-          v-if="route.jobId === 'middleware' && route.feature === 'commands'"
-          :auth="auth"
-          :isSysAdmin="isSysAdmin"
-          :managedCategory="managedCategory"
-          :softwareTypes="softwareTypes"
-          :module-request="currentJob.request"
-          :notify="notify"
-          :confirm="confirmAction"
-        />
-        <DataMigrationPage v-else-if="route.jobId === 'database' && route.feature === 'data-migration'" />
-        <p v-else class="empty-state">该岗位功能正在建设中。</p>
-      </JobWorkspace>
+      />
 
       <section v-else-if="route.name === 'forum'" class="workspace">
         <ForumPostList
@@ -302,9 +289,6 @@ import DiagnosticsPanel from './components/DiagnosticsPanel.vue'
 import HomePage from './pages/HomePage.vue'
 import DownloadsPage from './pages/DownloadsPage.vue'
 import StandardsPage from './pages/StandardsPage.vue'
-import DataMigrationPage from './pages/DataMigrationPage.vue'
-import CommandsPage from './pages/CommandsPage.vue'
-import JobWorkspace from './shared/jobs/JobWorkspace.vue'
 import { getJobModule } from './modules/index.js'
 import AdminPage from './pages/admin/AdminPage.vue'
 import FilesSection from './pages/admin/FilesSection.vue'
@@ -359,12 +343,19 @@ const siteConfig = reactive({ knowledgeEnabled: true, diagnosticsEnabled: true, 
 const loginForm = reactive({ username: '', password: '' })
 const selectedPreviewDocument = ref(null)
 const currentJob = computed(() => getJobModule(route.jobId))
+const jobModuleContext = computed(() => ({
+  auth,
+  isSysAdmin: isSysAdmin.value,
+  managedCategory: managedCategory.value,
+  softwareTypes: softwareTypes.value,
+  notify,
+  confirm: confirmAction
+}))
 
 const pageTitle = computed(() => {
   if (route.name === 'home') return '运营集成中心'
   if (route.name === 'public') return '运营集成中心 · 下载中心'
   if (route.name === 'standards') return '运营集成中心 · 标准发布'
-  if (route.name === 'dataMigration') return '运营集成中心 · 数据迁移'
   if (route.name === 'jobModule') return `运营集成中心 · ${currentJob.value?.name || '岗位空间'}`
   if (route.name === 'documentEditor') return '运营集成中心 · 文档编辑'
   if (route.name && route.name.startsWith('forum')) return '运营集成中心 · infra论坛'
@@ -381,10 +372,10 @@ function syncRoute() {
     token: null, standardId: null, standardType: null, documentId: null, postId: null,
     jobId: null, feature: null, legacy: false
   }, next)
-  if (next.legacy) window.history.replaceState(null, '', '#/jobs/middleware/commands')
+  if (next.legacy) window.history.replaceState(null, '', `#/jobs/${next.jobId}/${next.feature}`)
   updateDocumentTitle()
-  // 独立页面组件自行加载数据（HomePage/DownloadsPage/StandardsPage/DataMigrationPage/CommandsPage/WikiPanel/KnowledgePanel/DiagnosticsPanel）
-  const selfManagedRoutes = ['home', 'public', 'standards', 'dataMigration', 'jobModule', 'knowledge', 'wiki', 'diagnostics']
+  // 独立页面组件自行加载数据（HomePage/DownloadsPage/StandardsPage/岗位模块/WikiPanel/KnowledgePanel/DiagnosticsPanel）
+  const selfManagedRoutes = ['home', 'public', 'standards', 'jobModule', 'knowledge', 'wiki', 'diagnostics']
   if (selfManagedRoutes.includes(route.name)) return
   if (route.name === 'documentEditor' || route.name === 'forum' || route.name === 'forumDetail' || route.name === 'forumEditor' || route.name === 'forumMine') {
     if (route.name === 'documentEditor' && auth.token) {

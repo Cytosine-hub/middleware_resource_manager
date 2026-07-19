@@ -18,7 +18,7 @@
           <div><h3>{{ item.name }}</h3><p>{{ item.description }}</p></div>
           <BaseButton variant="ghost">进入</BaseButton>
         </article>
-        <p v-if="job.features.length === 0" class="empty-state">该岗位能力正在建设中，可按独立接口配置接入后端服务。</p>
+        <EmptyState v-if="job.features.length === 0" message="该岗位能力正在建设中，可按独立接口配置接入后端服务。" />
       </div>
     </main>
   </section>
@@ -27,6 +27,7 @@
 <script setup>
 import JobNavigation from './JobNavigation.vue'
 import BaseButton from '../../components/ui/BaseButton.vue'
+import EmptyState from '../../components/ui/EmptyState.vue'
 
 const props = defineProps({ job: { type: Object, required: true }, feature: { type: String, default: null } })
 const emit = defineEmits(['navigate'])

@@ -50,7 +50,7 @@
               </div>
             </div>
           </article>
-          <p v-if="filteredReleases.length === 0" class="empty-state">当前岗位暂无可下载软件，可切换其他岗位查看。</p>
+          <EmptyState v-if="filteredReleases.length === 0" message="当前岗位暂无可下载软件，可切换其他岗位查看。" />
         </div>
         <div class="release-pagination">
           <Pagination :page="page" @change="changePage" />
@@ -67,6 +67,7 @@ import { computed, ref, reactive, onMounted } from 'vue'
 import { request } from '../api'
 import { formatBytes } from '../utils'
 import Pagination from '../components/Pagination.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 import JobNavigation from '../shared/jobs/JobNavigation.vue'
 import { filterItemsByJob } from '../shared/jobs/jobFilter.js'
 import { useJobFilter } from '../shared/jobs/useJobFilter.js'

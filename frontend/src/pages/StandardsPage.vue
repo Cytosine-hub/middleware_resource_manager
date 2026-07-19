@@ -150,7 +150,7 @@
             </article>
           </div>
         </section>
-        <p v-if="filteredStandards.length === 0" class="empty-state">当前岗位暂无已发布标准，可切换其他岗位查看。</p>
+        <EmptyState v-if="filteredStandards.length === 0" message="当前岗位暂无已发布标准，可切换其他岗位查看。" />
       </div>
     </template>
       </div>
@@ -163,6 +163,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'v
 import { request } from '../api'
 import MarkdownIt from 'markdown-it'
 import Pagination from '../components/Pagination.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 import PdfDocumentPreview from '../components/previews/PdfDocumentPreview.vue'
 import WordDocumentPreview from '../components/previews/WordDocumentPreview.vue'
 import MarkdownDocumentPreview from '../components/previews/MarkdownDocumentPreview.vue'

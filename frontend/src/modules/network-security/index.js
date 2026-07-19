@@ -1,9 +1,16 @@
-import { createModuleApi } from '../../shared/api/createModuleApi.js'
+import { createJobModule } from '../../shared/jobs/createJobModule.js'
+import ModuleEntry from './ModuleEntry.vue'
 
-const apiBaseUrl = import.meta.env?.VITE_NETWORK_SECURITY_API_BASE_URL || '/api'
+const defaultApiBaseUrl = import.meta.env?.VITE_NETWORK_SECURITY_API_BASE_URL || '/api'
 
-export const networkSecurityModule = {
+const definition = {
   id: 'network-security', name: '网络安全岗位', shortName: '网络安全', englishName: 'Network Security',
   description: '承载安全基线、防护策略和网络安全运营能力。', modulePath: '/modules/network-security',
-  apiConfigKey: 'VITE_NETWORK_SECURITY_API_BASE_URL', apiBaseUrl, request: createModuleApi(apiBaseUrl), features: []
+  apiConfigKey: 'VITE_NETWORK_SECURITY_API_BASE_URL', defaultApiBaseUrl, entryComponent: ModuleEntry, features: []
 }
+
+export function createNetworkSecurityModule(options) {
+  return createJobModule(definition, options)
+}
+
+export const networkSecurityModule = createNetworkSecurityModule()

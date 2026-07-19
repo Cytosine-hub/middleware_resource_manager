@@ -15,10 +15,10 @@ export function normalizeJobId(jobId) {
 export function matchesJob(value, jobId) {
   if (normalizeJobId(jobId) === ALL_JOBS_ID) return true
   const values = Array.isArray(value) ? value : [value]
-  const aliases = jobAliases[jobId]
+  const aliases = jobAliases[jobId].map((alias) => alias.toLowerCase())
   return values.some((item) => {
     const normalized = String(item || '').trim().toLowerCase()
-    return aliases.some((alias) => normalized.includes(alias.toLowerCase()))
+    return aliases.includes(normalized)
   })
 }
 

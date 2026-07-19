@@ -38,7 +38,7 @@
           <p v-if="!hasMore && filteredPosts.length > 0" class="forum-no-more">— 已加载全部文章 —</p>
         </template>
         <div v-if="loading && posts.length === 0" class="loading-panel"><div class="spinner"></div><p>加载中...</p></div>
-        <p v-if="!loading && filteredPosts.length === 0" class="empty-state">当前岗位暂无文章，可切换其他岗位或发表第一篇内容。</p>
+        <EmptyState v-if="!loading && filteredPosts.length === 0" message="当前岗位暂无文章，可切换其他岗位或发表第一篇内容。" />
       </div>
 
       <aside class="forum-sidebar">
@@ -60,6 +60,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { request } from '../api'
+import EmptyState from './ui/EmptyState.vue'
 import JobNavigation from '../shared/jobs/JobNavigation.vue'
 import { filterItemsByJob } from '../shared/jobs/jobFilter.js'
 import { useJobFilter } from '../shared/jobs/useJobFilter.js'
