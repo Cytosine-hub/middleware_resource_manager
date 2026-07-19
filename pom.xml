@@ -115,6 +115,30 @@
                     <classifier>exec</classifier>
                 </configuration>
             </plugin>
+            <!--
+              把 Mockito 的 ByteBuddy agent 作为 -javaagent 显式加载，避免测试期运行时 self-attach。
+              新版 JDK 默认禁止动态 self-attach，否则 mock(...) 会初始化失败（评审环境曾报 14 个 error）。
+              先用 dependency-plugin 把 byte-buddy-agent 的 jar 路径解析到 property，再传给 surefire。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>resolve-mockito-agent</id>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-javaagent:${net.bytebuddy:byte-buddy-agent:jar} -Xshare:off</argLine>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>

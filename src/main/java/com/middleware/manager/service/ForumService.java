@@ -49,7 +49,8 @@ public class ForumService {
         PageRequest pr = PageRequest.of(Math.max(page, 0), s, Sort.by(Sort.Direction.DESC, "createdAt"));
         if (StringUtils.hasText(category)) {
             String kw = StringUtils.hasText(keyword) ? keyword.trim() : null;
-            return postRepo.findByCategory(category.trim(), kw, pr);
+            String tg = StringUtils.hasText(tag) ? tag.trim() : null;
+            return postRepo.findByCategory(category.trim(), kw, tg, pr);
         }
         if (StringUtils.hasText(keyword) || StringUtils.hasText(tag)) {
             String kw = StringUtils.hasText(keyword) ? sanitizeFulltext(keyword.trim()) : null;

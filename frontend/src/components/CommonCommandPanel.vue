@@ -37,6 +37,8 @@ import { request } from '../api'
 
 const props = defineProps({
   category: { type: String, required: true },
+  // 后端接入点：默认门户后端 /api，岗位模块可传入自己的独立后端（TC-06）
+  apiBase: { type: String, default: '/api' },
   notify: { type: Function, default: null }
 })
 
@@ -49,7 +51,8 @@ async function reload() {
   loading.value = true
   try {
     const params = new URLSearchParams({ category: props.category, keyword: keyword.value, size: 100 })
-    const data = await request(`/api/module/commands?${params}`, { token: null })
+    const base = (props.apiBase || '/api').replace(/\/$/, '')
+    const data = await request(`${base}/module/commands?${params}`, { token: null })
     commands.value = Array.isArray(data?.content) ? data.content : []
   } catch {
     commands.value = []

@@ -32,15 +32,15 @@
           <h3>常用命令</h3>
           <span class="muted">{{ role.label }}岗位常用运维命令，可搜索、复制</span>
         </div>
-        <CommonCommandPanel :category="role.category" :notify="notify" />
+        <CommonCommandPanel :category="role.category" :api-base="role.apiBase" :notify="notify" />
       </section>
     </template>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
-import { request } from '../api'
+import { computed, onMounted, ref } from 'vue'
+import { ROLE_FALLBACK, fetchRoles } from '../roles'
 import CommonCommandPanel from './CommonCommandPanel.vue'
 
 const props = defineProps({
@@ -50,28 +50,14 @@ const props = defineProps({
 })
 defineEmits(['home', 'open-downloads', 'open-standards', 'open-forum'])
 
-const FALLBACK = [
-  { id: 'middleware', label: '中间件', category: '中间件' },
-  { id: 'database', label: '数据库', category: '数据库' },
-  { id: 'host', label: '主机', category: '主机' },
-  { id: 'network', label: '网络', category: '网络' },
-  { id: 'security', label: '网络安全', category: '安全' }
-]
-const roles = ref(FALLBACK)
+// 岗位清单统一来自共享数据源（roles.js），与首页入口/公共模块导航保持一致
+const roles = ref([...ROLE_FALLBACK])
 
 const role = computed(() => roles.value.find(r => r.id === props.roleId) || null)
 
-async function loadRoles() {
-  try {
-    const data = await request('/api/public/portal/roles', { token: null })
-    if (Array.isArray(data) && data.length) roles.value = data
-  } catch {
-    roles.value = FALLBACK
-  }
-}
-
-onMounted(loadRoles)
-watch(() => props.roleId, () => {})
+onMounted(async () => {
+  roles.value = await fetchRoles()
+})
 </script>
 
 <style scoped>

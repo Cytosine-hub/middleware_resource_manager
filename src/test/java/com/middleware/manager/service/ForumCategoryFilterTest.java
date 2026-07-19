@@ -45,6 +45,10 @@ class ForumCategoryFilterTest {
         forumService.createPost(title, "内容-" + title, List.of(), category, "alice", "Alice");
     }
 
+    private void post(String title, String content, List<String> tags, String category) {
+        forumService.createPost(title, content, tags, category, "alice", "Alice");
+    }
+
     @Test
     void TC_03_论坛按岗位筛选仅返回对应岗位帖子() {
         post("中间件调优", "中间件");
@@ -78,5 +82,33 @@ class ForumCategoryFilterTest {
         post("中间件部署手册", "中间件");
 
         assertThat(forumService.listPosts("调优", "", "中间件", 0, 12).getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    void TC_03_论坛岗位内关键字同时匹配标题与内容() {
+        // 关键字只出现在内容里，也应被检出——保持原论坛「标题或内容搜索」的交互
+        post("Nginx部署手册", "详解 keepalive 长连接调优参数", List.of(), "中间件");
+        post("Tomcat线程池", "线程池配置说明", List.of(), "中间件");
+
+        // 命中内容
+        assertThat(forumService.listPosts("keepalive", "", "中间件", 0, 12).getTotalElements()).isEqualTo(1);
+        // 命中标题
+        assertThat(forumService.listPosts("Tomcat", "", "中间件", 0, 12).getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    void TC_03_论坛岗位内可与标签条件组合() {
+        post("Redis缓存实践", "内容A", List.of("redis", "缓存"), "中间件");
+        post("Kafka消息", "内容B", List.of("kafka"), "中间件");
+        post("MySQL索引", "内容C", List.of("redis"), "数据库");
+
+        // 岗位 + 标签组合：只返回中间件岗位下带 redis 标签的帖子（不串到数据库岗位）
+        Page<ForumPost> byTag = forumService.listPosts("", "redis", "中间件", 0, 12);
+        assertThat(byTag.getTotalElements()).isEqualTo(1);
+        assertThat(byTag.getContent()).allMatch(p -> "中间件".equals(p.getCategory()));
+        assertThat(byTag.getContent().get(0).getTitle()).isEqualTo("Redis缓存实践");
+
+        // 标签大小写不敏感
+        assertThat(forumService.listPosts("", "REDIS", "中间件", 0, 12).getTotalElements()).isEqualTo(1);
     }
 }

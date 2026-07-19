@@ -21,7 +21,7 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { request } from '../api'
+import { ROLE_FALLBACK, fetchRoles } from '../roles'
 
 const props = defineProps({
   // 当前选中的岗位分类，'' 表示全部
@@ -29,15 +29,8 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue', 'change'])
 
-// 兜底数据：接口不可用时仍能展示五大岗位，保证导航一致可用
-const FALLBACK = [
-  { id: 'middleware', label: '中间件', category: '中间件' },
-  { id: 'database', label: '数据库', category: '数据库' },
-  { id: 'host', label: '主机', category: '主机' },
-  { id: 'network', label: '网络', category: '网络' },
-  { id: 'security', label: '网络安全', category: '安全' }
-]
-const roles = ref(FALLBACK)
+// 岗位清单统一来自共享数据源（roles.js），三个公共模块共用，保证顺序/名称/交互一致
+const roles = ref([...ROLE_FALLBACK])
 
 function select(category) {
   if (category === props.modelValue) return
@@ -46,12 +39,7 @@ function select(category) {
 }
 
 onMounted(async () => {
-  try {
-    const data = await request('/api/public/portal/roles', { token: null })
-    if (Array.isArray(data) && data.length) roles.value = data
-  } catch {
-    roles.value = FALLBACK
-  }
+  roles.value = await fetchRoles()
 })
 </script>
 

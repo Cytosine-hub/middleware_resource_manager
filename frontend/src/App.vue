@@ -201,23 +201,30 @@
         </div>
 
         <template v-else>
-          <div class="release-grid">
-            <article v-for="release in publicPage.content" :key="release.downloadToken" class="release-card">
-              <div>
-                <h2>{{ release.middlewareName }}</h2>
-                <p>{{ release.version }} · {{ release.platform || '通用平台' }}</p>
-              </div>
-              <p class="description">{{ release.description || '暂无版本说明。' }}</p>
-              <div class="card-footer">
-                <span>{{ formatBytes(release.fileSize) }}</span>
-                <div class="card-actions">
-                  <button class="ghost" @click="openDetail(release.downloadToken)">详情</button>
-                  <a class="download-button" href="#" @click.prevent="handleDownload(release.downloadUrl, release.originalFileName)">下载</a>
-                </div>
-              </div>
-            </article>
+          <div v-if="publicPage.content.length === 0" class="empty-state download-empty">
+            {{ publicFilters.category || publicFilters.keyword || publicFilters.platform
+              ? '当前筛选条件下暂无软件资源，可切换岗位或清除筛选后再试。'
+              : '暂无已发布软件资源。' }}
           </div>
-          <Pagination :page="publicPage" @change="changePublicPage" />
+          <template v-else>
+            <div class="release-grid">
+              <article v-for="release in publicPage.content" :key="release.downloadToken" class="release-card">
+                <div>
+                  <h2>{{ release.middlewareName }}</h2>
+                  <p>{{ release.version }} · {{ release.platform || '通用平台' }}</p>
+                </div>
+                <p class="description">{{ release.description || '暂无版本说明。' }}</p>
+                <div class="card-footer">
+                  <span>{{ formatBytes(release.fileSize) }}</span>
+                  <div class="card-actions">
+                    <button class="ghost" @click="openDetail(release.downloadToken)">详情</button>
+                    <a class="download-button" href="#" @click.prevent="handleDownload(release.downloadUrl, release.originalFileName)">下载</a>
+                  </div>
+                </div>
+              </article>
+            </div>
+            <Pagination :page="publicPage" @change="changePublicPage" />
+          </template>
         </template>
         </div>
       </section>
@@ -1100,6 +1107,7 @@
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 import { clearAuth, fileUrl, getSavedAuth, request, saveAuth } from './api'
+import { ROLE_FALLBACK, fetchRoles } from './roles'
 import CryptoJS from 'crypto-js'
 import Pagination from './components/Pagination.vue'
 import DocumentEditor from './components/DocumentEditor.vue'
@@ -1234,17 +1242,12 @@ const adminSectionLabel = computed(() => {
   if (adminSection.value === 'reviews') return { eyebrow: 'Reviews', title: '审核管理' }
   return { eyebrow: 'Admin', title: '用户管理' }
 })
-const roleModules = [
-  { id: 'middleware', label: '中间件', category: '中间件' },
-  { id: 'database', label: '数据库', category: '数据库' },
-  { id: 'host', label: '主机', category: '主机' },
-  { id: 'network', label: '网络', category: '网络' },
-  { id: 'security', label: '网络安全', category: '安全' }
-]
+// 岗位专属区域入口清单：统一来自共享数据源（roles.js），与公共模块左侧岗位导航一致，避免多处硬编码漂移
+const roleModules = ref([...ROLE_FALLBACK])
 const pageTitle = computed(() => {
   if (route.name === 'home') return '运营集成中心门户'
   if (route.name === 'roleModule') {
-    const role = roleModules.find(r => r.id === route.roleId)
+    const role = roleModules.value.find(r => r.id === route.roleId)
     return role ? `${role.label}岗位` : '岗位模块'
   }
   if (route.name === 'public') return '软件下载'
@@ -2841,6 +2844,7 @@ async function loadSiteConfig() {
 
 onMounted(() => {
   loadSiteConfig()
+  fetchRoles().then(list => { roleModules.value = list })
   const saved = getSavedAuth()
   if (saved) {
     auth.token = saved.token
