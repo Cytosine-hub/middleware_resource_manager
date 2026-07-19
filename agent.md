@@ -122,7 +122,12 @@ public class AdminSoftwareTypeApiController {
   论坛发帖岗位选择等一律从这里取数，保证顺序、标识、名称一致，避免多处硬编码漂移。
 - 论坛发帖/编辑需带岗位（category），否则新帖无法被左侧岗位导航筛出；编辑时回显原岗位。
 - 常用命令：`module/common/command/`（`CommonCommand*`）是**可复用的按 category 隔离**的通用能力，
-  各岗位共用同一 Service/接口/组件；当前门户「常用命令」已归入**中间件**岗位模块（category=中间件）。
+  各岗位共用同一 Service/接口/组件；当前门户「常用命令」已归入**中间件**岗位模块（category=中间件），
+  唯一入口在中间件岗位模块页（`RoleModulePanel` 内嵌 `CommonCommandPanel`），首页不再有独立入口。
+  历史内置命令由 `module/middleware/MiddlewareCommandSeeder` 在启动时**程序化幂等回填**（按 category+title 去重），
+  不依赖仅需手动执行的 DDL 样例，保证全新库也能完整展示历史数据。
+- 岗位分类是受控枚举：论坛发帖/编辑、常用命令写入等**带 category 的写操作必须用 `PortalRole.isRoleCategory` 校验**
+  （允许「不限岗位」= null），拒绝非法/超长岗位值，避免脏分类导致左侧岗位导航筛不出或 UI 分类不一致。
 
 **③ 岗位数据范围沿用核心 category 隔离（见 §3）。** 五大岗位 category 固定为
 `中间件/数据库/主机/网络/安全`；「网络安全」为展示名，数据范围用既有「安全」分类。

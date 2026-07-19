@@ -18,4 +18,7 @@ public interface CommonCommandRepository extends JpaRepository<CommonCommand, Lo
     Page<CommonCommand> filter(@Param("category") String category,
                                @Param("keyword") String keyword,
                                Pageable pageable);
+
+    /** 幂等回填用：判断某岗位下同标题命令是否已存在，避免重复迁移。 */
+    boolean existsByCategoryAndTitle(String category, String title);
 }

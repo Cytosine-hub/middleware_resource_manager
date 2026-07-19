@@ -83,13 +83,6 @@ CREATE TABLE IF NOT EXISTS common_commands (
 -- 论坛帖子增加岗位分类列（用于按岗位筛选，列不存在时执行）
 ALTER TABLE forum_posts ADD COLUMN IF NOT EXISTS category VARCHAR(40) COMMENT '岗位分类';
 
--- 中间件岗位常用命令初始数据（幂等，避免重复插入）
-INSERT INTO common_commands (category, title, command, description, tag, created_at, updated_at)
-SELECT '中间件', '查看Nginx进程', 'ps -ef | grep nginx', '定位 nginx 主/工作进程', 'nginx', NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM common_commands WHERE category = '中间件' AND title = '查看Nginx进程');
-INSERT INTO common_commands (category, title, command, description, tag, created_at, updated_at)
-SELECT '中间件', '重载Nginx配置', 'nginx -t && nginx -s reload', '校验并热加载配置，不中断服务', 'nginx', NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM common_commands WHERE category = '中间件' AND title = '重载Nginx配置');
-INSERT INTO common_commands (category, title, command, description, tag, created_at, updated_at)
-SELECT '中间件', '查看Tomcat端口', 'netstat -anp | grep 8080', '确认 Tomcat 监听端口与连接', 'tomcat', NOW(), NOW()
-WHERE NOT EXISTS (SELECT 1 FROM common_commands WHERE category = '中间件' AND title = '查看Tomcat端口');
+-- 中间件岗位「常用命令」历史数据的迁移/回填不在此手工维护：
+-- 由 MiddlewareCommandSeeder 在应用启动时**程序化幂等回填**（见 com.middleware.manager.module.middleware），
+-- 确保任意环境（含全新库）历史命令都完整展示，避免依赖仅需手动执行的 DDL 样例。

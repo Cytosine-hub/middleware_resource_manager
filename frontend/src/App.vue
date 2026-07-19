@@ -100,6 +100,26 @@
             <button>进入论坛</button>
           </article>
         </div>
+
+        <div class="portal-latest">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Latest</p>
+              <h3>最新软件发布</h3>
+            </div>
+            <button class="ghost" @click="goPublic()">更多</button>
+          </div>
+          <div class="latest-list">
+            <article v-for="release in publicPage.content.slice(0, 4)" :key="release.downloadToken">
+              <div>
+                <h4>{{ release.middlewareName }}</h4>
+                <p>{{ release.version }} · {{ release.platform || '通用平台' }}</p>
+              </div>
+              <button class="ghost" @click.stop="openDetail(release.downloadToken)">详情</button>
+            </article>
+            <p v-if="publicPage.content.length === 0" class="empty-state">暂无已发布软件资源。</p>
+          </div>
+        </div>
         </section>
 
         <section class="portal-region portal-roles">
@@ -120,54 +140,6 @@
           </div>
         </section>
 
-        <div class="section-heading portal-tools-heading">
-          <div>
-            <p class="eyebrow">Tools</p>
-            <h3>常用工具</h3>
-          </div>
-        </div>
-        <div class="portal-grid portal-tools-grid">
-          <article class="portal-card portal-tool">
-            <div class="portal-icon tool-icon">库</div>
-            <div><h3>知识库</h3><p>运维文档、故障案例、技术方案和经验总结。</p></div>
-            <button class="ghost">查看</button>
-          </article>
-          <article class="portal-card portal-tool">
-            <div class="portal-icon tool-icon">监</div>
-            <div><h3>监控面板</h3><p>服务器性能、中间件状态、告警信息统一查看。</p></div>
-            <button class="ghost">查看</button>
-          </article>
-          <article class="portal-card portal-tool">
-            <div class="portal-icon tool-icon">端</div>
-            <div><h3>远程终端</h3><p>Web SSH 终端，快速连接服务器和管理中间件。</p></div>
-            <button class="ghost">打开</button>
-          </article>
-          <article class="portal-card portal-tool">
-            <div class="portal-icon tool-icon">备</div>
-            <div><h3>备份管理</h3><p>数据库与配置文件定时备份、恢复和版本管理。</p></div>
-            <button class="ghost">查看</button>
-          </article>
-        </div>
-
-        <section class="portal-latest">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Latest</p>
-              <h3>最新软件发布</h3>
-            </div>
-            <button class="ghost" @click="goPublic()">更多</button>
-          </div>
-          <div class="latest-list">
-            <article v-for="release in publicPage.content.slice(0, 4)" :key="release.downloadToken">
-              <div>
-                <h4>{{ release.middlewareName }}</h4>
-                <p>{{ release.version }} · {{ release.platform || '通用平台' }}</p>
-              </div>
-              <button class="ghost" @click.stop="openDetail(release.downloadToken)">详情</button>
-            </article>
-            <p v-if="publicPage.content.length === 0" class="empty-state">暂无已发布软件资源。</p>
-          </div>
-        </section>
       </section>
 
       <section v-else-if="route.name === 'public'" class="workspace module-with-rolenav">

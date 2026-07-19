@@ -3,6 +3,7 @@ package com.middleware.manager.service;
 import com.middleware.manager.domain.*;
 import com.middleware.manager.repository.*;
 import com.middleware.manager.domain.PostLike;
+import com.middleware.manager.module.common.PortalRole;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -103,8 +104,20 @@ public class ForumService {
         return postRepo.save(post);
     }
 
+    /**
+     * 归一化帖子岗位分类：允许「不限岗位」（null/空 → null）；一旦提供，必须是门户五大岗位分类之一。
+     * 校验既防止写入非法/超长岗位值（导致左侧岗位导航筛不出、UI 分类不一致或超出表字段长度），
+     * 也让前后端岗位口径与 {@link PortalRole} 单一数据源保持一致（TC-03/TC-04）。
+     */
     private String normalizeCategory(String category) {
-        return StringUtils.hasText(category) ? category.trim() : null;
+        if (!StringUtils.hasText(category)) {
+            return null;
+        }
+        String trimmed = category.trim();
+        if (!PortalRole.isRoleCategory(trimmed)) {
+            throw new IllegalArgumentException("非法岗位分类: " + trimmed);
+        }
+        return trimmed;
     }
 
     @Transactional

@@ -1,8 +1,10 @@
 package com.middleware.manager.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.middleware.manager.domain.ForumPost;
+import com.middleware.manager.module.common.PortalRole;
 import com.middleware.manager.repository.ForumCommentRepository;
 import com.middleware.manager.repository.ForumPostRepository;
 import com.middleware.manager.repository.ForumTagRepository;
@@ -120,6 +122,33 @@ class ForumCategoryFilterTest {
         assertThat(forumService.listPosts("keepalive", "", "中间件", 0, 12).getTotalElements()).isEqualTo(1);
         // 命中标题
         assertThat(forumService.listPosts("Tomcat", "", "中间件", 0, 12).getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    void TC_03_发帖岗位必须属于五大岗位否则被拒绝以保证导航一致() {
+        // 五大岗位分类均可正常发帖
+        for (String category : PortalRole.categories()) {
+            ForumPost saved = forumService.createPost("岗位帖-" + category, "内容", List.of(), category, "alice", "Alice");
+            assertThat(saved.getCategory()).isEqualTo(category);
+        }
+        // 非法岗位（拼写错误/超长/不在五大岗位内）被拒绝，避免写入脏分类筛不出、UI 不一致
+        assertThatThrownBy(() -> forumService.createPost("非法岗位帖", "内容", List.of(), "运维大杂烩", "alice", "Alice"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> forumService.createPost("超长岗位帖", "内容", List.of(),
+                "这是一个远超岗位字段长度限制的非法岗位分类值这是一个远超岗位字段长度限制的非法岗位分类值", "alice", "Alice"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void TC_03_编辑帖子改到非法岗位被拒绝且不破坏原岗位数据() {
+        forumService.createPost("中间件帖", "内容", List.of(), "中间件", "alice", "Alice");
+        Long id = forumService.listPosts("", "", "中间件", 0, 12).getContent().get(0).getId();
+
+        assertThatThrownBy(() -> forumService.updatePost(id, "中间件帖", "内容", List.of(), "非法岗位", "alice"))
+                .isInstanceOf(IllegalArgumentException.class);
+        // 允许「不限岗位」（null）——这不是非法值
+        forumService.updatePost(id, "中间件帖", "内容", List.of(), null, "alice");
+        assertThat(forumService.getPost(id).getCategory()).isNull();
     }
 
     @Test
