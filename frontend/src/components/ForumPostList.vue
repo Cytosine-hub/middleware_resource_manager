@@ -144,7 +144,7 @@ watch(() => props.auth.token, () => { loadPosts(true) })
 
 <style scoped>
 .forum-page { padding-top: var(--space-xl); }
-.public-module-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--space-xl); }
+.public-module-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 6fr); gap: var(--space-xl); }
 .public-module-content { min-width: 0; }
 .forum-hero {
   background: linear-gradient(120deg, #1a3650, #1a4a6e);

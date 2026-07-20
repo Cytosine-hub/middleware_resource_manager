@@ -113,7 +113,7 @@ onMounted(loadData)
   min-height: 0;
   padding-top: var(--space-lg);
 }
-.public-module-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--space-xl); min-height: 0; }
+.public-module-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 6fr); gap: var(--space-xl); min-height: 0; }
 .public-module-content { display: flex; flex-direction: column; gap: var(--space-md); min-width: 0; min-height: 0; }
 .release-list-container {
   display: flex;

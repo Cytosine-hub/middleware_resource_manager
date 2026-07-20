@@ -43,10 +43,10 @@ defineEmits(['update:modelValue'])
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 32px;
+  min-height: 2.5em;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  padding: var(--space-xs) var(--space-sm);
+  padding: 0.31em 0.62em;
   color: var(--color-text-secondary);
   background: transparent;
   text-align: left;

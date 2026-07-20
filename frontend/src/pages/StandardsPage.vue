@@ -348,7 +348,7 @@ onBeforeUnmount(destroyScrollSpy)
 </script>
 
 <style scoped>
-.public-module-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--space-xl); padding-top: var(--space-xl); }
+.public-module-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 6fr); gap: var(--space-xl); padding-top: var(--space-xl); }
 .public-module-content { min-width: 0; }
 .standards-tree {
   width: 260px; border-right: 1px solid var(--color-border);
