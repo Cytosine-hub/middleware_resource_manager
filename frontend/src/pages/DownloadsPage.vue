@@ -1,5 +1,8 @@
 <template>
   <section class="workspace downloads-page">
+    <div class="public-module-layout">
+      <JobNavigation :model-value="selectedJob" @update:model-value="selectJob" />
+      <div class="public-module-content">
     <div class="toolbar">
       <div class="filters">
         <input v-model.trim="filters.keyword" placeholder="搜索名称、版本、说明" @keyup.enter="loadData()" />
@@ -47,12 +50,15 @@
               </div>
             </div>
           </article>
+          <EmptyState v-if="page.content.length === 0" message="当前岗位暂无可下载软件，可切换其他岗位查看。" />
         </div>
         <div class="release-pagination">
           <Pagination :page="page" @change="changePage" />
         </div>
       </div>
     </template>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -61,16 +67,30 @@ import { ref, reactive, onMounted } from 'vue'
 import { request } from '../api'
 import { formatBytes } from '../utils'
 import Pagination from '../components/Pagination.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
+import JobNavigation from '../shared/jobs/JobNavigation.vue'
+import { getJobCategory } from '../shared/jobs/jobFilter.js'
+import { useJobFilter } from '../shared/jobs/useJobFilter.js'
 
 const filters = reactive({ keyword: '', platform: '', page: 0, size: 12 })
 const page = reactive({ content: [], page: 0, size: 12, totalElements: 0, totalPages: 0, first: true, last: true })
 const selectedRelease = ref(null)
+const { selectedJob, selectJob: persistSelectedJob } = useJobFilter()
 
 async function loadData() {
-  const query = new URLSearchParams(filters).toString()
+  const queryFilters = { ...filters }
+  const category = getJobCategory(selectedJob.value)
+  if (category) queryFilters.category = category
+  const query = new URLSearchParams(queryFilters).toString()
   const data = await request(`/api/public/releases?${query}`, { token: null })
   Object.assign(page, data)
   selectedRelease.value = null
+}
+
+function selectJob(jobId) {
+  persistSelectedJob(jobId)
+  filters.page = 0
+  loadData()
 }
 
 async function openDetail(token) {
@@ -93,6 +113,8 @@ onMounted(loadData)
   min-height: 0;
   padding-top: var(--space-lg);
 }
+.public-module-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--space-xl); min-height: 0; }
+.public-module-content { display: flex; flex-direction: column; gap: var(--space-md); min-width: 0; min-height: 0; }
 .release-list-container {
   display: flex;
   flex-direction: column;
@@ -135,6 +157,7 @@ onMounted(loadData)
 }
 
 @media (max-width: 760px) {
+  .public-module-layout { grid-template-columns: 1fr; }
   .downloads-page {
     height: auto;
     min-height: 0;

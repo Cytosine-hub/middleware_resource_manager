@@ -1,5 +1,8 @@
 <template>
   <section class="workspace standards-page">
+    <div class="public-module-layout">
+      <JobNavigation :model-value="selectedJob" @update:model-value="handleJobChange" />
+      <div class="public-module-content">
     <div v-if="selectedStandard" class="standards-detail-layout">
       <!-- 左侧树形目录 -->
       <aside class="standards-tree">
@@ -8,7 +11,7 @@
           <button class="ghost" @click="closeDetail()">返回列表</button>
         </div>
         <div class="tree-content">
-          <div v-for="std in standards" :key="std.id" class="tree-group">
+          <div v-for="std in filteredStandards" :key="std.id" class="tree-group">
             <!-- 一级目录：参数标准 -->
             <div :class="['tree-item', 'tree-parent', { active: selectedStandard?.id === std.id && !selectedDoc }]" @click="openStandardDetail(std.id)">
               <span class="tree-toggle" @click.stop="toggleExpand(std.id)">{{ expanded[std.id] ? '▼' : '▶' }}</span>
@@ -23,7 +26,7 @@
               </div>
             </div>
           </div>
-          <p v-if="standards.length === 0" class="tree-empty">暂无标准</p>
+          <p v-if="filteredStandards.length === 0" class="tree-empty">暂无标准</p>
         </div>
       </aside>
 
@@ -147,9 +150,11 @@
             </article>
           </div>
         </section>
-        <p v-if="standards.length === 0" class="empty-state">暂无已发布标准。</p>
+        <EmptyState v-if="filteredStandards.length === 0" message="当前岗位暂无已发布标准，可切换其他岗位查看。" />
       </div>
     </template>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -158,9 +163,13 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'v
 import { request } from '../api'
 import MarkdownIt from 'markdown-it'
 import Pagination from '../components/Pagination.vue'
+import EmptyState from '../components/ui/EmptyState.vue'
 import PdfDocumentPreview from '../components/previews/PdfDocumentPreview.vue'
 import WordDocumentPreview from '../components/previews/WordDocumentPreview.vue'
 import MarkdownDocumentPreview from '../components/previews/MarkdownDocumentPreview.vue'
+import JobNavigation from '../shared/jobs/JobNavigation.vue'
+import { filterItemsByJob } from '../shared/jobs/jobFilter.js'
+import { useJobFilter } from '../shared/jobs/useJobFilter.js'
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
 
@@ -174,6 +183,7 @@ const paramSearch = ref('')
 const paramPage = reactive({ page: 0, size: 10, totalPages: 0, totalElements: 0, first: true, last: true })
 const loading = ref(false)
 const expanded = reactive({})
+const { selectedJob, selectJob } = useJobFilter()
 
 const isPdfDoc = computed(() =>
   selectedDoc.value?.storedFileName?.toLowerCase().endsWith('.pdf') ?? false
@@ -198,13 +208,14 @@ const relatedDocs = computed(() => {
 })
 const standardGroups = computed(() => {
   const groups = new Map()
-  for (const s of standards.value) {
+  for (const s of filteredStandards.value) {
     const cat = s.category || '未分类'
     if (!groups.has(cat)) groups.set(cat, { category: cat, standards: [] })
     groups.get(cat).standards.push(s)
   }
   return [...groups.values()]
 })
+const filteredStandards = computed(() => filterItemsByJob(standards.value, selectedJob.value, (standard) => standard.category))
 const docHtml = computed(() => {
   const doc = selectedDoc.value || selectedStandard.value
   if (!doc) return ''
@@ -253,6 +264,13 @@ function displayTitle(doc) {
 }
 function toggleExpand(id) {
   expanded[id] = !expanded[id]
+}
+
+function handleJobChange(jobId) {
+  selectJob(jobId)
+  if (selectedStandard.value && !filterItemsByJob([selectedStandard.value], jobId, (standard) => standard.category).length) {
+    closeDetail()
+  }
 }
 
 async function loadStandards() {
@@ -331,6 +349,8 @@ onBeforeUnmount(destroyScrollSpy)
 </script>
 
 <style scoped>
+.public-module-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--space-xl); padding-top: var(--space-xl); }
+.public-module-content { min-width: 0; }
 .standards-tree {
   width: 260px; border-right: 1px solid var(--color-border);
   display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden;
@@ -353,6 +373,9 @@ onBeforeUnmount(destroyScrollSpy)
 .tree-item:hover { background: var(--color-bg-tertiary); }
 .tree-item.active { background: var(--color-primary-light); color: var(--color-primary); }
 .tree-parent { font-weight: 500; }
+@media (max-width: 760px) {
+  .public-module-layout { grid-template-columns: 1fr; }
+}
 .tree-child { padding-left: calc(var(--space-lg) + 20px); font-weight: 400; }
 .tree-toggle {
   width: 16px; text-align: center; font-size: var(--text-xs); color: var(--color-text-tertiary);

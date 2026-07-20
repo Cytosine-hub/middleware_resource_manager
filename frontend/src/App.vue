@@ -10,7 +10,7 @@
           <button :class="{ active: false }" @click="navigate('home')">首页</button>
           <button v-if="auth.token" :class="{ active: route.name === 'standards' }" @click="navigate('standards')">标准发布</button>
           <button v-if="auth.token" :class="{ active: route.name === 'public' }" @click="navigate('downloads')">下载中心</button>
-          <button v-if="auth.token" :class="{ active: route.name === 'dataMigration' }" @click="navigate('data-migration')">数据迁移</button>
+          <button v-if="auth.token" :class="{ active: route.name === 'jobModule' && route.jobId === 'database' && route.feature === 'data-migration' }" @click="navigate('data-migration')">数据迁移</button>
           <button v-if="auth.token" :class="{ active: route.name?.startsWith('forum') }" @click="navigate('forum')">论坛</button>
           <button v-if="auth.token && siteConfig.knowledgeEnabled" :class="{ active: route.name === 'knowledge' }" @click="navigate('knowledge')">知识库</button>
           <button v-if="auth.token && siteConfig.wikiEnabled" :class="{ active: route.name === 'wiki' }" @click="navigate('wiki')">Wiki</button>
@@ -77,7 +77,14 @@
 
       <StandardsPage v-else-if="route.name === 'standards'" />
 
-      <DataMigrationPage v-else-if="route.name === 'dataMigration'" />
+      <component
+        v-else-if="route.name === 'jobModule' && currentJob"
+        :is="currentJob.entryComponent"
+        :job="currentJob"
+        :feature="route.feature"
+        :context="jobModuleContext"
+        @navigate="navigate"
+      />
 
       <section v-else-if="route.name === 'forum'" class="workspace">
         <ForumPostList
@@ -121,16 +128,6 @@
       <KnowledgePanel v-else-if="route.name === 'knowledge' && siteConfig.knowledgeEnabled" :auth="auth" :notify="notify" />
       <WikiPanel v-else-if="route.name === 'wiki' && siteConfig.wikiEnabled" :auth="auth" :notify="notify" />
       <DiagnosticsPanel v-else-if="route.name === 'diagnostics' && siteConfig.diagnosticsEnabled" :auth="auth" :notify="notify" />
-
-      <CommandsPage
-        v-else-if="route.name === 'commands'"
-        :auth="auth"
-        :isSysAdmin="isSysAdmin"
-        :managedCategory="managedCategory"
-        :softwareTypes="softwareTypes"
-        :notify="notify"
-        :confirm="confirmAction"
-      />
 
       <section v-else class="workspace">
         <div v-if="!auth.token" class="login-page">
@@ -279,7 +276,7 @@ import MarkdownIt from 'markdown-it'
 import { request } from './api'
 import { useAuth } from './composables/useAuth'
 import { useNotify } from './composables/useNotify'
-import { useRoute } from './composables/useRoute'
+import { parseHashRoute, useRoute } from './composables/useRoute'
 import DocumentEditor from './components/DocumentEditor.vue'
 import WordPreview from './components/WordPreview.vue'
 import ForumPostList from './components/ForumPostList.vue'
@@ -292,8 +289,7 @@ import DiagnosticsPanel from './components/DiagnosticsPanel.vue'
 import HomePage from './pages/HomePage.vue'
 import DownloadsPage from './pages/DownloadsPage.vue'
 import StandardsPage from './pages/StandardsPage.vue'
-import DataMigrationPage from './pages/DataMigrationPage.vue'
-import CommandsPage from './pages/CommandsPage.vue'
+import { getJobModule } from './modules/index.js'
 import AdminPage from './pages/admin/AdminPage.vue'
 import FilesSection from './pages/admin/FilesSection.vue'
 import TypesSection from './pages/admin/TypesSection.vue'
@@ -346,54 +342,40 @@ const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true })
 const siteConfig = reactive({ knowledgeEnabled: true, diagnosticsEnabled: true, wikiEnabled: true })
 const loginForm = reactive({ username: '', password: '' })
 const selectedPreviewDocument = ref(null)
+const currentJob = computed(() => getJobModule(route.jobId))
+const jobModuleContext = computed(() => ({
+  auth,
+  isSysAdmin: isSysAdmin.value,
+  managedCategory: managedCategory.value,
+  softwareTypes: softwareTypes.value,
+  notify,
+  confirm: confirmAction
+}))
 
 const pageTitle = computed(() => {
   if (route.name === 'home') return '运营集成中心'
   if (route.name === 'public') return '运营集成中心 · 下载中心'
   if (route.name === 'standards') return '运营集成中心 · 标准发布'
-  if (route.name === 'dataMigration') return '运营集成中心 · 数据迁移'
+  if (route.name === 'jobModule') return `运营集成中心 · ${currentJob.value?.name || '岗位空间'}`
   if (route.name === 'documentEditor') return '运营集成中心 · 文档编辑'
   if (route.name && route.name.startsWith('forum')) return '运营集成中心 · infra论坛'
   if (route.name === 'knowledge') return '运营集成中心 · 知识库管理'
   if (route.name === 'wiki') return '运营集成中心 · Wiki 知识库'
   if (route.name === 'diagnostics') return '运营集成中心 · 智能排查'
-  if (route.name === 'commands') return '运营集成中心 · 常用命令'
   return '运营集成中心 · 管理后台'
 })
 
 // syncRoute 包含路由变化后的数据加载副作用
 function syncRoute() {
-  const hash = window.location.hash.replace(/^#/, '')
-  let next
-  if (!hash || hash === '/' || hash === '/home') next = { name: 'home', token: null }
-  else if (hash.startsWith('/admin/document-editor')) {
-    const m = hash.match(/^\/admin\/document-editor\/(\d+)$/); next = { name: 'documentEditor', documentId: m ? m[1] : null }
-  } else if (hash.startsWith(ROUTE_WORD_PREVIEW)) next = { name: 'wordPreview' }
-  else if (hash.startsWith('/admin')) next = { name: 'admin', token: null }
-  else if (hash === '/forum/mine') next = { name: 'forumMine', postId: null }
-  else if (hash.startsWith('/forum/new')) next = { name: 'forumEditor', postId: null }
-  else if (/^\/forum\/edit\/(\d+)$/.test(hash)) next = { name: 'forumEditor', postId: hash.match(/\d+/)[0] }
-  else if (/^\/forum\/post\/(\d+)$/.test(hash)) next = { name: 'forumDetail', postId: hash.match(/\d+/)[0] }
-  else if (hash.startsWith('/forum')) next = { name: 'forum', postId: null }
-  else if (hash.startsWith('/knowledge')) next = { name: 'knowledge' }
-  else if (hash.startsWith('/wiki')) next = { name: 'wiki' }
-  else if (hash.startsWith('/diagnostics')) next = { name: 'diagnostics' }
-  else if (hash.startsWith('/data-migration')) next = { name: 'dataMigration' }
-  else if (/^\/downloads\/(.+)$/.test(hash)) next = { name: 'public', token: hash.match(/^\/downloads\/(.+)$/)[1] }
-  else if (/^\/standards\/(ps|doc)\/(\d+)$/.test(hash)) { const m = hash.match(/^\/standards\/(ps|doc)\/(\d+)$/); next = { name: 'standards', standardId: m[2], standardType: m[1] } }
-  else if (/^\/standards\/(\d+)$/.test(hash)) next = { name: 'standards', standardId: hash.match(/\d+/)[0], standardType: null }
-  else if (hash === '/standards') next = { name: 'standards', standardId: null, standardType: null }
-  else if (hash.startsWith('/commands')) next = { name: 'commands' }
-  else next = { name: 'public', token: null }
-  route.name = next.name
-  route.token = next.token
-  route.standardId = next.standardId
-  route.standardType = next.standardType
-  route.documentId = next.documentId
-  route.postId = next.postId
+  const next = parseHashRoute(window.location.hash)
+  Object.assign(route, {
+    token: null, standardId: null, standardType: null, documentId: null, postId: null,
+    jobId: null, feature: null, legacy: false
+  }, next)
+  if (next.legacy) window.history.replaceState(null, '', `#/jobs/${next.jobId}/${next.feature}`)
   updateDocumentTitle()
-  // 独立页面组件自行加载数据（HomePage/DownloadsPage/StandardsPage/DataMigrationPage/CommandsPage/WikiPanel/KnowledgePanel/DiagnosticsPanel）
-  const selfManagedRoutes = ['home', 'public', 'standards', 'dataMigration', 'commands', 'knowledge', 'wiki', 'diagnostics']
+  // 独立页面组件自行加载数据（HomePage/DownloadsPage/StandardsPage/岗位模块/WikiPanel/KnowledgePanel/DiagnosticsPanel）
+  const selfManagedRoutes = ['home', 'public', 'standards', 'jobModule', 'knowledge', 'wiki', 'diagnostics']
   if (selfManagedRoutes.includes(route.name)) return
   if (route.name === 'documentEditor' || route.name === 'forum' || route.name === 'forumDetail' || route.name === 'forumEditor' || route.name === 'forumMine') {
     if (route.name === 'documentEditor' && auth.token) {

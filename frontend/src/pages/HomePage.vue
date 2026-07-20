@@ -18,60 +18,26 @@
       </div>
     </div>
 
-    <div class="portal-grid">
-      <article class="portal-card primary" @click="$emit('navigate', 'downloads')">
-        <div class="portal-icon">软</div>
-        <div>
-          <h3>软件下载</h3>
-          <p>查看已发布的中间件安装包、版本说明、平台信息和下载链接。</p>
-        </div>
-        <button>进入下载中心</button>
-      </article>
-
-      <article class="portal-card" @click="$emit('navigate', 'standards')">
-        <div class="portal-icon">标</div>
-        <div>
-          <h3>标准发布</h3>
-          <p>集中发布基础设施规范、部署标准、运维手册和检查基线。</p>
-        </div>
-        <button>查看标准</button>
-      </article>
-
-      <article class="portal-card warning" @click="$emit('navigate', 'data-migration')">
-        <div class="portal-icon">迁</div>
-        <div>
-          <h3>数据迁移</h3>
-          <p>规划 MySQL、Oracle、OceanBase 等数据库的可插拔迁移能力。</p>
-        </div>
-        <button>查看设计</button>
-      </article>
-
-      <article class="portal-card forum" @click="$emit('navigate', 'forum')">
-        <div class="portal-icon">论</div>
-        <div>
-          <h3>infra论坛</h3>
-          <p>沉淀基础设施实践经验，支持问题讨论、方案交流和知识共享。</p>
-        </div>
-        <button>进入论坛</button>
+    <div class="portal-grid portal-public-grid">
+      <article v-for="feature in publicFeatures" :key="feature.id" class="portal-card" @click="$emit('navigate', feature.id)">
+        <div class="portal-icon">{{ feature.icon }}</div>
+        <div><h3>{{ feature.title }}</h3><p>{{ feature.description }}</p></div>
+        <BaseButton variant="primary">进入</BaseButton>
       </article>
     </div>
 
-    <div class="section-heading portal-tools-heading">
+    <div class="section-heading portal-tools-heading portal-section-divider">
       <div>
-        <p class="eyebrow">Tools</p>
-        <h3>常用工具</h3>
+        <p class="eyebrow">Professional Workspaces</p>
+        <h3>选择你的工作空间</h3>
       </div>
+      <p>各岗位独立演进，共享统一交互与基础能力。</p>
     </div>
-    <div class="portal-grid portal-tools-grid">
-      <article class="portal-card portal-tool">
-        <div class="portal-icon tool-icon">监</div>
-        <div><h3>监控面板</h3><p>服务器性能、中间件状态、告警信息统一查看。</p></div>
-        <button class="ghost">查看</button>
-      </article>
-      <article class="portal-card portal-tool" @click="$emit('navigate', 'commands')">
-        <div class="portal-icon tool-icon">令</div>
-        <div><h3>常用命令</h3><p>中间件常用运维命令速查手册。</p></div>
-        <button class="ghost">查看</button>
+    <div class="portal-grid portal-jobs-grid">
+      <article v-for="job in jobModules" :key="job.id" class="portal-card portal-job-card" @click="$emit('navigate', `jobs/${job.id}`)">
+        <div class="portal-icon tool-icon">{{ job.shortName.slice(0, 1) }}</div>
+        <div><h3>{{ job.shortName }}</h3><p>{{ job.description }}</p></div>
+        <BaseButton variant="ghost">进入岗位空间</BaseButton>
       </article>
     </div>
 
@@ -81,7 +47,7 @@
           <p class="eyebrow">Latest</p>
           <h3>最新软件发布</h3>
         </div>
-        <button class="ghost" @click="$emit('navigate', 'downloads')">更多</button>
+        <BaseButton variant="ghost" @click="$emit('navigate', 'downloads')">更多</BaseButton>
       </div>
       <div class="latest-list">
         <article v-for="release in latestReleases" :key="release.downloadToken">
@@ -89,7 +55,7 @@
             <h4>{{ release.middlewareName }}</h4>
             <p>{{ release.version }} · {{ release.platform || '通用平台' }}</p>
           </div>
-          <button class="ghost" @click="$emit('openDetail', release.downloadToken)">详情</button>
+          <BaseButton variant="ghost" @click="$emit('openDetail', release.downloadToken)">详情</BaseButton>
         </article>
         <p v-if="latestReleases.length === 0" class="empty-state">暂无已发布软件资源。</p>
       </div>
@@ -100,6 +66,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { request } from '../api'
+import { publicFeatures } from '../config/portalFeatures.js'
+import { jobModules } from '../modules/index.js'
+import BaseButton from '../components/ui/BaseButton.vue'
 
 defineEmits(['navigate', 'openDetail', 'notify'])
 

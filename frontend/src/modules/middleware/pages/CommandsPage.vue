@@ -33,7 +33,7 @@
               <div v-html="formatDetail(cmd.detailedDescription)"></div>
             </div>
           </article>
-          <p v-if="filteredCommands.length === 0" class="empty-state">暂无匹配的命令。</p>
+          <EmptyState v-if="filteredCommands.length === 0" message="暂无匹配的命令。" />
         </div>
       </main>
     </div>
@@ -59,15 +59,16 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { request } from '../api'
-import { formatDetail } from '../utils'
-import FormModal from '../components/ui/FormModal.vue'
+import { formatDetail } from '../../../utils'
+import EmptyState from '../../../components/ui/EmptyState.vue'
+import FormModal from '../../../components/ui/FormModal.vue'
 
 const props = defineProps({
   auth: Object,
   isSysAdmin: Boolean,
   managedCategory: String,
   softwareTypes: { type: Array, default: () => [] },
+  moduleRequest: { type: Function, required: true },
   notify: { type: Function, default: () => {} },
   confirm: { type: Function, default: () => {} }
 })
@@ -117,7 +118,9 @@ function canManageCmd(cmd) {
 function parseCats(cats) { if (!cats) return []; try { return JSON.parse(cats) } catch { return [] } }
 function copyCommand(text) {
   if (navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(text).then(() => props.notify('已复制到剪贴板')).catch(() => {})
+    navigator.clipboard.writeText(text)
+      .then(() => props.notify('已复制到剪贴板'))
+      .catch(() => props.notify('复制失败', 'error'))
   } else {
     const textarea = document.createElement('textarea')
     textarea.value = text
@@ -143,30 +146,39 @@ function openEditDialog(cmd) {
   showDialog.value = true
 }
 
-async function loadTypes() { try { const res = await fetch('/api/middleware-commands/types'); if (res.ok) types.value = await res.json() } catch {} }
-async function loadCommands() { try { const res = await fetch('/api/middleware-commands'); if (res.ok) commands.value = (await res.json()).map(c => ({ ...c, _expanded: false })) } catch {} }
+async function loadTypes() {
+  try { types.value = await props.moduleRequest('/middleware-commands/types') || [] }
+  catch (error) { props.notify(error.message, 'error') }
+}
+async function loadCommands() {
+  try { commands.value = (await props.moduleRequest('/middleware-commands') || []).map(command => ({ ...command, _expanded: false })) }
+  catch (error) { props.notify(error.message, 'error') }
+}
 
 async function saveCmd() {
   const cats = form.categories ? JSON.stringify(form.categories.split(/[,，]/).map(s => s.trim()).filter(Boolean)) : null
   const body = { softwareTypeId: form.softwareTypeId, commandFormat: form.commandFormat, briefDescription: form.briefDescription, detailedDescription: form.detailedDescription, categories: cats, sortOrder: 0 }
   const isEdit = !!form.id
   try {
-    const res = await fetch(isEdit ? `/api/middleware-commands/${form.id}` : '/api/middleware-commands', {
+    await props.moduleRequest(isEdit ? `/middleware-commands/${form.id}` : '/middleware-commands', {
       method: isEdit ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: props.auth?.token ? `Bearer ${props.auth.token}` : '' },
-      body: JSON.stringify(body)
+      body
     })
-    if (res.ok) { props.notify('命令已保存'); showDialog.value = false; await loadTypes(); await loadCommands() }
-    else { const err = await res.json().catch(() => ({})); props.notify(err.message || '保存失败', 'error') }
-  } catch { props.notify('网络错误', 'error') }
+    props.notify('命令已保存')
+    showDialog.value = false
+    await loadTypes()
+    await loadCommands()
+  } catch (error) { props.notify(error.message, 'error') }
 }
 
 async function deleteCmd(cmd) {
   props.confirm(`确定删除命令：${cmd.briefDescription}？`, async () => {
     try {
-      const res = await fetch(`/api/middleware-commands/${cmd.id}`, { method: 'DELETE', headers: { Authorization: props.auth?.token ? `Bearer ${props.auth.token}` : '' } })
-      if (res.ok) { props.notify('已删除'); await loadTypes(); await loadCommands() }
-    } catch { props.notify('网络错误', 'error') }
+      await props.moduleRequest(`/middleware-commands/${cmd.id}`, { method: 'DELETE' })
+      props.notify('已删除')
+      await loadTypes()
+      await loadCommands()
+    } catch (error) { props.notify(error.message, 'error') }
   })
 }
 

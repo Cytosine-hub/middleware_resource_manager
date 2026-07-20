@@ -28,9 +28,10 @@ public class ForumController {
     @GetMapping("/posts")
     public PageResult<Map<String, Object>> list(@RequestParam(defaultValue = "") String keyword,
                                      @RequestParam(defaultValue = "") String tag,
+                                     @RequestParam(defaultValue = "") String job,
                                      @RequestParam(defaultValue = "0") int page,
                                      @RequestParam(defaultValue = "12") int size) {
-        var p = forumService.listPosts(keyword, tag, page, size);
+        var p = forumService.listPosts(keyword, tag, job, page, size);
         Map<Long, List<String>> tagsByPostId = batchLoadTags(p.getList());
         PageResult<Map<String, Object>> result = new PageResult<>();
         result.setContent(p.getList().stream().map(post -> toSummary(post, tagsByPostId)).collect(Collectors.toList()));

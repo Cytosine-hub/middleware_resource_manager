@@ -147,6 +147,11 @@ API 调用统一走 `api.js` 的 `request()`（自动附带 `Authorization: Bear
 - 组件用 `<script setup>` + `defineProps` + `defineEmits`；Props 向下、Events 向上，禁止 `$refs`/`$parent` 通信。
 - 样式只用 `styles/tokens.css` 中的 `var(--color-*)` 等设计令牌。
 
+**门户岗位模块**
+- 岗位模块编码独立：中间件、数据库、主机、网络和网络安全分别放在 `frontend/src/modules/<job>/`，各自维护入口、路由能力与接口配置；单个岗位可通过独立的 `VITE_<JOB>_API_BASE_URL` 连接自己的后端，也可回退使用门户后端，禁止跨岗位直接依赖业务实现。
+- 通用能力代码复用：岗位导航、列表筛选、空状态、详情查看、复制与错误提示等跨岗位能力必须沉淀到 `frontend/src/shared/`、`frontend/src/components/ui/` 或公共组合式函数，禁止复制核心逻辑形成多个版本。
+- UI 风格保持一致：公共模块与岗位模块统一使用 `styles/tokens.css` 设计令牌和共享 UI 组件；同类功能的布局、按钮、列表、空状态、错误提示和交互流程必须一致，岗位模块不得自行硬编码颜色、间距或另建重复组件。
+
 ## 6. 风格由工具强制
 
 当前仓库**未配置** Checkstyle/Spotless/ESLint/Prettier，风格靠 `docs/development-standards.md` + `/code-review` skill（规则见 `docs/code-review-rules.md`）人工/Agent 审查强制。**建议引入**：后端 `spotless-maven-plugin`（google-java-format）+ Checkstyle；前端 ESLint（`eslint-plugin-vue`）+ Prettier，并挂 pre-commit hook。在引入之前，每次提交后必须执行 `/code-review` skill 作为替代强制手段。
