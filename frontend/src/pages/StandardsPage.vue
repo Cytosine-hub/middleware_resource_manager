@@ -128,7 +128,6 @@
         <section v-for="group in standardGroups" :key="group.category" class="standard-category-section">
           <div class="standard-category-head">
             <div>
-              <p class="eyebrow">Category</p>
               <h2>{{ group.category }}</h2>
             </div>
             <span>{{ group.standards.length }} 项标准</span>
@@ -150,7 +149,7 @@
             </article>
           </div>
         </section>
-        <EmptyState v-if="filteredStandards.length === 0" message="当前岗位暂无已发布标准，可切换其他岗位查看。" />
+        <EmptyState v-if="filteredStandards.length === 0" message="当前类别暂无已发布标准，可切换其他类别查看。" />
       </div>
     </template>
       </div>

@@ -2,7 +2,6 @@
   <div class="app-shell">
     <header :class="['topbar', route.name === 'home' ? 'portal-topbar' : '']">
       <div class="clickable-title" @click="navigate('home')">
-        <p class="eyebrow">Operations Hub</p>
         <h1>{{ pageTitle }}</h1>
       </div>
       <div class="topbar-right">
@@ -356,7 +355,7 @@ const pageTitle = computed(() => {
   if (route.name === 'home') return '运营集成中心'
   if (route.name === 'public') return '运营集成中心 · 下载中心'
   if (route.name === 'standards') return '运营集成中心 · 标准发布'
-  if (route.name === 'jobModule') return `运营集成中心 · ${currentJob.value?.name || '岗位空间'}`
+  if (route.name === 'jobModule') return `运营集成中心 · ${currentJob.value?.shortName || '空间'}`
   if (route.name === 'documentEditor') return '运营集成中心 · 文档编辑'
   if (route.name && route.name.startsWith('forum')) return '运营集成中心 · infra论坛'
   if (route.name === 'knowledge') return '运营集成中心 · 知识库管理'

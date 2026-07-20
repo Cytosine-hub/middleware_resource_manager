@@ -127,7 +127,7 @@ describe('门户页面结构优化验收', () => {
       expect(job.entryComponent).toBeTruthy()
 
       const entry = track(mount(job.entryComponent, { props: { job, feature: null, context: {} } }))
-      expect(entry.find('.job-workspace-header').text()).toContain(job.name)
+      expect(entry.find('.job-workspace-header').text()).toContain(`集成中心·${job.shortName}`)
       expect(entry.find('.job-mark').text()).toBe(job.shortName)
     }
   })
@@ -244,13 +244,13 @@ describe('门户页面结构优化验收', () => {
     await flushPromises()
 
     await selectJob(wrapper, '主机')
-    expect(wrapper.find('.empty-state').text()).toContain('当前岗位暂无可下载软件')
+    expect(wrapper.find('.empty-state').text()).toContain('当前类别暂无可下载软件')
 
     await selectJob(wrapper, '数据库')
     expect(wrapper.findAll('.release-card')).toHaveLength(1)
     expect(wrapper.text()).toContain('Database Toolkit')
 
-    await selectJob(wrapper, '全部岗位')
+    await selectJob(wrapper, '全部')
     expect(wrapper.findAll('.release-card')).toHaveLength(3)
 
     await selectJob(wrapper, '网络安全')
