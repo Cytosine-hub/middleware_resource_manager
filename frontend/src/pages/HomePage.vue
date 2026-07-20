@@ -26,25 +26,20 @@
       </article>
     </div>
 
-    <div class="section-heading portal-tools-heading portal-section-divider">
-      <div>
-        <p class="eyebrow">Professional Workspaces</p>
-        <h3>选择你的工作空间</h3>
-      </div>
-      <p>各岗位独立演进，共享统一交互与基础能力。</p>
+    <div class="portal-section-divider">
+      <p>各类别独立演进，共享统一交互与基础能力。</p>
     </div>
     <div class="portal-grid portal-jobs-grid">
       <article v-for="job in jobModules" :key="job.id" class="portal-card portal-job-card" @click="$emit('navigate', `jobs/${job.id}`)">
         <div class="portal-icon tool-icon">{{ job.shortName.slice(0, 1) }}</div>
         <div><h3>{{ job.shortName }}</h3><p>{{ job.description }}</p></div>
-        <BaseButton variant="ghost">进入岗位空间</BaseButton>
+        <BaseButton variant="ghost">进入空间</BaseButton>
       </article>
     </div>
 
     <section class="portal-latest">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">Latest</p>
           <h3>最新软件发布</h3>
         </div>
         <BaseButton variant="ghost" @click="$emit('navigate', 'downloads')">更多</BaseButton>
