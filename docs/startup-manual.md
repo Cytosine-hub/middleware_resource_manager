@@ -2,7 +2,8 @@
 
 本文档适用于当前前后端分离版本：
 
-- 后端：Spring Boot 3.5.3，默认端口 `8080`
+- API Gateway：Spring Cloud Gateway，默认端口 `8080`
+- 后端 app：Spring Boot 3.5.3 模块化单体，默认端口 `8081`
 - 前端：Vue 3 + Vite，默认端口 `5173`
 - 数据库：MySQL 8.0，默认端口 `3306`
 
@@ -47,16 +48,25 @@ powershell -ExecutionPolicy Bypass -File .\scripts\stop-local-mysql.ps1
 - 用户：`root`
 - 密码：读取 `APP_DB_PASSWORD`，未设置时使用配置文件默认值
 
-## 3. 启动后端
+## 3. 启动后端与 Gateway
 
 进入 `backend/` 目录执行：
 
 ```powershell
 cd backend
-mvn spring-boot:run
+mvn -pl app -am spring-boot:run
 ```
 
-后端启动成功后访问：
+另开终端启动 Gateway：
+
+```powershell
+cd backend
+mvn -pl api-gateway -am spring-boot:run
+```
+
+默认 profile 不连接 Nacos，Gateway 静态转发到 app `:8081`。启用 Nacos 的 `cloud` 启动与验证步骤见 `docs/microservices-stage1-gateway-nacos.md`。
+
+两个进程启动成功后经 Gateway 访问：
 
 ```text
 http://localhost:8080/api/public/releases
@@ -94,6 +104,8 @@ Vite 已配置代理：
 
 - `/api` 转发到 `http://localhost:8080`
 - `/files` 转发到 `http://localhost:8080`
+
+`8080` 是 Gateway；app 的直连地址为 `http://localhost:8081`。
 
 ## 5. 登录后台
 
@@ -193,6 +205,7 @@ mvn test
 
 ```powershell
 netstat -ano | Select-String ':8080'
+netstat -ano | Select-String ':8081'
 ```
 
 检查前端端口：
@@ -204,11 +217,12 @@ netstat -ano | Select-String ':5173'
 ## 10. 推荐启动顺序
 
 1. 启动 MySQL
-2. 启动 Spring Boot 后端
-3. 启动 Vue 前端
-4. 打开 `http://localhost:5173`
+2. 启动 Spring Boot app（`:8081`）
+3. 启动 Gateway（`:8080`）
+4. 启动 Vue 前端
+5. 打开 `http://localhost:5173`
 
-如果前端页面能打开但接口报错，优先检查后端 `8080` 是否启动成功；如果后端启动失败，优先检查 MySQL 是否已启动。
+如果前端页面能打开但接口报错，先检查 Gateway `8080`，再检查 app `8081`；如果 app 启动失败，优先检查 MySQL 是否已启动。
 
 ## 11. 知识库模块配置
 

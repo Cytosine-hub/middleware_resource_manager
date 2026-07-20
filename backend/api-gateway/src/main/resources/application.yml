@@ -1,0 +1,30 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  main:
+    web-application-type: reactive
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+        register-enabled: false
+      config:
+        enabled: false
+        import-check:
+          enabled: false
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: app-api
+              uri: "${APP_SERVICE_URL:http://127.0.0.1:8081}"
+              predicates:
+                - Path=/api/**,/files/**
+
+logging:
+  level:
+    root: INFO
+    com.middleware.gateway: INFO

@@ -14,7 +14,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local-full.ps1
 
 ```text
 前端：http://localhost:5173
-后端：http://localhost:8080
+网关：http://localhost:8080
+后端 app：http://localhost:8081
 ```
 
 常用接口检查：
@@ -25,10 +26,16 @@ http://localhost:8080/api/public/releases
 
 ## 分别启动
 
-后端使用 `target` 目录下已经打好的可执行 jar：
+后端 app 使用 `target` 目录下已经打好的可执行 jar：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start-local-backend-jar.ps1
+```
+
+Gateway 使用自己的可执行 jar；默认 profile 静态转发到 app，不要求 Nacos：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-local-gateway-jar.ps1
 ```
 
 前端项目位于 `frontend` 目录，使用 Vite 开发服务：
@@ -44,6 +51,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local-frontend-dev.ps1
 ```text
 backend-local.out.log
 backend-local.err.log
+gateway-local.out.log
+gateway-local.err.log
 frontend-local.out.log
 frontend-local.err.log
 ```
@@ -55,7 +64,8 @@ frontend-local.err.log
 默认端口：
 
 ```text
-后端：8080
+Gateway：8080
+后端 app：8081
 前端：5173
 ```
 

@@ -1,5 +1,7 @@
 # 生产环境部署手册
 
+> 本文主体保留阶段 0 的单体直连部署说明。阶段 1 已调整为 Gateway `:8080` + app `:8081`，并新增 Nacos `cloud` profile；新部署请先阅读 `docs/microservices-stage1-gateway-nacos.md`。
+
 ## 1. 架构概览
 
 ```

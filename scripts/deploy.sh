@@ -121,6 +121,7 @@ fi
 if [[ "$MODULE" == "all" || "$MODULE" == "backend" ]]; then
     if [[ -d "$TMPDIR/backend" ]]; then
         log "停止旧后端..."
+        systemctl stop api-gateway 2>/dev/null || true
         systemctl stop infra-portal 2>/dev/null || true
         sleep 3
 
@@ -128,6 +129,10 @@ if [[ "$MODULE" == "all" || "$MODULE" == "backend" ]]; then
         mkdir -p "$DEPLOY_DIR/backend"
         rm -f "$DEPLOY_DIR/backend/"*.jar
         cp "$TMPDIR/backend/"*.jar "$DEPLOY_DIR/backend/"
+
+        if compgen -G "$TMPDIR/systemd/*.service" > /dev/null; then
+            cp "$TMPDIR/systemd/"*.service /etc/systemd/system/
+        fi
 
         # 配置文件：首次部署复制 example，已有则保留
         if [[ ! -f "$DEPLOY_DIR/backend/application.yml" ]]; then
@@ -142,19 +147,32 @@ if [[ "$MODULE" == "all" || "$MODULE" == "backend" ]]; then
         # 确保日志目录存在
         mkdir -p "$DEPLOY_DIR/logs"
 
-        log "启动后端..."
+        log "启动 app 与 api-gateway..."
         systemctl daemon-reload
         systemctl start infra-portal
 
-        # 等待启动
-        log "等待后端启动..."
+        # app 先在 8081 就绪，再启动默认静态路由到 app 的网关
+        log "等待 app 启动..."
         for i in $(seq 1 30); do
-            if curl -sf http://localhost:8080/api/public/config > /dev/null 2>&1; then
-                log "后端启动成功"
+            if curl -sf http://localhost:8081/api/public/config > /dev/null 2>&1; then
+                log "app 启动成功"
                 break
             fi
             if [[ $i -eq 30 ]]; then
-                err "后端启动超时，请检查日志: $DEPLOY_DIR/logs/infra-portal.log"
+                err "app 启动超时，请检查日志: $DEPLOY_DIR/logs/infra-portal.log"
+            fi
+            sleep 2
+        done
+
+        systemctl start api-gateway
+        log "等待 api-gateway 启动..."
+        for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/api/public/config > /dev/null 2>&1; then
+                log "api-gateway 启动成功"
+                break
+            fi
+            if [[ $i -eq 30 ]]; then
+                err "api-gateway 启动超时，请检查日志: $DEPLOY_DIR/logs/api-gateway.log"
             fi
             sleep 2
         done

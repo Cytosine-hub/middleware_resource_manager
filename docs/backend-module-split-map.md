@@ -1,5 +1,7 @@
 # 后端模块拆分对照表与验收结果
 
+> 本文记录阶段 0 的历史验收快照。阶段 1 已在单体前新增独立 `api-gateway`，app 仍是唯一业务可执行 JAR；当前拓扑与端口见 `docs/microservices-stage1-gateway-nacos.md`。
+
 ## 1. 拆分结论
 
 阶段 0 将 `backend/` 从单 Maven 工程调整为 16 个子模块加 1 个聚合父工程。运行时仍是单进程、单数据库、单个 Spring Boot 可执行 JAR；Java 包名、API 路径、鉴权规则、SQL 和数据库表结构均未改变。
@@ -114,4 +116,3 @@ MyBatis 的 `mapper-locations` 由 `classpath:mapper/*.xml` 调整为 `classpath
 | DB 访问核对 | 30 份 Mapper XML 逐文件哈希一致；无 schema/DML 改动 |
 | Maven 边界核对 | 7 个平台模块无岗位依赖、无平台互依；5 个岗位模块与前端岗位一一对应 |
 | 测试语义 | 16 个原测试类全部保留；仅 `IngestAgentTest` 的 mock 声明由具体类改为等价端口 |
-
