@@ -27,6 +27,8 @@ defineEmits(['update:modelValue'])
 <style scoped>
 .job-navigation {
   display: grid;
+  align-content: start;
+  align-self: start;
   gap: var(--space-2xs);
   position: sticky;
   top: var(--space-lg);
