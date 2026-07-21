@@ -31,7 +31,7 @@ while ($elapsed -lt $timeout) {
     if ($pid) {
         Write-Host "==> Backend started on port 8081 (PID $pid) in ${elapsed}s" -ForegroundColor Green
         Write-Host "    Logs: $projectRoot\backend-local.out.log" -ForegroundColor Gray
-        Write-Host "    Direct API:  http://localhost:8081/api/public/releases" -ForegroundColor Gray
+        Write-Host "    Direct API:  http://localhost:8081/api/middleware-commands/types" -ForegroundColor Gray
         exit 0
     }
     Write-Host "    ... ${elapsed}s" -ForegroundColor Gray

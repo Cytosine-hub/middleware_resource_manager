@@ -35,7 +35,11 @@ spring:
               uri: lb://ai-service
               predicates:
                 - Path=/api/knowledge/**,/api/agent/**,/api/wiki/**,/api/ops-agent/**,/api/ops-agent/export/**
+            - id: core-api
+              uri: lb://core-service
+              predicates:
+                - Path=/api/auth/**,/api/admin/users/**,/api/admin/account/**,/api/admin/settings/**,/api/admin/releases/**,/api/admin/software-types/**,/api/admin/software-type-categories/**,/api/admin/parameter-standards/**,/api/admin/standard-documents/**,/api/admin/standard-parameters/**,/api/admin/reviews/**,/api/admin/revisions/**,/api/admin/images/**,/api/public/**,/files/**
             - id: app-api
               uri: lb://middleware-resource-manager-app
               predicates:
-                - Path=/api/**,/files/**
+                - Path=/api/**

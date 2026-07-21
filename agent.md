@@ -2,21 +2,21 @@
 
 ## 1. 项目一句话定位与形态
 
-**中间件资源管理平台**：一个面向基础设施团队的内部门户，管理软件下载包（ReleaseAsset）、参数标准（含草稿→审核→发布版本流）、标准文档、论坛，并集成 AI 知识库/RAG 排查（LangChain4j + Milvus）、Wiki 知识图谱和 Zabbix 监控 Agent。业务运行时为 Spring Boot 3.5.3（Java 17，MyBatis + MySQL 8）：论坛由独立 community-service 提供，knowledge + wiki + ops-agent 集群由独立 ai-service 提供，其余能力留在 app，前置 Spring Cloud Gateway；`cloud` profile 下通过 Nacos 注册、发现和配置。前端为 Vue 3 单页应用（Vite，无 vue-router，hash 路由）。
+**中间件资源管理平台**：一个面向基础设施团队的内部门户，管理软件下载包（ReleaseAsset）、参数标准（含草稿→审核→发布版本流）、标准文档、论坛，并集成 AI 知识库/RAG 排查（LangChain4j + Milvus）、Wiki 知识图谱和 Zabbix 监控 Agent。业务运行时为 Spring Boot 3.5.3（Java 17，MyBatis + MySQL 8）：identity + catalog + standards 由独立 core-service 提供，论坛由 community-service 提供，knowledge + wiki + ops-agent 集群由 ai-service 提供，app 仅聚合岗位模块，前置 Spring Cloud Gateway；`cloud` profile 下通过 Nacos 注册、发现和配置。前端为 Vue 3 单页应用（Vite，无 vue-router，hash 路由）。
 
 ## 2. 代码地图
 
 ```
 .
-├── backend/                         # Maven 多模块：app + community/AI 服务 + api-gateway
+├── backend/                         # Maven 多模块：5 个可执行部署单元 + 业务库模块
 │   ├── pom.xml                      # 聚合根父 POM，统一 Boot/Cloud/Alibaba BOM 与插件
 │   ├── modular-monolith-parent/     # 既有业务模块的依赖父 POM，隔离 Gateway WebFlux 依赖
 │   ├── common-core/                 # DTO、异常/错误码、常量、共享模型及跨模块业务端口
 │   ├── common-security/             # Token 校验、PermissionService、角色/岗位权限端口
 │   ├── common-web/                  # SecurityConfig、过滤器、全局异常处理、Web 通用配置
-│   ├── identity/                    # 账号、Token、角色、系统设置、API 审计
-│   ├── catalog/                     # 软件分类、软件类型、发布包与文件下载
-│   ├── standards/                   # 参数标准、标准文档、审核、版本与转换
+│   ├── identity/                    # core-service 业务库：账号、Token、角色、系统设置、API 审计
+│   ├── catalog/                     # core-service 业务库：软件分类、软件类型、发布包与文件下载
+│   ├── standards/                   # core-service 业务库：参数标准、标准文档、审核、版本与转换
 │   ├── knowledge/                   # ai-service 业务库：知识库、向量检索、RAG 基础能力
 │   ├── wiki/                        # ai-service 业务库：Wiki 摄取、检索与知识图谱
 │   ├── community/                   # 论坛帖子、评论、标签与点赞
@@ -29,7 +29,8 @@
 │   ├── api-gateway/                 # 独立 Gateway 应用（:8080）；cloud 下经 Nacos lb:// 路由
 │   ├── community-service/           # 独立论坛应用（:8082）；聚合 common-* + community
 │   ├── ai-service/                  # 独立 AI/Agent 应用（:8083）；聚合 knowledge + wiki + ops-agent
-│   └── app/                         # 剩余业务启动模块（:8081）；不含 community/AI 集群
+│   ├── core-service/                # 独立平台核心应用（:8084）；聚合 identity + catalog + standards
+│   └── app/                         # 岗位业务启动模块（:8081）；当前仅暴露 job-middleware 端点
 │       └── src/main/java/com/middleware/manager/MiddlewareResourceManagerApplication.java
 ├── frontend/
 │   ├── src/main.js      # 前端入口
@@ -164,6 +165,7 @@ API 调用统一走 `api.js` 的 `request()`（自动附带 `Authorization: Bear
 | app 启动（:8081） | `cd backend && mvn -pl app -am spring-boot:run` |
 | community-service 启动（:8082） | `cd backend && mvn -pl community-service -am spring-boot:run` |
 | ai-service 启动（:8083） | `cd backend && mvn -pl ai-service -am spring-boot:run` |
+| core-service 启动（:8084） | `cd backend && mvn -pl core-service -am spring-boot:run` |
 | Gateway 启动（:8080） | `cd backend && mvn -pl api-gateway -am spring-boot:run` |
 | 后端测试 | `cd backend && mvn test` |
 | 前端安装 | `cd frontend && npm install` |
@@ -177,7 +179,7 @@ API 调用统一走 `api.js` 的 `request()`（自动附带 `Authorization: Bear
 
 数据库：MySQL 8.0 `127.0.0.1:3306/middleware_resource_manager`，用户 `root`，凭据在 `~/.my.cnf`；连接可用 `APP_DB_*` 环境变量覆盖。
 
-Nacos：默认 profile 明确关闭注册与配置；仅 `cloud` profile 启用，服务名为 `middleware-resource-manager-app`、`community-service`、`ai-service` 和 `api-gateway`。Gateway 将 `/api/forum/**` 路由到 community-service，将 `/api/knowledge/**`、`/api/agent/**`、`/api/wiki/**`、`/api/ops-agent/**` 路由到 ai-service，其余 API 和 `/files/**` 路由到 app。端口、环境变量和联通清单见 `docs/microservices-stage3-ai-service.md`。
+Nacos：默认 profile 明确关闭注册与配置；仅 `cloud` profile 启用，服务名为 `middleware-resource-manager-app`、`community-service`、`ai-service`、`core-service` 和 `api-gateway`。Gateway 将 `/api/forum/**` 路由到 community-service，将 `/api/knowledge/**`、`/api/agent/**`、`/api/wiki/**`、`/api/ops-agent/**` 路由到 ai-service，将 identity/catalog/standards 的原路径和 `/files/**` 路由到 core-service，其余 `/api/**`（当前为岗位端点）路由到 app。端口、环境变量和联通清单见 `docs/microservices-stage4-core-service.md`。
 
 ## 8. 测试（严格 TDD）
 

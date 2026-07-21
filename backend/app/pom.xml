@@ -6,9 +6,6 @@
         <dependency><groupId>com.middleware</groupId><artifactId>common-core</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.middleware</groupId><artifactId>common-security</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.middleware</groupId><artifactId>common-web</artifactId><version>${project.version}</version></dependency>
-        <dependency><groupId>com.middleware</groupId><artifactId>identity</artifactId><version>${project.version}</version></dependency>
-        <dependency><groupId>com.middleware</groupId><artifactId>catalog</artifactId><version>${project.version}</version></dependency>
-        <dependency><groupId>com.middleware</groupId><artifactId>standards</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.middleware</groupId><artifactId>job-middleware</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.middleware</groupId><artifactId>job-database</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.middleware</groupId><artifactId>job-host</artifactId><version>${project.version}</version></dependency>

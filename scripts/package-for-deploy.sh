@@ -17,6 +17,7 @@ echo "  应用 JAR: backend/app/target/middleware-resource-manager-0.0.1-SNAPSHO
 echo "  网关 JAR: backend/api-gateway/target/api-gateway-0.0.1-SNAPSHOT-exec.jar"
 echo "  论坛 JAR: backend/community-service/target/community-service-0.0.1-SNAPSHOT-exec.jar"
 echo "  AI JAR: backend/ai-service/target/ai-service-0.0.1-SNAPSHOT-exec.jar"
+echo "  平台核心 JAR: backend/core-service/target/core-service-0.0.1-SNAPSHOT-exec.jar"
 
 # 2. 构建前端
 echo "[2/4] 构建前端..."
@@ -35,6 +36,7 @@ cp "$PROJECT_DIR/backend/app/target/middleware-resource-manager-0.0.1-SNAPSHOT-e
 cp "$PROJECT_DIR/backend/api-gateway/target/api-gateway-0.0.1-SNAPSHOT-exec.jar" "$OUTPUT_DIR/backend/"
 cp "$PROJECT_DIR/backend/community-service/target/community-service-0.0.1-SNAPSHOT-exec.jar" "$OUTPUT_DIR/backend/"
 cp "$PROJECT_DIR/backend/ai-service/target/ai-service-0.0.1-SNAPSHOT-exec.jar" "$OUTPUT_DIR/backend/"
+cp "$PROJECT_DIR/backend/core-service/target/core-service-0.0.1-SNAPSHOT-exec.jar" "$OUTPUT_DIR/backend/"
 
 # 前端
 cp -r "$PROJECT_DIR/frontend/dist/"* "$OUTPUT_DIR/frontend/dist/"
@@ -48,10 +50,12 @@ cp "$PROJECT_DIR/docs/startup-manual.md" "$OUTPUT_DIR/docs/" 2>/dev/null || true
 cp "$PROJECT_DIR/docs/microservices-stage1-gateway-nacos.md" "$OUTPUT_DIR/docs/"
 cp "$PROJECT_DIR/docs/microservices-stage2-community-service.md" "$OUTPUT_DIR/docs/"
 cp "$PROJECT_DIR/docs/microservices-stage3-ai-service.md" "$OUTPUT_DIR/docs/"
+cp "$PROJECT_DIR/docs/microservices-stage4-core-service.md" "$OUTPUT_DIR/docs/"
 cp "$PROJECT_DIR/scripts/infra-portal.service" "$OUTPUT_DIR/systemd/"
 cp "$PROJECT_DIR/scripts/api-gateway.service" "$OUTPUT_DIR/systemd/"
 cp "$PROJECT_DIR/scripts/community-service.service" "$OUTPUT_DIR/systemd/"
 cp "$PROJECT_DIR/scripts/ai-service.service" "$OUTPUT_DIR/systemd/"
+cp "$PROJECT_DIR/scripts/core-service.service" "$OUTPUT_DIR/systemd/"
 
 # 默认配置（供参考）
 cp "$PROJECT_DIR/backend/app/src/main/resources/application.yml" "$OUTPUT_DIR/backend/application.yml.example"
@@ -62,6 +66,8 @@ cp "$PROJECT_DIR/backend/community-service/src/main/resources/application.yml" "
 cp "$PROJECT_DIR/backend/community-service/src/main/resources/application-cloud.yml" "$OUTPUT_DIR/backend/community-application-cloud.yml.example"
 cp "$PROJECT_DIR/backend/ai-service/src/main/resources/application.yml" "$OUTPUT_DIR/backend/ai-application.yml.example"
 cp "$PROJECT_DIR/backend/ai-service/src/main/resources/application-cloud.yml" "$OUTPUT_DIR/backend/ai-application-cloud.yml.example"
+cp "$PROJECT_DIR/backend/core-service/src/main/resources/application.yml" "$OUTPUT_DIR/backend/core-application.yml.example"
+cp "$PROJECT_DIR/backend/core-service/src/main/resources/application-cloud.yml" "$OUTPUT_DIR/backend/core-application-cloud.yml.example"
 
 # 4. 压缩
 echo "[4/4] 压缩..."

@@ -122,6 +122,7 @@ if [[ "$MODULE" == "all" || "$MODULE" == "backend" ]]; then
     if [[ -d "$TMPDIR/backend" ]]; then
         log "停止旧后端..."
         systemctl stop api-gateway 2>/dev/null || true
+        systemctl stop core-service 2>/dev/null || true
         systemctl stop ai-service 2>/dev/null || true
         systemctl stop community-service 2>/dev/null || true
         systemctl stop infra-portal 2>/dev/null || true
@@ -153,25 +154,42 @@ if [[ "$MODULE" == "all" || "$MODULE" == "backend" ]]; then
             cp "$TMPDIR/backend/ai-application.yml.example" "$DEPLOY_DIR/backend/ai-application.yml"
             warn "已创建 ai-application.yml，请检查数据库、模型和向量库配置"
         fi
+        if [[ ! -f "$DEPLOY_DIR/backend/core-application.yml" && -f "$TMPDIR/backend/core-application.yml.example" ]]; then
+            cp "$TMPDIR/backend/core-application.yml.example" "$DEPLOY_DIR/backend/core-application.yml"
+            warn "已创建 core-application.yml，请设置数据库密码和 ADMIN_DEFAULT_PASSWORD"
+        fi
 
         # 确保日志目录存在
         mkdir -p "$DEPLOY_DIR/logs"
 
-        log "启动 app、community-service、ai-service 与 api-gateway..."
+        log "启动 app、community-service、ai-service、core-service 与 api-gateway..."
         systemctl daemon-reload
         systemctl start infra-portal
         systemctl start community-service
         systemctl start ai-service
+        systemctl start core-service
 
-        # app 先在 8081 就绪，再启动默认静态路由到 app 的网关
+        # 四个下游服务均就绪后，再启动默认静态路由的网关
         log "等待 app 启动..."
         for i in $(seq 1 30); do
-            if curl -sf http://localhost:8081/api/public/config > /dev/null 2>&1; then
+            if curl -sf http://localhost:8081/api/middleware-commands/types > /dev/null 2>&1; then
                 log "app 启动成功"
                 break
             fi
             if [[ $i -eq 30 ]]; then
                 err "app 启动超时，请检查日志: $DEPLOY_DIR/logs/infra-portal.log"
+            fi
+            sleep 2
+        done
+
+        log "等待 core-service 启动..."
+        for i in $(seq 1 30); do
+            if curl -sf http://localhost:8084/api/public/config > /dev/null 2>&1; then
+                log "core-service 启动成功"
+                break
+            fi
+            if [[ $i -eq 30 ]]; then
+                err "core-service 启动超时，请检查日志: $DEPLOY_DIR/logs/core-service.log"
             fi
             sleep 2
         done

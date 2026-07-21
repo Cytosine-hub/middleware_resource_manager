@@ -5,6 +5,7 @@ $ScriptRoot = $PSScriptRoot
 & (Join-Path $ScriptRoot "start-local-backend-jar.ps1")
 & (Join-Path $ScriptRoot "start-local-community-jar.ps1")
 & (Join-Path $ScriptRoot "start-local-ai-jar.ps1")
+& (Join-Path $ScriptRoot "start-local-core-jar.ps1")
 & (Join-Path $ScriptRoot "start-local-gateway-jar.ps1")
 & (Join-Path $ScriptRoot "start-local-frontend-dev.ps1")
 
@@ -14,4 +15,5 @@ Write-Host "Gateway:  http://localhost:8080"
 Write-Host "Backend:  http://localhost:8081"
 Write-Host "Community: http://localhost:8082"
 Write-Host "AI:       http://localhost:8083"
+Write-Host "Core:     http://localhost:8084"
 Write-Host "Frontend: http://localhost:5173"

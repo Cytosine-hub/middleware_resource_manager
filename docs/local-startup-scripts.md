@@ -18,6 +18,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local-full.ps1
 后端 app：http://localhost:8081
 论坛服务：http://localhost:8082
 AI 服务：http://localhost:8083
+平台核心：http://localhost:8084
 ```
 
 常用接口检查：
@@ -54,6 +55,12 @@ ai-service 使用独立可执行 jar：
 powershell -ExecutionPolicy Bypass -File .\scripts\start-local-ai-jar.ps1
 ```
 
+core-service 使用独立可执行 jar：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-local-core-jar.ps1
+```
+
 前端项目位于 `frontend` 目录，使用 Vite 开发服务：
 
 ```powershell
@@ -73,6 +80,8 @@ community-local.out.log
 community-local.err.log
 ai-local.out.log
 ai-local.err.log
+core-local.out.log
+core-local.err.log
 frontend-local.out.log
 frontend-local.err.log
 ```
@@ -88,6 +97,7 @@ Gateway：8080
 后端 app：8081
 community-service：8082
 ai-service：8083
+core-service：8084
 前端：5173
 ```
 

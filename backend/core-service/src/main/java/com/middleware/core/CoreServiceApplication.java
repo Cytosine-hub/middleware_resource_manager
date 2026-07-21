@@ -1,4 +1,4 @@
-package com.middleware.manager;
+package com.middleware.core;
 
 import com.middleware.manager.config.StorageProperties;
 import org.mybatis.spring.annotation.MapperScan;
@@ -8,16 +8,14 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.scheduling.annotation.EnableAsync;
 
-@SpringBootApplication(scanBasePackages = {"com.middleware.app", "com.middleware.manager"})
+@SpringBootApplication(scanBasePackages = {"com.middleware.core", "com.middleware.manager"})
 @EnableDiscoveryClient
 @EnableAsync
-@MapperScan({
-        "com.middleware.manager.repository"
-})
+@MapperScan("com.middleware.manager.repository")
 @EnableConfigurationProperties(StorageProperties.class)
-public class MiddlewareResourceManagerApplication {
+public class CoreServiceApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(MiddlewareResourceManagerApplication.class, args);
+        SpringApplication.run(CoreServiceApplication.class, args);
     }
 }

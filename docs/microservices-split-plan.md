@@ -2,7 +2,7 @@
 
 > 目标：把当前单体后端按「岗位」组织成模块，并演进为微服务架构，与前端已有的岗位化模块对齐。
 > 本文档既是给人审阅的设计方案，也是交给实现 Agent（codex gpt-5.6-sol / xhigh）的规格书。
-> 进度：阶段 0、阶段 1、阶段 2 已完成；阶段 3 已将 knowledge + wiki + ops-agent 集群剥离为 ai-service。落地细节见 `docs/microservices-stage3-ai-service.md`。
+> 进度：阶段 0-4 已完成；阶段 4 已将 identity + catalog + standards 闭环剥离为 core-service。落地细节见 `docs/microservices-stage4-core-service.md`。
 
 ---
 
@@ -45,9 +45,9 @@
                             │                          │
         ┌───────────────────┴──────┐        ┌──────────┴─────────────────────┐
         │   平台能力服务（横切）      │        │   岗位服务（纵向，薄 BFF+专属）   │
-        │  identity-service         │        │  middleware-service (命令…)     │
-        │  catalog-service          │        │  database-service   (迁移…)     │
-        │  standards-service        │        │  host-service                   │
+        │  core-service             │        │  middleware-service (命令…)     │
+        │   (identity+catalog+      │        │  database-service   (迁移…)     │
+        │    standards)             │        │  host-service                   │
         │  ai-service               │        │  network-service                │
         │   (knowledge+wiki+agent)  │        │  security-service               │
         │  community-service        │        └─────────────────────────────────┘
@@ -87,7 +87,8 @@
 - **阶段 1 — 引入网关 + Nacos（已落地）**：加 `api-gateway`；默认 profile 静态路由到 `app:8081` 以兼容无 Nacos 环境，`cloud` profile 下 app/Gateway 注册到 Nacos、Gateway 通过 `lb://middleware-resource-manager-app` 动态路由；前端 `VITE_*_API_BASE_URL` 指向网关。
 - **阶段 2 — community-service 剥离（已落地）**：论坛成为首个独立业务服务，Gateway 按 `/api/forum/**` 路由。
 - **阶段 3 — ai-service 剥离（已落地）**：knowledge、wiki、ops-agent 作为紧耦合 AI/Agent 边界上下文整体剥离，Gateway 按原路径路由，避免集群内部远程调用。
-- **阶段 4 — 数据与运维**：物理拆库、分布式配置、可观测性(链路/日志/指标)、每服务独立 CI/CD。
+- **阶段 4 — core-service 剥离（已落地）**：identity、catalog、standards 因三个内部端口闭环整体剥离，Gateway 按原路径和 `/files/**` 路由，app 仅保留岗位模块。
+- **阶段 5 — 数据与运维**：物理拆库、分布式配置、可观测性(链路/日志/指标)、每服务独立 CI/CD。
 
 ---
 

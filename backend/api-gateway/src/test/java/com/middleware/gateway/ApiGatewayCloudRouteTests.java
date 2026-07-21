@@ -26,17 +26,19 @@ class ApiGatewayCloudRouteTests {
     private RouteDefinitionLocator routeDefinitionLocator;
 
     @Test
-    @DisplayName("TC-GATEWAY-002 cloud profile 分别路由论坛、AI 集群与其余 API")
+    @DisplayName("TC-GATEWAY-002 cloud profile 分别路由论坛、AI、平台核心与岗位 API")
     void cloudProfileUsesLoadBalancedAppRoute() {
         Map<String, URI> routes = routeDefinitionLocator.getRouteDefinitions()
                 .filter(route -> "community-api".equals(route.getId())
                         || "ai-api".equals(route.getId())
+                        || "core-api".equals(route.getId())
                         || "app-api".equals(route.getId()))
                 .collect(Collectors.toMap(route -> route.getId(), route -> route.getUri()))
                 .block(Duration.ofSeconds(5));
 
         assertThat(routes).containsEntry("community-api", URI.create("lb://community-service"));
         assertThat(routes).containsEntry("ai-api", URI.create("lb://ai-service"));
+        assertThat(routes).containsEntry("core-api", URI.create("lb://core-service"));
         assertThat(routes).containsEntry("app-api", URI.create("lb://middleware-resource-manager-app"));
     }
 }

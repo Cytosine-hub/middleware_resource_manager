@@ -37,6 +37,7 @@
         <module>api-gateway</module>
         <module>community-service</module>
         <module>ai-service</module>
+        <module>core-service</module>
         <module>app</module>
     </modules>
 

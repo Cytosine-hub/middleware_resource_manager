@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.env.Environment;
 
 @SpringBootTest
@@ -13,6 +14,9 @@ class MiddlewareResourceManagerApplicationTests {
 
     @Autowired
     private Environment environment;
+
+    @Autowired
+    private ApplicationContext applicationContext;
 
     @Test
     @DisplayName("TC-APP-001 默认 profile 加载上下文且不启用 Nacos")
@@ -59,5 +63,45 @@ class MiddlewareResourceManagerApplicationTests {
         assertThat(classLoader.getResource("dev/langchain4j/model/chat/ChatModel.class")).isNull();
         assertThat(classLoader.getResource("org/jgrapht/Graph.class")).isNull();
         assertThat(classLoader.getResource("com/fasterxml/jackson/dataformat/yaml/YAMLFactory.class")).isNull();
+    }
+
+    @Test
+    @DisplayName("TC-APP-005 app 类路径不再包含 identity、catalog、standards Controller")
+    void appClasspathDoesNotContainCoreControllers() {
+        ClassLoader classLoader = MiddlewareResourceManagerApplication.class.getClassLoader();
+        String[] controllers = {
+            "AdminAccountApiController",
+            "AdminParameterStandardController",
+            "AdminReleaseApiController",
+            "AdminSettingController",
+            "AdminSoftwareCategoryApiController",
+            "AdminSoftwareTypeApiController",
+            "AdminStandardDocumentApiController",
+            "AdminStandardParameterApiController",
+            "AdminUserController",
+            "AuthApiController",
+            "DocumentRevisionController",
+            "ImageController",
+            "PublicConfigController",
+            "PublicParameterStandardController",
+            "PublicReleaseApiController",
+            "PublicStandardDocumentApiController",
+            "PublicStandardParameterApiController",
+            "ReviewApiController"
+        };
+
+        for (String controller : controllers) {
+            assertThat(classLoader.getResource(
+                    "com/middleware/manager/web/api/" + controller + ".class")).isNull();
+        }
+        assertThat(classLoader.getResource(
+                "com/middleware/manager/web/controller/FileDownloadController.class")).isNull();
+    }
+
+    @Test
+    @DisplayName("TC-APP-006 app 仍加载岗位中间件命令 Controller")
+    void appStillLoadsMiddlewareJobController() {
+        assertThat(applicationContext.getBean(
+                com.middleware.manager.web.api.MiddlewareCommandApiController.class)).isNotNull();
     }
 }

@@ -40,7 +40,7 @@ public class AdminAccountService implements UserDetailsService, AccountDirectory
     public AdminAccountService(AdminAccountMapper mapper,
                                RoleService roleService,
                                PasswordEncoder passwordEncoder,
-                               @Value("${app.security.admin.default-password:admin123}") String defaultPassword) {
+                               @Value("${app.security.admin.default-password:}") String defaultPassword) {
         this.mapper = mapper;
         this.roleService = roleService;
         this.passwordEncoder = passwordEncoder;
