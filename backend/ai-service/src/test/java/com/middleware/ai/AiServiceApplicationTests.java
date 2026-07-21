@@ -7,9 +7,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.middleware.manager.agent.web.ExportController;
 import com.middleware.manager.knowledge.web.KnowledgeController;
 import com.middleware.manager.knowledge.web.KnowledgeGraphController;
+import com.middleware.manager.repository.ApiAuditLogMapper;
 import com.middleware.manager.wiki.web.WikiController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.apache.ibatis.session.SqlSessionFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,6 +31,9 @@ class AiServiceApplicationTests {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private SqlSessionFactory sqlSessionFactory;
 
     @Test
     @DisplayName("TC-AI-001 默认 profile 独立加载 AI 集群且关闭 Nacos")
@@ -65,6 +70,15 @@ class AiServiceApplicationTests {
         assertThat(AiServiceApplication.class.getClassLoader()
                 .getResource("com/middleware/manager/service/TokenService.class"))
                 .isNull();
+    }
+
+    @Test
+    @DisplayName("TC-AI-004 审计日志 Mapper 的 insert 语句已绑定")
+    void auditLogInsertStatementIsBound() {
+        String statementId = ApiAuditLogMapper.class.getName() + ".insert";
+
+        assertThat(sqlSessionFactory.getConfiguration().hasStatement(statementId)).isTrue();
+        assertThat(applicationContext.getBean(ApiAuditLogMapper.class)).isNotNull();
     }
 
     private void assertUnauthorized(String path) throws Exception {

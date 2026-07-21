@@ -40,7 +40,6 @@ app:
 mybatis:
   mapper-locations:
     - classpath*:mapper/SoftwareTypeMapper.xml
-    - classpath*:mapper/ApiAuditLogMapper.xml
     - classpath*:mapper/MiddlewareCommandMapper.xml
   type-aliases-package: com.middleware.manager.domain
   configuration:

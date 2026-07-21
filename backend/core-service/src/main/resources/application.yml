@@ -54,7 +54,6 @@ mybatis:
     - classpath*:mapper/StandardDocumentMapper.xml
     - classpath*:mapper/RoleMapper.xml
     - classpath*:mapper/UserTokenMapper.xml
-    - classpath*:mapper/ApiAuditLogMapper.xml
     - classpath*:mapper/SystemSettingMapper.xml
     - classpath*:mapper/SoftwareCategoryMapper.xml
     - classpath*:mapper/DocumentRevisionMapper.xml

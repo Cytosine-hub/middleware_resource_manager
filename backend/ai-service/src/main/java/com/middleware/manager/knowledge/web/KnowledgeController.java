@@ -22,8 +22,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.util.UriUtils;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -185,8 +187,21 @@ public class KnowledgeController {
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + title + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, buildContentDisposition(title))
                 .body(resource);
+    }
+
+    private String buildContentDisposition(String fileName) {
+        String asciiFallback = fileName
+                .replaceAll("[^\\x20-\\x7E]", "_")
+                .replace('"', '_')
+                .replace('\\', '_');
+        if (asciiFallback.isBlank()) {
+            asciiFallback = "download";
+        }
+        String encodedFileName = UriUtils.encode(fileName, StandardCharsets.UTF_8);
+        return "attachment; filename=\"" + asciiFallback
+                + "\"; filename*=UTF-8''" + encodedFileName;
     }
 
     /**

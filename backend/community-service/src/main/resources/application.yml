@@ -46,7 +46,6 @@ mybatis:
     - classpath*:mapper/ForumCommentMapper.xml
     - classpath*:mapper/ForumTagMapper.xml
     - classpath*:mapper/PostLikeMapper.xml
-    - classpath*:mapper/ApiAuditLogMapper.xml
   type-aliases-package: com.middleware.manager.domain
   configuration:
     map-underscore-to-camel-case: true

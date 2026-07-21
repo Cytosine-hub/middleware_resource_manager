@@ -239,6 +239,45 @@ describe('门户页面结构优化验收', () => {
     expect(wrapper.text()).toContain('Network Post Page 2')
   })
 
+  test('TC-PORTAL-008 论坛搜索失败时保留已有文章并显示错误提示', async () => {
+    let searchShouldFail = false
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = new URL(String(input), 'http://localhost')
+      if (url.pathname === '/api/forum/posts' && searchShouldFail) {
+        return Promise.resolve(new Response(JSON.stringify({ message: '论坛搜索暂不可用' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }))
+      }
+      if (url.pathname === '/api/forum/posts') return jsonResponse({ content: posts, last: true })
+      if (url.pathname === '/api/forum/tags') return jsonResponse([])
+      return jsonResponse([])
+    })
+    const notify = vi.fn()
+    const wrapper = track(mount(ForumPostList, { props: { auth: {}, notify } }))
+    await flushPromises()
+
+    searchShouldFail = true
+    await wrapper.find('.forum-hero-bar input').setValue('故障')
+    await wrapper.find('.forum-hero-bar input').trigger('keyup.enter')
+    await flushPromises()
+
+    expect(wrapper.findAll('.forum-card')).toHaveLength(posts.length)
+    expect(wrapper.find('[role="alert"]').text()).toContain('论坛搜索暂不可用')
+    expect(wrapper.findComponent(EmptyState).exists()).toBe(false)
+    expect(notify).toHaveBeenCalledWith('论坛搜索暂不可用', 'error')
+  })
+
+  test('TC-PORTAL-009 论坛移动端正文与标签栏改为单列布局', async () => {
+    const forumSource = await readSource('../src/components/ForumPostList.vue')
+    const mobileRuleStart = forumSource.search(/@media\s*\(max-width:\s*760px\)/)
+    const mobileRule = mobileRuleStart >= 0 ? forumSource.slice(mobileRuleStart) : ''
+
+    expect(mobileRule, 'ForumPostList 应定义 760px 移动端规则').toBeTruthy()
+    expect(mobileRule).toMatch(/\.forum-body\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/)
+    expect(mobileRule).toMatch(/\.forum-main\s*\{[^}]*max-height:\s*none/)
+  })
+
   test('TC-PORTAL-004 (TC-04) 岗位筛选处理无数据、单条数据、清除与刷新保留', async () => {
     const wrapper = track(mount(DownloadsPage))
     await flushPromises()

@@ -14,6 +14,7 @@
 
     <div class="forum-body">
       <div class="forum-main" ref="scrollContainer" @scroll="onScroll">
+        <div v-if="errorMessage" class="forum-error" role="alert">{{ errorMessage }}</div>
         <template v-if="posts.length > 0 || loading">
           <article v-for="post in posts" :key="post.id" class="forum-card" @click="$emit('openPost', post.id)">
             <div class="forum-card-body">
@@ -38,7 +39,7 @@
           <p v-if="!hasMore && posts.length > 0" class="forum-no-more">— 已加载全部文章 —</p>
         </template>
         <div v-if="loading && posts.length === 0" class="loading-panel"><div class="spinner"></div><p>加载中...</p></div>
-        <EmptyState v-if="!loading && posts.length === 0" message="当前岗位暂无文章，可切换其他岗位或发表第一篇内容。" />
+        <EmptyState v-if="!loading && !errorMessage && posts.length === 0" message="当前岗位暂无文章，可切换其他岗位或发表第一篇内容。" />
       </div>
 
       <aside class="forum-sidebar">
@@ -69,7 +70,10 @@ const PAGE_SIZE = 10
 const SCROLL_THRESHOLD = 100
 const HERO_HEIGHT_OFFSET = 260
 
-const props = defineProps({ auth: Object })
+const props = defineProps({
+  auth: { type: Object, default: () => ({}) },
+  notify: { type: Function, default: () => {} }
+})
 const emit = defineEmits(['openPost', 'newPost', 'goMine'])
 
 const posts = ref([])
@@ -80,6 +84,7 @@ const page = ref(0)
 const hasMore = ref(true)
 const loading = ref(false)
 const loadingMore = ref(false)
+const errorMessage = ref('')
 const scrollContainer = ref(null)
 const { selectedJob, selectJob: persistSelectedJob } = useJobFilter()
 
@@ -87,12 +92,12 @@ async function loadPosts(reset = false) {
   if (reset) {
     page.value = 0
     hasMore.value = true
-    posts.value = []
   }
   if (!hasMore.value) return
 
   if (page.value === 0) loading.value = true
   else loadingMore.value = true
+  errorMessage.value = ''
 
   try {
     const params = new URLSearchParams({
@@ -110,8 +115,10 @@ async function loadPosts(reset = false) {
       posts.value = [...posts.value, ...newPosts]
     }
     hasMore.value = !data?.last
-  } catch {
-    if (page.value === 0) posts.value = []
+  } catch (error) {
+    const message = error?.message || '论坛文章加载失败'
+    errorMessage.value = message
+    props.notify(message, 'error')
   } finally {
     loading.value = false
     loadingMore.value = false
@@ -191,6 +198,17 @@ watch(() => props.auth.token, () => { loadPosts(true) })
 .forum-no-more {
   text-align: center; padding: var(--space-lg) 0; color: var(--color-text-tertiary); font-size: var(--text-sm);
 }
+.forum-error {
+  margin-bottom: var(--space-md); padding: var(--space-md); border: 1px solid var(--color-danger-light);
+  border-radius: var(--radius-md); background: var(--color-danger-light); color: var(--color-danger); font-size: var(--text-sm);
+}
 @keyframes spin { to { transform: rotate(360deg); } }
-@media (max-width: 760px) { .public-module-layout { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .public-module-layout { grid-template-columns: minmax(0, 1fr); }
+  .forum-body { grid-template-columns: minmax(0, 1fr); }
+  .forum-main { max-height: none; overflow-y: visible; }
+  .forum-hero-bar { flex-wrap: wrap; }
+  .forum-hero-bar input { flex-basis: 100%; min-width: 0; }
+  .forum-sidebar { min-width: 0; }
+}
 </style>

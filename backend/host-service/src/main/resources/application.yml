@@ -38,7 +38,6 @@ app:
     gateway-signing-secret: ${GATEWAY_SIGNING_SECRET:}
 
 mybatis:
-  mapper-locations: classpath*:mapper/ApiAuditLogMapper.xml
   type-aliases-package: com.middleware.manager.domain
   configuration:
     map-underscore-to-camel-case: true

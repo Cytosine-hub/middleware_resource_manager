@@ -11,8 +11,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.LinkedHashMap;
@@ -37,6 +39,16 @@ public class ApiExceptionHandler {
         }
         log.warn("参数校验失败 fields={}", errors);
         return ResponseEntity.badRequest().body(new ApiError(400, ErrorCode.PARAM_INVALID, ErrorMessages.PARAM_INVALID, errors));
+    }
+
+    @ExceptionHandler({
+            MissingServletRequestParameterException.class,
+            MethodArgumentTypeMismatchException.class
+    })
+    public ResponseEntity<ApiError> handleRequestParameter(Exception ex) {
+        log.warn("查询参数无效: {}", ex.getMessage());
+        return ResponseEntity.badRequest()
+                .body(new ApiError(400, ErrorCode.PARAM_INVALID, ErrorMessages.PARAM_INVALID));
     }
 
     @ExceptionHandler(NotFoundException.class)

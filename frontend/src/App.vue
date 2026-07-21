@@ -88,6 +88,7 @@
       <section v-else-if="route.name === 'forum'" class="workspace">
         <ForumPostList
           :auth="auth"
+          :notify="notify"
           @open-post="(id) => navigate('forum/post/' + id)"
           @new-post="goForumNew"
           @go-mine="navigate('forum/mine')"
@@ -270,7 +271,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 import { request } from './api'
 import { useAuth } from './composables/useAuth'
@@ -282,9 +283,6 @@ import ForumPostList from './components/ForumPostList.vue'
 import ForumPostDetail from './components/ForumPostDetail.vue'
 import ForumPostEditor from './components/ForumPostEditor.vue'
 import ForumPersonalCenter from './components/ForumPersonalCenter.vue'
-import KnowledgePanel from './components/KnowledgePanel.vue'
-import WikiPanel from './components/WikiPanel.vue'
-import DiagnosticsPanel from './components/DiagnosticsPanel.vue'
 import HomePage from './pages/HomePage.vue'
 import DownloadsPage from './pages/DownloadsPage.vue'
 import StandardsPage from './pages/StandardsPage.vue'
@@ -303,6 +301,10 @@ import FormModal from './components/ui/FormModal.vue'
 import DocumentPreview from './components/DocumentPreview.vue'
 import AdminModals from './components/AdminModals.vue'
 import { useAdmin } from './composables/useAdmin'
+
+const KnowledgePanel = defineAsyncComponent(() => import('./components/KnowledgePanel.vue'))
+const WikiPanel = defineAsyncComponent(() => import('./components/WikiPanel.vue'))
+const DiagnosticsPanel = defineAsyncComponent(() => import('./components/DiagnosticsPanel.vue'))
 
 const { auth, login: authLogin, logout: authLogout, restoreAuth,
   currentUserRole, isSysAdmin, isCategoryAdmin, canAccessAdmin, isReadOnly, managedCategory } = useAuth()
