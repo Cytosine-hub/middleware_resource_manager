@@ -2,6 +2,7 @@ package com.middleware.manager.security;
 
 import com.middleware.manager.security.gateway.GatewayIdentityHeaders;
 import com.middleware.manager.security.gateway.GatewaySignatureService;
+import com.middleware.manager.security.gateway.IdentityHeaderCodec;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -47,19 +48,21 @@ public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private void authenticate(HttpServletRequest request) {
-        String username = request.getHeader(GatewayIdentityHeaders.USER);
-        String displayName = request.getHeader(GatewayIdentityHeaders.DISPLAY_NAME);
+        // 头里的 user/displayName/category 是网关 Base64(URL-safe) 编码后的值（防中文在头传输中损坏）。
+        // 验签必须用编码后的原始头值（与网关签名一致），验签通过后再解码回真实值构建认证。
+        String usernameHeader = request.getHeader(GatewayIdentityHeaders.USER);
+        String displayNameHeader = request.getHeader(GatewayIdentityHeaders.DISPLAY_NAME);
         String rolesHeader = request.getHeader(GatewayIdentityHeaders.ROLES);
-        String category = request.getHeader(GatewayIdentityHeaders.CATEGORY);
+        String categoryHeader = request.getHeader(GatewayIdentityHeaders.CATEGORY);
         String categoryAdmin = request.getHeader(GatewayIdentityHeaders.CATEGORY_ADMIN);
         String signature = request.getHeader(GatewayIdentityHeaders.SIGNATURE);
 
-        if (!StringUtils.hasText(username) || !StringUtils.hasText(rolesHeader)
+        if (!StringUtils.hasText(usernameHeader) || !StringUtils.hasText(rolesHeader)
                 || !("true".equals(categoryAdmin) || "false".equals(categoryAdmin))) {
             return;
         }
         if (!signatureService.verifyIdentityHeaders(
-                username, displayName, rolesHeader, category, categoryAdmin, signature)) {
+                usernameHeader, displayNameHeader, rolesHeader, categoryHeader, categoryAdmin, signature)) {
             return;
         }
 
@@ -69,6 +72,13 @@ public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
                 .distinct()
                 .toList();
         if (roles.isEmpty()) {
+            return;
+        }
+
+        String username = IdentityHeaderCodec.decode(usernameHeader);
+        String displayName = IdentityHeaderCodec.decode(displayNameHeader);
+        String category = IdentityHeaderCodec.decode(categoryHeader);
+        if (!StringUtils.hasText(username)) {
             return;
         }
 

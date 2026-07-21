@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.middleware.manager.security.gateway.GatewayIdentityHeaders;
 import com.middleware.manager.security.gateway.GatewaySignatureService;
+import com.middleware.manager.security.gateway.IdentityHeaderCodec;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -39,10 +40,13 @@ class GatewayAuthenticationFilterTest {
         filter.filter(exchange, capture(forwarded)).block();
 
         assertThat(forwarded.get()).isNotNull();
-        assertThat(forwarded.get().getHeaders().getFirst(GatewayIdentityHeaders.USER)).isEqualTo("alice");
+        // user/category 现以 Base64(URL-safe) 编码注入（防中文头传输损坏）
+        assertThat(forwarded.get().getHeaders().getFirst(GatewayIdentityHeaders.USER))
+                .isEqualTo(IdentityHeaderCodec.encode("alice"));
         assertThat(forwarded.get().getHeaders().getFirst(GatewayIdentityHeaders.ROLES))
                 .isEqualTo("ROLE_MIDDLEWARE_ADMIN");
-        assertThat(forwarded.get().getHeaders().getFirst(GatewayIdentityHeaders.CATEGORY)).isEqualTo("中间件");
+        assertThat(forwarded.get().getHeaders().getFirst(GatewayIdentityHeaders.CATEGORY))
+                .isEqualTo(IdentityHeaderCodec.encode("中间件"));
     }
 
     @Test
@@ -74,11 +78,14 @@ class GatewayAuthenticationFilterTest {
         filter.filter(exchange, capture(forwarded)).block();
 
         var headers = forwarded.get().getHeaders();
-        assertThat(headers.getFirst(GatewayIdentityHeaders.DISPLAY_NAME)).isEqualTo("Alice");
+        assertThat(headers.getFirst(GatewayIdentityHeaders.DISPLAY_NAME))
+                .isEqualTo(IdentityHeaderCodec.encode("Alice"));
         assertThat(headers.getFirst(GatewayIdentityHeaders.CATEGORY_ADMIN)).isEqualTo("true");
+        // 签名对编码后的头值计算
         assertThat(headers.getFirst(GatewayIdentityHeaders.SIGNATURE)).isEqualTo(
-                signatureService.signIdentityHeaders("alice", "Alice",
-                        "ROLE_MIDDLEWARE_ADMIN", "中间件", "true"));
+                signatureService.signIdentityHeaders(
+                        IdentityHeaderCodec.encode("alice"), IdentityHeaderCodec.encode("Alice"),
+                        "ROLE_MIDDLEWARE_ADMIN", IdentityHeaderCodec.encode("中间件"), "true"));
     }
 
     @Test

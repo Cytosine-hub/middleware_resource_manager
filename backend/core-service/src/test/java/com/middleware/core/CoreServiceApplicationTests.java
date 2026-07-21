@@ -10,6 +10,7 @@ import com.middleware.manager.config.ApiAuditLogger;
 import com.middleware.manager.domain.RoleEntity;
 import com.middleware.manager.security.gateway.GatewayIdentityHeaders;
 import com.middleware.manager.security.gateway.GatewaySignatureService;
+import com.middleware.manager.security.gateway.IdentityHeaderCodec;
 import com.middleware.manager.service.AdminAccountService;
 import com.middleware.manager.service.RoleService;
 import com.middleware.manager.service.SystemSettingService;
@@ -213,14 +214,15 @@ class CoreServiceApplicationTests {
 
     private HttpHeaders signedIdentityHeaders(String role, String category, boolean categoryAdmin) {
         HttpHeaders headers = new HttpHeaders();
-        headers.set(GatewayIdentityHeaders.USER, "alice");
-        headers.set(GatewayIdentityHeaders.DISPLAY_NAME, "Alice");
+        headers.set(GatewayIdentityHeaders.USER, IdentityHeaderCodec.encode("alice"));
+        headers.set(GatewayIdentityHeaders.DISPLAY_NAME, IdentityHeaderCodec.encode("Alice"));
         headers.set(GatewayIdentityHeaders.ROLES, role);
-        headers.set(GatewayIdentityHeaders.CATEGORY, category);
+        headers.set(GatewayIdentityHeaders.CATEGORY, IdentityHeaderCodec.encode(category));
         headers.set(GatewayIdentityHeaders.CATEGORY_ADMIN, Boolean.toString(categoryAdmin));
         headers.set(GatewayIdentityHeaders.SIGNATURE,
                 SIGNATURE_SERVICE.signIdentityHeaders(
-                        "alice", "Alice", role, category, Boolean.toString(categoryAdmin)));
+                        IdentityHeaderCodec.encode("alice"), IdentityHeaderCodec.encode("Alice"),
+                        role, IdentityHeaderCodec.encode(category), Boolean.toString(categoryAdmin)));
         return headers;
     }
 }

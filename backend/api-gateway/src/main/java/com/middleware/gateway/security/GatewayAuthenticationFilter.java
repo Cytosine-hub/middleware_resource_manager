@@ -2,6 +2,7 @@ package com.middleware.gateway.security;
 
 import com.middleware.manager.security.gateway.GatewayIdentityHeaders;
 import com.middleware.manager.security.gateway.GatewaySignatureService;
+import com.middleware.manager.security.gateway.IdentityHeaderCodec;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -99,19 +100,22 @@ public class GatewayAuthenticationFilter implements GlobalFilter, Ordered {
             return complete(exchange, HttpStatus.UNAUTHORIZED);
         }
 
-        String displayName = value(result.displayName());
+        // 用户名/显示名/岗位分类可能含中文，HTTP 头按 ISO-8859-1 传输会损坏并导致下游验签失败，
+        // 故统一 Base64(URL-safe) 编码后再进头与签名；roles(ROLE_* 逗号串)、categoryAdmin(布尔串) 为 ASCII，不编码。
+        String encUser = IdentityHeaderCodec.encode(result.username());
+        String encDisplay = IdentityHeaderCodec.encode(value(result.displayName()));
         String roles = String.join(",", normalizedRoles(result.roles()));
-        String category = value(result.category());
+        String encCategory = IdentityHeaderCodec.encode(value(result.category()));
         String categoryAdmin = Boolean.toString(result.categoryAdmin());
         String signature = signatureService.signIdentityHeaders(
-                result.username(), displayName, roles, category, categoryAdmin);
+                encUser, encDisplay, roles, encCategory, categoryAdmin);
 
         ServerHttpRequest request = exchange.getRequest().mutate()
                 .headers(headers -> {
-                    headers.set(GatewayIdentityHeaders.USER, result.username());
-                    headers.set(GatewayIdentityHeaders.DISPLAY_NAME, displayName);
+                    headers.set(GatewayIdentityHeaders.USER, encUser);
+                    headers.set(GatewayIdentityHeaders.DISPLAY_NAME, encDisplay);
                     headers.set(GatewayIdentityHeaders.ROLES, roles);
-                    headers.set(GatewayIdentityHeaders.CATEGORY, category);
+                    headers.set(GatewayIdentityHeaders.CATEGORY, encCategory);
                     headers.set(GatewayIdentityHeaders.CATEGORY_ADMIN, categoryAdmin);
                     headers.set(GatewayIdentityHeaders.SIGNATURE, signature);
                 })

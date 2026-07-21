@@ -10,6 +10,7 @@ import com.middleware.manager.config.ApiAuditLogger;
 import com.middleware.manager.domain.ForumPost;
 import com.middleware.manager.security.gateway.GatewayIdentityHeaders;
 import com.middleware.manager.security.gateway.GatewaySignatureService;
+import com.middleware.manager.security.gateway.IdentityHeaderCodec;
 import com.middleware.manager.service.ForumService;
 import com.middleware.manager.web.api.ForumController;
 import java.util.List;
@@ -113,14 +114,15 @@ class CommunityServiceApplicationTests {
 
     private HttpHeaders signedIdentityHeaders() {
         HttpHeaders headers = new HttpHeaders();
-        headers.set(GatewayIdentityHeaders.USER, "alice");
-        headers.set(GatewayIdentityHeaders.DISPLAY_NAME, "Alice");
+        headers.set(GatewayIdentityHeaders.USER, IdentityHeaderCodec.encode("alice"));
+        headers.set(GatewayIdentityHeaders.DISPLAY_NAME, IdentityHeaderCodec.encode("Alice"));
         headers.set(GatewayIdentityHeaders.ROLES, "ROLE_DEV_MGR");
-        headers.set(GatewayIdentityHeaders.CATEGORY, "");
+        headers.set(GatewayIdentityHeaders.CATEGORY, IdentityHeaderCodec.encode(""));
         headers.set(GatewayIdentityHeaders.CATEGORY_ADMIN, "false");
         headers.set(GatewayIdentityHeaders.SIGNATURE,
                 SIGNATURE_SERVICE.signIdentityHeaders(
-                        "alice", "Alice", "ROLE_DEV_MGR", "", "false"));
+                        IdentityHeaderCodec.encode("alice"), IdentityHeaderCodec.encode("Alice"),
+                        "ROLE_DEV_MGR", IdentityHeaderCodec.encode(""), "false"));
         return headers;
     }
 

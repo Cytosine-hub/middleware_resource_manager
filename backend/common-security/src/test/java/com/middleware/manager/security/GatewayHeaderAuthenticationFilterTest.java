@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.middleware.manager.security.gateway.GatewayIdentityHeaders;
 import com.middleware.manager.security.gateway.GatewaySignatureService;
+import com.middleware.manager.security.gateway.IdentityHeaderCodec;
 import jakarta.servlet.FilterChain;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -57,7 +58,8 @@ class GatewayHeaderAuthenticationFilterTest {
     @DisplayName("TC-SECURITY-003 正确签名身份头构建认证上下文")
     void correctlySignedHeadersAuthenticate() throws Exception {
         String signature = signatureService.signIdentityHeaders(
-                "alice", "Alice", "ROLE_MIDDLEWARE_ADMIN", "中间件", "true");
+                IdentityHeaderCodec.encode("alice"), IdentityHeaderCodec.encode("Alice"),
+                "ROLE_MIDDLEWARE_ADMIN", IdentityHeaderCodec.encode("中间件"), "true");
         MockHttpServletRequest request = identityRequest(true, signature);
 
         filter.doFilter(request, new MockHttpServletResponse(), passthroughChain());
@@ -78,7 +80,8 @@ class GatewayHeaderAuthenticationFilterTest {
     @DisplayName("TC-SECURITY-004 签名后篡改角色时保持未认证")
     void roleTamperingAfterSigningRemainsUnauthenticated() throws Exception {
         String signature = signatureService.signIdentityHeaders(
-                "alice", "Alice", "ROLE_DEV_MGR", "", "false");
+                IdentityHeaderCodec.encode("alice"), IdentityHeaderCodec.encode("Alice"),
+                "ROLE_DEV_MGR", "", "false");
         MockHttpServletRequest request = identityRequest(false, signature);
 
         filter.doFilter(request, new MockHttpServletResponse(), passthroughChain());
@@ -109,11 +112,12 @@ class GatewayHeaderAuthenticationFilterTest {
     }
 
     private MockHttpServletRequest identityRequest(boolean categoryAdmin, String signature) {
+        // 头值按网关的真实行为：user/displayName/category 为 Base64(URL-safe) 编码后的 ASCII
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/admin/releases");
-        request.addHeader(GatewayIdentityHeaders.USER, "alice");
-        request.addHeader(GatewayIdentityHeaders.DISPLAY_NAME, "Alice");
+        request.addHeader(GatewayIdentityHeaders.USER, IdentityHeaderCodec.encode("alice"));
+        request.addHeader(GatewayIdentityHeaders.DISPLAY_NAME, IdentityHeaderCodec.encode("Alice"));
         request.addHeader(GatewayIdentityHeaders.ROLES, "ROLE_MIDDLEWARE_ADMIN");
-        request.addHeader(GatewayIdentityHeaders.CATEGORY, "中间件");
+        request.addHeader(GatewayIdentityHeaders.CATEGORY, IdentityHeaderCodec.encode("中间件"));
         request.addHeader(GatewayIdentityHeaders.CATEGORY_ADMIN, Boolean.toString(categoryAdmin));
         if (signature != null) {
             request.addHeader(GatewayIdentityHeaders.SIGNATURE, signature);
