@@ -3,14 +3,16 @@
 <mapper namespace="com.middleware.manager.repository.MiddlewareCommandMapper">
     <select id="findBySoftwareTypeIdOrderBySortOrderAsc" resultType="MiddlewareCommand">SELECT * FROM middleware_commands WHERE software_type_id = #{softwareTypeId} ORDER BY sort_order ASC</select>
     <select id="findAllByOrderBySoftwareTypeIdAscSortOrderAsc" resultType="MiddlewareCommand">SELECT * FROM middleware_commands ORDER BY software_type_id ASC, sort_order ASC</select>
-    <select id="findByCategory" resultType="MiddlewareCommand">
-        SELECT mc.* FROM middleware_commands mc
-        INNER JOIN software_types st ON mc.software_type_id = st.id
-        WHERE st.category = #{category}
-        ORDER BY mc.software_type_id ASC, mc.sort_order ASC
+    <select id="findBySoftwareTypeIdsOrderBySortOrderAsc" resultType="MiddlewareCommand">
+        SELECT * FROM middleware_commands WHERE software_type_id IN
+        <foreach collection="softwareTypeIds" item="softwareTypeId" open="(" separator="," close=")">
+            #{softwareTypeId}
+        </foreach>
+        ORDER BY software_type_id ASC, sort_order ASC
     </select>
     <select id="findDistinctSoftwareTypeIds" resultType="long">SELECT DISTINCT software_type_id FROM middleware_commands</select>
     <select id="findById" resultType="MiddlewareCommand">SELECT * FROM middleware_commands WHERE id = #{id}</select>
+    <select id="findBySoftwareTypeIdAndCommandFormat" resultType="MiddlewareCommand">SELECT * FROM middleware_commands WHERE software_type_id = #{softwareTypeId} AND command_format = #{commandFormat} LIMIT 1</select>
     <select id="count" resultType="long">SELECT COUNT(*) FROM middleware_commands</select>
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">INSERT INTO middleware_commands (software_type_id, name, command, command_format, brief_description, detailed_description, categories, sort_order) VALUES (#{softwareTypeId}, #{name}, #{command}, #{commandFormat}, #{briefDescription}, #{detailedDescription}, #{categories}, #{sortOrder})</insert>
     <update id="update">UPDATE middleware_commands SET software_type_id=#{softwareTypeId}, name=#{name}, command=#{command}, command_format=#{commandFormat}, brief_description=#{briefDescription}, detailed_description=#{detailedDescription}, categories=#{categories}, sort_order=#{sortOrder} WHERE id=#{id}</update>

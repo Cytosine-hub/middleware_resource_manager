@@ -13,6 +13,10 @@ public interface SoftwareTypeMapper {
 
     List<SoftwareType> findAllByOrderByCategoryAscNameAsc();
 
+    List<SoftwareType> findByIds(@Param("ids") List<Long> ids);
+
+    List<SoftwareType> findByCategoryIgnoreCaseOrderByNameAsc(@Param("category") String category);
+
     List<String> findDistinctCategories();
 
     boolean existsByCategoryIgnoreCaseAndNameIgnoreCase(@Param("category") String category, @Param("name") String name);

@@ -37,6 +37,7 @@ public class GatewayAuthenticationFilter implements GlobalFilter, Ordered {
     private static final String LOGIN_PATH = "/api/auth/login";
     private static final String LOGOUT_PATH = "/api/auth/logout";
     private static final String INTROSPECTION_PATH = "/api/auth/introspect";
+    private static final String COMMAND_EXPORT_PATH = "/api/middleware-commands/export";
 
     private final GatewayIntrospectionClient introspectionClient;
     private final GatewaySignatureService signatureService;
@@ -147,7 +148,8 @@ public class GatewayAuthenticationFilter implements GlobalFilter, Ordered {
                 && !FORUM_MY_POSTS.equals(path)) {
             return true;
         }
-        if (HttpMethod.GET.equals(method) && MIDDLEWARE_COMMANDS.matches(pathContainer)) {
+        if (HttpMethod.GET.equals(method) && MIDDLEWARE_COMMANDS.matches(pathContainer)
+                && !COMMAND_EXPORT_PATH.equals(path)) {
             return true;
         }
         return HttpMethod.POST.equals(method) && LOGIN_PATH.equals(path);

@@ -179,6 +179,15 @@ class CoreServiceApplicationTests {
     }
 
     @Test
+    @DisplayName("TC-CORE-009 catalog 内部类型解析缺少服务间签名返回 403")
+    void internalSoftwareTypeLookupWithoutSignatureIsForbidden() throws Exception {
+        mockMvc.perform(post("/api/internal/catalog/software-types/by-ids")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"ids\":[1]}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @DisplayName("TC-CORE-008 用户管理路径继续只允许签名系统管理员角色")
     void userAdministrationStillRequiresSystemAdminRole() throws Exception {
         mockMvc.perform(get("/api/admin/users")

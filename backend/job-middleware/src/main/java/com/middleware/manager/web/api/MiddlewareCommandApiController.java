@@ -1,131 +1,119 @@
 package com.middleware.manager.web.api;
 
-import com.middleware.manager.domain.MiddlewareCommand;
 import com.middleware.manager.constant.ErrorCode;
 import com.middleware.manager.constant.ErrorMessages;
-import com.middleware.manager.exception.BusinessException;
-import com.middleware.manager.exception.NotFoundException;
+import com.middleware.manager.domain.MiddlewareCommand;
 import com.middleware.manager.domain.SoftwareType;
-import com.middleware.manager.repository.SoftwareTypeMapper;
+import com.middleware.manager.exception.ForbiddenException;
 import com.middleware.manager.security.PermissionService;
 import com.middleware.manager.service.MiddlewareCommandService;
-import org.springframework.http.HttpStatus;
+import com.middleware.manager.web.api.dto.MiddlewareCommandImportResult;
+import com.middleware.manager.web.api.dto.MiddlewareCommandRequest;
+import com.middleware.manager.web.api.dto.MiddlewareCommandResponse;
+import com.middleware.manager.web.api.dto.MiddlewareCommandTransferItem;
+import com.middleware.manager.web.api.dto.SoftwareTypeResponse;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
-import java.util.List;
-import java.util.Map;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Validated
 @RequestMapping("/api/middleware-commands")
 public class MiddlewareCommandApiController {
-
     private final MiddlewareCommandService service;
     private final PermissionService permissionService;
-    private final SoftwareTypeMapper softwareTypeMapper;
 
     public MiddlewareCommandApiController(MiddlewareCommandService service,
-                                          PermissionService permissionService,
-                                          SoftwareTypeMapper softwareTypeMapper) {
+                                          PermissionService permissionService) {
         this.service = service;
         this.permissionService = permissionService;
-        this.softwareTypeMapper = softwareTypeMapper;
     }
 
     @GetMapping("/types")
-    public List<SoftwareType> listTypes() {
-        return service.listTypes();
+    public List<SoftwareTypeResponse> listTypes() {
+        return service.listTypes().stream().map(SoftwareTypeResponse::from).toList();
     }
 
     @GetMapping
-    public List<MiddlewareCommand> listCommands(@RequestParam(required = false) Long typeId,
-                                                 @RequestParam(required = false) String category) {
-        if (category != null && !category.isBlank()) {
-            return service.listCommandsByCategory(category);
-        }
-        return service.listCommands(typeId);
+    public List<MiddlewareCommandResponse> listCommands(
+            @RequestParam(required = false) Long typeId,
+            @RequestParam(required = false) String category) {
+        List<MiddlewareCommand> commands = category != null && !category.isBlank()
+                ? service.listCommandsByCategory(category)
+                : service.listCommands(typeId);
+        return commands.stream().map(MiddlewareCommandResponse::from).toList();
+    }
+
+    @GetMapping("/export")
+    public List<MiddlewareCommandTransferItem> exportCommands(Authentication authentication) {
+        requireSystemAdmin(authentication);
+        return service.exportCommands();
+    }
+
+    @PostMapping("/import")
+    public MiddlewareCommandImportResult importCommands(
+            @NotEmpty @RequestBody List<@Valid MiddlewareCommandTransferItem> items,
+            Authentication authentication) {
+        requireSystemAdmin(authentication);
+        return service.importCommands(items);
     }
 
     @PostMapping
-    public ResponseEntity<MiddlewareCommand> create(@RequestBody Map<String, Object> body, Authentication auth) {
-        requireAuth(auth);
-        Long softwareTypeId = toLong(body.get("softwareTypeId"));
-        String commandFormat = (String) body.get("commandFormat");
-        String briefDesc = (String) body.get("briefDescription");
-        String detailDesc = (String) body.get("detailedDescription");
-        String categories = (String) body.get("categories");
-        int sortOrder = body.get("sortOrder") != null ? ((Number) body.get("sortOrder")).intValue() : 0;
-        if (softwareTypeId == null || commandFormat == null || commandFormat.isBlank()) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID, "类型和命令格式不能为空");
-        }
-        SoftwareType type = softwareTypeMapper.findById(softwareTypeId);
-        if (type == null) {
-            throw new NotFoundException(ErrorCode.SOFTWARE_TYPE_NOT_FOUND, ErrorMessages.SOFTWARE_TYPE_NOT_FOUND);
-        }
-        checkCategoryAccess(auth, type.getCategory());
-        MiddlewareCommand cmd = service.create(softwareTypeId, commandFormat, briefDesc, detailDesc, categories, sortOrder);
-        return ResponseEntity.ok(cmd);
+    public MiddlewareCommandResponse create(@Valid @RequestBody MiddlewareCommandRequest request,
+                                            Authentication authentication) {
+        SoftwareType type = service.getSoftwareType(request.getSoftwareTypeId());
+        checkCategoryAccess(authentication, type.getCategory());
+        return MiddlewareCommandResponse.from(service.create(
+                request.getSoftwareTypeId(), request.getCommandFormat(),
+                request.getBriefDescription(), request.getDetailedDescription(),
+                request.getCategories(), request.getSortOrder()));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<MiddlewareCommand> update(@PathVariable Long id, @RequestBody Map<String, Object> body,
-                                                    Authentication auth) {
-        requireAuth(auth);
-        MiddlewareCommand existing = service.findById(id);
-        if (existing == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "命令不存在");
-        }
-        SoftwareType existingType = softwareTypeMapper.findById(existing.getSoftwareTypeId());
-        if (existingType != null) {
-            checkCategoryAccess(auth, existingType.getCategory());
-        }
-
-        Long softwareTypeId = toLong(body.get("softwareTypeId"));
-        String commandFormat = (String) body.get("commandFormat");
-        String briefDesc = (String) body.get("briefDescription");
-        String detailDesc = (String) body.get("detailedDescription");
-        String categories = (String) body.get("categories");
-        int sortOrder = body.get("sortOrder") != null ? ((Number) body.get("sortOrder")).intValue() : 0;
-        MiddlewareCommand cmd = service.update(id, softwareTypeId, commandFormat, briefDesc, detailDesc, categories, sortOrder);
-        return ResponseEntity.ok(cmd);
+    public MiddlewareCommandResponse update(@PathVariable Long id,
+                                            @Valid @RequestBody MiddlewareCommandRequest request,
+                                            Authentication authentication) {
+        MiddlewareCommand existing = service.get(id);
+        checkCategoryAccess(authentication,
+                service.getSoftwareType(existing.getSoftwareTypeId()).getCategory());
+        SoftwareType targetType = service.getSoftwareType(request.getSoftwareTypeId());
+        checkCategoryAccess(authentication, targetType.getCategory());
+        return MiddlewareCommandResponse.from(service.update(
+                id, request.getSoftwareTypeId(), request.getCommandFormat(),
+                request.getBriefDescription(), request.getDetailedDescription(),
+                request.getCategories(), request.getSortOrder()));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id, Authentication auth) {
-        requireAuth(auth);
-        MiddlewareCommand existing = service.findById(id);
-        if (existing == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "命令不存在");
-        }
-        SoftwareType type = softwareTypeMapper.findById(existing.getSoftwareTypeId());
-        if (type != null) {
-            checkCategoryAccess(auth, type.getCategory());
-        }
+    public ResponseEntity<Void> delete(@PathVariable Long id, Authentication authentication) {
+        MiddlewareCommand existing = service.get(id);
+        SoftwareType type = service.getSoftwareType(existing.getSoftwareTypeId());
+        checkCategoryAccess(authentication, type.getCategory());
         service.delete(id);
         return ResponseEntity.noContent().build();
     }
 
-    private void checkCategoryAccess(Authentication auth, String category) {
-        if (permissionService.isAdmin(auth)) return;
-        if (!permissionService.canManageCategory(auth, category)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "只能操作本岗位分类的资源");
+    private void checkCategoryAccess(Authentication authentication, String category) {
+        if (!permissionService.canManageCategory(authentication, category)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN, ErrorMessages.FORBIDDEN);
         }
     }
 
-    private void requireAuth(Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "需要登录");
-        }
-    }
-
-    private Long toLong(Object value) {
-        if (value == null) return null;
-        if (value instanceof Number n) return n.longValue();
-        try {
-            return Long.parseLong(value.toString());
-        } catch (NumberFormatException e) {
-            return null;
+    private void requireSystemAdmin(Authentication authentication) {
+        if (!permissionService.isAdmin(authentication)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN, ErrorMessages.FORBIDDEN);
         }
     }
 }

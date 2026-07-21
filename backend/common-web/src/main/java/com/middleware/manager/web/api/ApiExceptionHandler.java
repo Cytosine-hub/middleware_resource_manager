@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
+import jakarta.validation.ConstraintViolationException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +50,16 @@ public class ApiExceptionHandler {
         log.warn("查询参数无效: {}", ex.getMessage());
         return ResponseEntity.badRequest()
                 .body(new ApiError(400, ErrorCode.PARAM_INVALID, ErrorMessages.PARAM_INVALID));
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiError> handleConstraintViolation(ConstraintViolationException ex) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        ex.getConstraintViolations().forEach(violation ->
+                errors.put(violation.getPropertyPath().toString(), violation.getMessage()));
+        log.warn("参数校验失败 fields={}", errors);
+        return ResponseEntity.badRequest()
+                .body(new ApiError(400, ErrorCode.PARAM_INVALID, ErrorMessages.PARAM_INVALID, errors));
     }
 
     @ExceptionHandler(NotFoundException.class)

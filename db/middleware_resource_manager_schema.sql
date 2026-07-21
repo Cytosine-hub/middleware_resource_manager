@@ -283,21 +283,6 @@ CREATE TABLE `middleware_commands` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `middleware_types`
---
-
-DROP TABLE IF EXISTS `middleware_types`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `middleware_types` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `name` varchar(80) NOT NULL COMMENT '类型名称',
-  `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序序号',
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='中间件类型';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
 -- Table structure for table `parameter_standards`
 --
 

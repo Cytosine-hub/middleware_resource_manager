@@ -13,11 +13,16 @@ public interface MiddlewareCommandMapper {
 
     List<MiddlewareCommand> findAllByOrderBySoftwareTypeIdAscSortOrderAsc();
 
-    List<MiddlewareCommand> findByCategory(@Param("category") String category);
+    List<MiddlewareCommand> findBySoftwareTypeIdsOrderBySortOrderAsc(
+            @Param("softwareTypeIds") List<Long> softwareTypeIds);
 
     List<Long> findDistinctSoftwareTypeIds();
 
     MiddlewareCommand findById(@Param("id") Long id);
+
+    MiddlewareCommand findBySoftwareTypeIdAndCommandFormat(
+            @Param("softwareTypeId") Long softwareTypeId,
+            @Param("commandFormat") String commandFormat);
 
     int insert(MiddlewareCommand cmd);
 

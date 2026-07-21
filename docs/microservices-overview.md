@@ -52,7 +52,7 @@ database/host/network/security-service 当前没有业务路径，只在 `cloud`
 | **community-service** | 8082 | 论坛社区 | `/api/forum/**` | forum_* |
 | **ai-service** | 8083 | 知识库 RAG、Wiki、Zabbix Agent | `/api/knowledge/**` `/api/agent/**` `/api/wiki/**` `/api/ops-agent/**` | knowledge_*、wiki_*、agent_tool_invocations |
 | **core-service** | 8084 | 身份、资源目录、标准 | `/api/auth/**` `/api/admin/**` `/api/public/**` `/files/**` | admin_accounts、roles、user_tokens、catalog/standards 相关表 |
-| **middleware-service** | 8085 | 中间件岗位专属命令 | `/api/middleware-commands/**` | middleware_commands、middleware_types；只读 software_types |
+| **middleware-service** | 8085 | 中间件岗位专属命令、按名导入导出 | `/api/middleware-commands/**` | middleware_commands；通过 SoftwareTypeLookup 调 catalog |
 | **database-service** | 8086 | 数据库岗位骨架 | 直连 `/health`，暂无网关业务路由 | 暂无专属表 |
 | **host-service** | 8087 | 主机岗位骨架 | 直连 `/health`，暂无网关业务路由 | 暂无专属表 |
 | **network-service** | 8088 | 网络岗位骨架 | 直连 `/health`，暂无网关业务路由 | 暂无专属表 |
@@ -100,7 +100,7 @@ sequenceDiagram
 ## 关键不变量
 
 - 9 个可执行 JAR：api-gateway、core-service、ai-service、community-service 与 5 个岗位服务，无 app。
-- `/api/middleware-commands/**` 的 Controller、Service、Mapper XML、DDL/DML 均未修改，只变更承载进程和网关目标。
+- `/api/middleware-commands` 的既有查询行为保持不变；类型解析改由 middleware-service 通过签名内部 API 调用 core-service catalog，导入导出仅系统管理员可用。
 - 148 个业务端点保持不变；四个 `/health` 是运维端点，不计入业务端点集合。
 - 默认 profile 所有服务关闭 Nacos；只有 `cloud` profile 注册和读取 Nacos 配置。
 - 服务间零编译依赖；部署服务只依赖 `common-*` 与自身能力模块。

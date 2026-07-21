@@ -59,6 +59,12 @@ public final class ErrorCode {
     public static final String SOFTWARE_TYPE_NOT_FOUND = "SOFTWARE_TYPE_NOT_FOUND";
     public static final String SOFTWARE_TYPE_DUPLICATE = "SOFTWARE_TYPE_DUPLICATE";
     public static final String SOFTWARE_TYPE_IN_USE = "SOFTWARE_TYPE_IN_USE";
+    public static final String SOFTWARE_TYPE_LOOKUP_FAILED = "SOFTWARE_TYPE_LOOKUP_FAILED";
+
+    // 中间件命令相关
+    public static final String COMMAND_NOT_FOUND = "COMMAND_NOT_FOUND";
+    public static final String COMMAND_EXPORT_FAILED = "COMMAND_EXPORT_FAILED";
+    public static final String COMMAND_IMPORT_FAILED = "COMMAND_IMPORT_FAILED";
 
     // 发布资源相关
     public static final String RELEASE_NOT_FOUND = "RELEASE_NOT_FOUND";

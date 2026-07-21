@@ -68,6 +68,7 @@ public final class ErrorMessages {
     public static final String SOFTWARE_TYPE_NOT_FOUND = "软件类型不存在";
     public static final String SOFTWARE_TYPE_DUPLICATE = "该分类下软件类型已存在";
     public static final String SOFTWARE_TYPE_IN_USE = "该软件类型正在使用中，无法删除";
+    public static final String SOFTWARE_TYPE_LOOKUP_FAILED = "软件目录服务暂不可用";
 
     // 发布资源相关
     public static final String RELEASE_NOT_FOUND = "资源不存在";
@@ -75,6 +76,8 @@ public final class ErrorMessages {
 
     // 中间件命令相关
     public static final String COMMAND_NOT_FOUND = "命令不存在";
+    public static final String COMMAND_EXPORT_FAILED = "命令导出失败";
+    public static final String COMMAND_IMPORT_FAILED = "命令导入失败";
 
     // 图片相关
     public static final String IMAGE_FILE_REQUIRED = "请选择图片文件";

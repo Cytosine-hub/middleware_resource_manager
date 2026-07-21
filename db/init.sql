@@ -161,13 +161,6 @@ CREATE TABLE `middleware_commands` (
   PRIMARY KEY (`id`),
   KEY `idx_software_type` (`software_type_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=47 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-DROP TABLE IF EXISTS `middleware_types`;
-CREATE TABLE `middleware_types` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `name` varchar(80) NOT NULL COMMENT '类型名称',
-  `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序序号',
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='中间件类型';
 DROP TABLE IF EXISTS `parameter_standards`;
 CREATE TABLE `parameter_standards` (
   `id` bigint NOT NULL AUTO_INCREMENT,

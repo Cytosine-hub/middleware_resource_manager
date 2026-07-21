@@ -3,6 +3,7 @@ package com.middleware.manager.security;
 import com.middleware.manager.security.gateway.GatewayIdentityHeaders;
 import com.middleware.manager.security.gateway.GatewaySignatureService;
 import com.middleware.manager.security.gateway.IdentityHeaderCodec;
+import com.middleware.manager.service.CatalogSoftwareTypeProtocol;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,6 +25,9 @@ public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
             "/api/public/**",
             "/api/auth/login",
             "/api/auth/introspect",
+            CatalogSoftwareTypeProtocol.BASE_PATH + CatalogSoftwareTypeProtocol.BY_IDS_PATH,
+            CatalogSoftwareTypeProtocol.BASE_PATH + CatalogSoftwareTypeProtocol.BY_CATEGORY_PATH,
+            CatalogSoftwareTypeProtocol.BASE_PATH + CatalogSoftwareTypeProtocol.RESOLVE_PATH,
             "/files/**");
 
     private final GatewaySignatureService signatureService;

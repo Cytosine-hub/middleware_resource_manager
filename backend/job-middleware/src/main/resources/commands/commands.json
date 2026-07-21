@@ -1,6 +1,6 @@
 [
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Kafka",
     "commandFormat": "kafka-topics.sh --list --bootstrap-server localhost:9092",
     "briefDescription": "查看所有主题",
@@ -11,7 +11,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Kafka",
     "commandFormat": "kafka-topics.sh --create --topic test --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1",
     "briefDescription": "创建主题",
@@ -23,7 +23,7 @@
     "sortOrder": 1
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Kafka",
     "commandFormat": "kafka-console-producer.sh --bootstrap-server localhost:9092 --topic test",
     "briefDescription": "生产消息",
@@ -34,7 +34,7 @@
     "sortOrder": 2
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Kafka",
     "commandFormat": "kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --from-beginning",
     "briefDescription": "消费消息",
@@ -45,7 +45,7 @@
     "sortOrder": 3
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Zookeeper",
     "commandFormat": "echo stat | nc localhost 2181",
     "briefDescription": "查看Zookeeper状态",
@@ -58,7 +58,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Zookeeper",
     "commandFormat": "zkCli.sh -server localhost:2181",
     "briefDescription": "连接Zookeeper客户端",
@@ -70,7 +70,7 @@
     "sortOrder": 1
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Zookeeper",
     "commandFormat": "ls /",
     "briefDescription": "查看根节点",
@@ -81,7 +81,7 @@
     "sortOrder": 2
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Zookeeper",
     "commandFormat": "get /path",
     "briefDescription": "获取节点数据",
@@ -92,7 +92,7 @@
     "sortOrder": 3
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "RabbitMQ",
     "commandFormat": "rabbitmqctl list_queues",
     "briefDescription": "查看所有队列",
@@ -103,7 +103,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "RabbitMQ",
     "commandFormat": "rabbitmqctl list_exchanges",
     "briefDescription": "查看所有交换机",
@@ -114,7 +114,7 @@
     "sortOrder": 1
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "RabbitMQ",
     "commandFormat": "rabbitmqctl list_connections",
     "briefDescription": "查看所有连接",
@@ -125,7 +125,7 @@
     "sortOrder": 2
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "RocketMQ",
     "commandFormat": "mqadmin clusterList -n localhost:9876",
     "briefDescription": "查看集群信息",
@@ -136,7 +136,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "RocketMQ",
     "commandFormat": "mqadmin topicList -n localhost:9876",
     "briefDescription": "查看所有主题",
@@ -147,7 +147,7 @@
     "sortOrder": 1
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "RocketMQ",
     "commandFormat": "sh mqnamesrv",
     "briefDescription": "启动NameServer",
@@ -158,8 +158,8 @@
     "sortOrder": 2
   },
   {
-    "softwareTypeCategory": "中间件",
-    "softwareTypeName": "Docker",
+    "categoryName": "中间件",
+    "softwareTypeName": "Java容器",
     "commandFormat": "docker ps",
     "briefDescription": "查看运行中的容器",
     "detailedDescription": "列出当前正在运行的Docker容器",
@@ -171,8 +171,8 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
-    "softwareTypeName": "Docker",
+    "categoryName": "中间件",
+    "softwareTypeName": "Java容器",
     "commandFormat": "docker ps -a",
     "briefDescription": "查看所有容器",
     "detailedDescription": "列出所有的Docker容器，包括停止的",
@@ -182,8 +182,8 @@
     "sortOrder": 1
   },
   {
-    "softwareTypeCategory": "中间件",
-    "softwareTypeName": "Docker",
+    "categoryName": "中间件",
+    "softwareTypeName": "Java容器",
     "commandFormat": "docker start container_id",
     "briefDescription": "启动容器",
     "detailedDescription": "启动指定ID的容器",
@@ -195,8 +195,8 @@
     "sortOrder": 2
   },
   {
-    "softwareTypeCategory": "中间件",
-    "softwareTypeName": "Docker",
+    "categoryName": "中间件",
+    "softwareTypeName": "Java容器",
     "commandFormat": "docker stop container_id",
     "briefDescription": "停止容器",
     "detailedDescription": "停止指定ID的容器",
@@ -208,8 +208,8 @@
     "sortOrder": 3
   },
   {
-    "softwareTypeCategory": "中间件",
-    "softwareTypeName": "Docker",
+    "categoryName": "中间件",
+    "softwareTypeName": "Java容器",
     "commandFormat": "docker logs container_id",
     "briefDescription": "查看容器日志",
     "detailedDescription": "查看指定容器的日志输出",
@@ -221,8 +221,8 @@
     "sortOrder": 4
   },
   {
-    "softwareTypeCategory": "中间件",
-    "softwareTypeName": "Docker",
+    "categoryName": "中间件",
+    "softwareTypeName": "Java容器",
     "commandFormat": "docker exec -it container_id bash",
     "briefDescription": "进入容器",
     "detailedDescription": "以交互模式进入容器的bash shell",
@@ -234,7 +234,7 @@
     "sortOrder": 5
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Redis",
     "commandFormat": "redis-cli -a $PASSWORD -h $HOST -p $PORT info",
     "briefDescription": "【查看基础信息】redis-cli -a abc@123 -h 127.0.0.1  -p 6379 info",
@@ -247,7 +247,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Redis",
     "commandFormat": "redis-cli -a $PASSWORD -h $HOST -p $PORT  client list",
     "briefDescription": "【查看有哪些客户端连接】redis-cli -a abc@123 -h 127.0.0.1 -p 6379 client list",
@@ -260,7 +260,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Redis",
     "commandFormat": "redis-cli -a $PASSWORD -h $HOST -p $PORT   config get  [参数名称]",
     "briefDescription": "【查看配置参数】redis-cli -a abc@123 -h 127.0.0.1  -p 6379 config get  appendonly",
@@ -271,7 +271,7 @@
     "sortOrder": 1
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Redis",
     "commandFormat": "redis-cli -a $PASSWORD -h $HOST -p $PORT   config set  [参数名字]  [参数值]",
     "briefDescription": "【修改配置参数】redis-cli -a abc@123 -h 127.0.0.1  -p 6379 config set  appendonly \tyes\t",
@@ -282,9 +282,9 @@
     "sortOrder": 1
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Redis",
-    "commandFormat": "redis-cli -a $PASSWORD -h $HOST -p $PORT   rewrite rewrite",
+    "commandFormat": "redis-cli -a $PASSWORD -h $HOST -p $PORT   config rewrite",
     "briefDescription": "【配置参数持久化写入到配置文件】redis-cli -a abc@123 -h 127.0.0.1  -p 6379 config rewrite",
     "detailedDescription": "",
     "categories": [
@@ -293,7 +293,7 @@
     "sortOrder": 1
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Redis",
     "commandFormat": "redis-cli -a $PASSWORD -h $HOST -p $PORT    shutdown save",
     "briefDescription": "【停止进程前强制执行RDB持久化】redis-cli -a abc@123 -h 127.0.0.1  -p 6379 shutdown save",
@@ -305,7 +305,7 @@
     "sortOrder": 1
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Redis",
     "commandFormat": "redis-cli  -h $HOST -p $SENTINEL_PORT   SENTINEL FAILOVER mymaster",
     "briefDescription": "【手动故障转移】redis-cli -h 127.0.0.1  -p 26379  SENTINEL FAILOVER mymaster",
@@ -316,7 +316,7 @@
     "sortOrder": 2
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Redis",
     "commandFormat": "redis-cli  -h $HOST -p $SENTINEL_PORT   SENTINEL RESET mymaster",
     "briefDescription": "【刷新哨兵状态】redis-cli -h 127.0.0.1  -p 26379  SENTINEL RESET mymaster",
@@ -327,7 +327,7 @@
     "sortOrder": 1
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Redis",
     "commandFormat": "redis-cli -a $PASSWORD -h $HOST -p $PORT   cluster info",
     "briefDescription": "【查看集群状态】 redis-cli -a abc@123 -h 127.0.0.1  -p 6379  cluster info",
@@ -339,7 +339,7 @@
     "sortOrder": 1
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Redis",
     "commandFormat": "redis-cli -a $PASSWORD -h $HOST -p $PORT    cluster nodes",
     "briefDescription": "【查看集群节点信息】 redis-cli -a abc@123 -h 127.0.0.1  -p 6379   cluster nodes",
@@ -351,7 +351,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Redis",
     "commandFormat": "redis-cli -a $PASSWORD -h $HOST -p $PORT   slowlog get [N]",
     "briefDescription": "【慢日志查询】 redis-cli -a abc@123 -h 127.0.0.1  -p 6379   slowlog get 5",
@@ -362,7 +362,7 @@
     "sortOrder": 1
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Redis",
     "commandFormat": "redis-cli -a $PASSWORD --cluster call    $HOST:$PORT   【命令】",
     "briefDescription": "【集群批量执行命令】 redis-cli -a abc@123 --cluster call  127.0.0.1:6379 info ",
@@ -373,7 +373,7 @@
     "sortOrder": 1
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "RabbitMQ",
     "commandFormat": "rabbitmq-server  -detached",
     "briefDescription": "【启动服务】",
@@ -384,7 +384,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "RabbitMQ",
     "commandFormat": "rabbitmqctl stop",
     "briefDescription": "【停止服务】",
@@ -395,7 +395,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "RabbitMQ",
     "commandFormat": "rabbitmqctl start_app",
     "briefDescription": "【启动应用】",
@@ -406,7 +406,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "RabbitMQ",
     "commandFormat": "rabbitmqctl stop_app",
     "briefDescription": "【停止应用】",
@@ -417,7 +417,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "RabbitMQ",
     "commandFormat": "rabbitmqctl cluster_status",
     "briefDescription": "查看集群状态",
@@ -428,7 +428,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "RabbitMQ",
     "commandFormat": "rabbitmqctl list_users",
     "briefDescription": "【查看用户列表】",
@@ -439,7 +439,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "RabbitMQ",
     "commandFormat": "rabbitmqctl change_password $userName $newPassword",
     "briefDescription": "【修改密码】",
@@ -450,10 +450,10 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "RabbitMQ",
     "commandFormat": "rabbitmqctl delete_user userName",
-    "briefDescription": "【删除用户(】",
+    "briefDescription": "【删除用户】",
     "detailedDescription": "",
     "categories": [
       "操作"
@@ -461,7 +461,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Kafka",
     "commandFormat": "/app/kafka/kafka_home/bin/kafka-server-start.sh -daemon /app/kafka/kafka_home/config/kafkaserver.properties",
     "briefDescription": "【启动服务】",
@@ -473,7 +473,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Kafka",
     "commandFormat": "/app/kafka/kafka_home/bin/kafka-server-stop.sh",
     "briefDescription": "【停止服务】",
@@ -485,7 +485,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Kafka",
     "commandFormat": "/app/kafka/kafka_home/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:9092     --describe ",
     "briefDescription": "【查看top详情】",
@@ -496,7 +496,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Kafka",
     "commandFormat": "/app/kafka/kafka_home/bin/kafka-leader-election.sh --bootstrap-server 127.0.0.1:9092    --election-type preferred --all-topic-partitions",
     "briefDescription": "【Leader重平衡】",
@@ -507,7 +507,7 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Kafka",
     "commandFormat": "/app/kafka/kafka_home/bin/kafka-reassign-partitions.sh --bootstrap-server  127.0.0.1:9092  --execute --reassignment-json-file  middletest2.json",
     "briefDescription": "【topic 加副本】",
@@ -518,11 +518,22 @@
     "sortOrder": 0
   },
   {
-    "softwareTypeCategory": "中间件",
+    "categoryName": "中间件",
     "softwareTypeName": "Kafka",
     "commandFormat": "kafka-consumer-groups.sh   --bootstrap-server 127.0.0.1:9092   --describe   --group my_group",
     "briefDescription": "【查看消费者组my_group消费情况】",
     "detailedDescription": "",
+    "categories": [
+      "查询"
+    ],
+    "sortOrder": 0
+  },
+  {
+    "categoryName": "中间件",
+    "softwareTypeName": "nginx",
+    "commandFormat": "nginx -v",
+    "briefDescription": "查看 nginx 版本",
+    "detailedDescription": "输出当前安装的 nginx 版本。",
     "categories": [
       "查询"
     ],

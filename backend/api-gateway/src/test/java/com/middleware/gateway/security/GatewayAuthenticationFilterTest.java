@@ -67,6 +67,23 @@ class GatewayAuthenticationFilterTest {
     }
 
     @Test
+    @DisplayName("TC-GATEWAY-011 命令导出 GET 端点不按公开查询放行")
+    void commandExportWithoutTokenReturnsUnauthorized() {
+        AtomicInteger chainCalls = new AtomicInteger();
+        GatewayAuthenticationFilter filter = filter(token -> Mono.just(validIdentity()));
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/middleware-commands/export"));
+
+        filter.filter(exchange, ignored -> {
+            chainCalls.incrementAndGet();
+            return Mono.empty();
+        }).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(chainCalls).hasValue(0);
+    }
+
+    @Test
     @DisplayName("TC-GATEWAY-005 有效 Token 注入完整身份头并生成正确签名")
     void validTokenInjectsCorrectlySignedIdentity() {
         GatewayAuthenticationFilter filter = filter(token -> Mono.just(validIdentity()));

@@ -27,7 +27,7 @@
 | 知识库 / RAG 排查 | knowledge/* (Knowledge、Agent、KnowledgeGraph) | knowledge_chunks, chat_sessions/messages + Milvus | 平台横切（按 category 分区，AI 基础设施） |
 | Wiki 知识图谱 | wiki/* | wiki_pages/sources/links/... | 平台横切（按 category 分区，AI） |
 | 运维 Agent(Zabbix) | agent/* (OpsAgent、Export) | agent_tool_invocations | 平台横切 / 运维 |
-| **中间件命令** | MiddlewareCommandApi | middleware_commands, middleware_types | **岗位专属：中间件** |
+| **中间件命令** | MiddlewareCommandApi | middleware_commands（software_type_id 逻辑关联 catalog） | **岗位专属：中间件** |
 | **数据迁移** | （前端页面，后端待建） | — | **岗位专属：数据库** |
 
 **结论**：现有绝大多数功能是**横切平台能力**，只有极少数是岗位专属。因此正确的拆分是**双轴**：横向的「平台能力服务」+ 纵向的「岗位服务」，而不是简单地把单体劈成 5 个岗位服务。

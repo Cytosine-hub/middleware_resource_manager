@@ -11,6 +11,7 @@ import com.middleware.manager.repository.SoftwareCategoryMapper;
 import com.middleware.manager.repository.SoftwareTypeMapper;
 import com.middleware.manager.web.api.dto.SoftwareTypeRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -45,6 +46,12 @@ public class SoftwareTypeService implements SoftwareTypeLookup {
         seedCategory("安全");
         seedCategory("网络");
         seed("中间件", "Redis");
+        seed("中间件", "Kafka");
+        seed("中间件", "Zookeeper");
+        seed("中间件", "RabbitMQ");
+        seed("中间件", "RocketMQ");
+        seed("中间件", "Java容器");
+        seed("中间件", "Nacos");
         seed("中间件", "nginx");
         seed("中间件", "tomcat");
         seed("中间件", "jdk");
@@ -86,6 +93,53 @@ public class SoftwareTypeService implements SoftwareTypeLookup {
         if (type == null) {
             throw new NotFoundException(ErrorCode.SOFTWARE_TYPE_NOT_FOUND, ErrorMessages.SOFTWARE_TYPE_NOT_FOUND);
         }
+        return type;
+    }
+
+    @Override
+    public List<SoftwareType> findByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        List<Long> normalizedIds = ids.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        return normalizedIds.isEmpty() ? List.of() : softwareTypeMapper.findByIds(normalizedIds);
+    }
+
+    @Override
+    public List<SoftwareType> findByCategory(String category) {
+        return softwareTypeMapper.findByCategoryIgnoreCaseOrderByNameAsc(normalizeCategory(category));
+    }
+
+    @Override
+    @Transactional
+    public SoftwareType resolveOrCreate(String category, String name) {
+        String normalizedCategory = normalizeCategory(category);
+        String normalizedName = normalizeName(name);
+        SoftwareType existing = softwareTypeMapper.findByCategoryIgnoreCaseAndNameIgnoreCase(
+                normalizedCategory, normalizedName);
+        if (existing != null) {
+            return existing;
+        }
+
+        ensureCategory(normalizedCategory);
+        SoftwareType type = new SoftwareType();
+        type.setCategory(normalizedCategory);
+        type.setName(normalizedName);
+        type.setActive(true);
+        type.setCreatedAt(LocalDateTime.now());
+        type.setUpdatedAt(LocalDateTime.now());
+        try {
+            softwareTypeMapper.insert(type);
+        } catch (DuplicateKeyException exception) {
+            SoftwareType concurrent = softwareTypeMapper.findByCategoryIgnoreCaseAndNameIgnoreCase(
+                    normalizedCategory, normalizedName);
+            if (concurrent != null) {
+                return concurrent;
+            }
+            throw exception;
+        }
+        log.info("软件类型已按名落地 id={} category={} name={}",
+                type.getId(), normalizedCategory, normalizedName);
         return type;
     }
 
@@ -160,22 +214,26 @@ public class SoftwareTypeService implements SoftwareTypeLookup {
         if (softwareCategoryMapper.existsByNameIgnoreCase(name)) {
             return;
         }
-        SoftwareCategory softwareCategory = new SoftwareCategory();
-        softwareCategory.setName(name);
-        softwareCategory.setCreatedAt(LocalDateTime.now());
-        softwareCategory.setUpdatedAt(LocalDateTime.now());
-        softwareCategoryMapper.insert(softwareCategory);
+        insertCategory(name);
     }
 
     private void ensureCategory(String category) {
         if (softwareCategoryMapper.existsByNameIgnoreCase(category)) {
             return;
         }
+        insertCategory(category);
+    }
+
+    private void insertCategory(String category) {
         SoftwareCategory softwareCategory = new SoftwareCategory();
         softwareCategory.setName(category);
         softwareCategory.setCreatedAt(LocalDateTime.now());
         softwareCategory.setUpdatedAt(LocalDateTime.now());
-        softwareCategoryMapper.insert(softwareCategory);
+        try {
+            softwareCategoryMapper.insert(softwareCategory);
+        } catch (DuplicateKeyException exception) {
+            log.debug("软件分类已被并发创建 category={}", category);
+        }
     }
 
     private String normalizeCategory(String category) {

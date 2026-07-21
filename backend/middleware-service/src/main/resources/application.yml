@@ -32,6 +32,9 @@ logging:
     name: logs/middleware-service.log
 
 app:
+  catalog:
+    base-url: "${CORE_SERVICE_URL:http://127.0.0.1:8084}"
+    load-balanced: false
   storage:
     location: ./storage
   security:
@@ -39,7 +42,6 @@ app:
 
 mybatis:
   mapper-locations:
-    - classpath*:mapper/SoftwareTypeMapper.xml
     - classpath*:mapper/MiddlewareCommandMapper.xml
   type-aliases-package: com.middleware.manager.domain
   configuration:

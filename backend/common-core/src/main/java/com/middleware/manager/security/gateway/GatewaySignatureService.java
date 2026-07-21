@@ -29,6 +29,14 @@ public final class GatewaySignatureService {
         return constantTimeEquals(signIntrospectionToken(token), signature);
     }
 
+    public String signInternalRequest(String operation, String payload) {
+        return sign("internal\n" + value(operation) + "\n" + value(payload));
+    }
+
+    public boolean verifyInternalRequest(String operation, String payload, String signature) {
+        return constantTimeEquals(signInternalRequest(operation, payload), signature);
+    }
+
     public String signIdentityHeaders(String username, String displayName, String roles,
                                       String category, String categoryAdmin) {
         return sign(identityPayload(username, displayName, roles, category, categoryAdmin));

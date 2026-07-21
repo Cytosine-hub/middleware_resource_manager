@@ -1,10 +1,13 @@
 package com.middleware.middleware;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.middleware.manager.security.gateway.GatewayIdentityHeaders;
+import com.middleware.manager.security.gateway.GatewaySignatureService;
+import com.middleware.manager.security.gateway.IdentityHeaderCodec;
 import com.middleware.manager.web.api.MiddlewareCommandApiController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,11 +17,15 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 class MiddlewareServiceApplicationTests {
+
+    private static final GatewaySignatureService SIGNATURE_SERVICE =
+            new GatewaySignatureService("test-only-gateway-signing-secret");
 
     @Autowired
     private Environment environment;
@@ -128,5 +135,43 @@ class MiddlewareServiceApplicationTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("TC-MIDDLEWARE-008 未认证访问命令导出端点返回 401")
+    void commandExportRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/middleware-commands/export"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("TC-MIDDLEWARE-009 岗位管理员不能执行全量命令导入导出")
+    void commandTransferRequiresSystemAdministrator() throws Exception {
+        HttpHeaders headers = signedIdentityHeaders("ROLE_MIDDLEWARE_ADMIN", "中间件", true);
+
+        mockMvc.perform(get("/api/middleware-commands/export").headers(headers))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/middleware-commands/import")
+                        .headers(headers)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("[]"))
+                .andExpect(status().isForbidden());
+    }
+
+    private HttpHeaders signedIdentityHeaders(String role, String category, boolean categoryAdmin) {
+        String user = IdentityHeaderCodec.encode("alice");
+        String displayName = IdentityHeaderCodec.encode("Alice");
+        String encodedCategory = IdentityHeaderCodec.encode(category);
+        String categoryAdminValue = Boolean.toString(categoryAdmin);
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(GatewayIdentityHeaders.USER, user);
+        headers.set(GatewayIdentityHeaders.DISPLAY_NAME, displayName);
+        headers.set(GatewayIdentityHeaders.ROLES, role);
+        headers.set(GatewayIdentityHeaders.CATEGORY, encodedCategory);
+        headers.set(GatewayIdentityHeaders.CATEGORY_ADMIN, categoryAdminValue);
+        headers.set(GatewayIdentityHeaders.SIGNATURE,
+                SIGNATURE_SERVICE.signIdentityHeaders(
+                        user, displayName, role, encodedCategory, categoryAdminValue));
+        return headers;
     }
 }

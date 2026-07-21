@@ -1,6 +1,7 @@
 package com.middleware.manager.config;
 
 import com.middleware.manager.security.GatewayHeaderAuthenticationFilter;
+import com.middleware.manager.service.CatalogSoftwareTypeProtocol;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -56,13 +57,21 @@ public class SecurityConfig {
                         .requestMatchers("/api/forum/**").authenticated()
                         // 公开接口
                         .requestMatchers("/api/public/**").permitAll()
-                        // 常用命令：读公开，写需登录
+                        // 常用命令：导入导出仅系统管理员，其他读公开、写需登录
+                        .requestMatchers(HttpMethod.GET, "/api/middleware-commands/export").hasRole("SYS_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/middleware-commands/import").hasRole("SYS_ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/middleware-commands/**").permitAll()
                         .requestMatchers("/api/middleware-commands/**").authenticated()
                         // 登录接口公开
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         // 仅由控制器内的网关 HMAC 校验保护
                         .requestMatchers(HttpMethod.POST, "/api/auth/introspect").permitAll()
+                        // catalog 内部类型解析接口由控制器校验服务间 HMAC
+                        .requestMatchers(HttpMethod.POST,
+                                CatalogSoftwareTypeProtocol.BASE_PATH + CatalogSoftwareTypeProtocol.BY_IDS_PATH,
+                                CatalogSoftwareTypeProtocol.BASE_PATH + CatalogSoftwareTypeProtocol.BY_CATEGORY_PATH,
+                                CatalogSoftwareTypeProtocol.BASE_PATH + CatalogSoftwareTypeProtocol.RESOLVE_PATH)
+                        .permitAll()
                         // 其他 auth 接口需认证
                         .requestMatchers("/api/auth/**").authenticated()
                         // 用户管理：仅系统管理员
