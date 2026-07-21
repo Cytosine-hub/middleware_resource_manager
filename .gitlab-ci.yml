@@ -1,0 +1,197 @@
+# ============================================================================
+# 中间件资源管理平台 · monorepo 微服务 CI/CD
+#
+# 设计：每个服务一条独立流水线，按【路径触发】——只有相关目录变更才构建对应服务；
+#       改动共享库 common-* 或父 POM 则【扇出】重建所有服务（每个服务的 changes 里都含这几条）。
+# 构建期服务之间零依赖：只用 `mvn -pl <服务> -am`（also-make，连带构建 common-* 与其能力模块）。
+# 服务间真实联通（网关↔Nacos↔服务、认证越权）属【集成】层，单独一条流水线在预发环境跑。
+#
+# 需要：一个 docker executor 的 GitLab Runner（把 default.tags 改成你们 runner 的 tag）。
+#       内网若无法直连 Docker Hub，把 image 换成你们镜像仓库里的 maven:3.9-eclipse-temurin-17。
+# ============================================================================
+
+default:
+  image: maven:3.9-eclipse-temurin-17
+  tags: [docker]                       # ← 改成你们 runner 的 tag
+  cache:                               # 复用 .m2，加速依赖解析
+    key: "mvn-$CI_COMMIT_REF_SLUG"
+    paths: [.m2/repository]
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  MAVEN_CLI_OPTS: "--batch-mode --no-transfer-progress -Dstyle.color=never"
+
+stages:
+  - verify        # 编译 + 单元测试 + 打包（每服务独立）
+  - integration   # 端到端 / 认证越权（需 Nacos + 多服务，骨架，手动）
+  - deploy        # 部署（每服务独立，骨架，手动）
+
+# 服务构建模板：mvn -pl <SVC> -am，只构建该服务 + 其依赖（common-* 与能力模块）
+.svc-verify:
+  stage: verify
+  script:
+    - cd backend
+    - mvn $MAVEN_CLI_OPTS -pl "$SVC" -am clean verify
+  artifacts:
+    when: always
+    paths:
+      - backend/$SVC/target/*-exec.jar
+    reports:
+      junit:
+        - backend/**/target/surefire-reports/TEST-*.xml
+    expire_in: 1 week
+
+# ----------------------------------------------------------------------------
+# 每服务流水线（路径触发）。
+# 每个 changes 列表 = 该服务自身 + 其能力模块 + 【扇出段】(共享库/父POM/本文件)。
+# 改共享库 → 所有服务的扇出段命中 → 全部重建。
+# ----------------------------------------------------------------------------
+verify:api-gateway:
+  extends: .svc-verify
+  variables: { SVC: api-gateway }
+  rules:
+    - changes:
+        - backend/api-gateway/**/*
+        - backend/pom.xml
+        - backend/modular-monolith-parent/pom.xml
+        - backend/common-core/**/*
+        - backend/common-security/**/*
+        - backend/common-web/**/*
+        - .gitlab-ci.yml
+
+verify:core-service:
+  extends: .svc-verify
+  variables: { SVC: core-service }
+  rules:
+    - changes:
+        - backend/core-service/**/*
+        - backend/identity/**/*
+        - backend/catalog/**/*
+        - backend/standards/**/*
+        - backend/pom.xml
+        - backend/modular-monolith-parent/pom.xml
+        - backend/common-core/**/*
+        - backend/common-security/**/*
+        - backend/common-web/**/*
+        - .gitlab-ci.yml
+
+verify:ai-service:
+  extends: .svc-verify
+  variables: { SVC: ai-service }
+  rules:
+    - changes:
+        - backend/ai-service/**/*
+        - backend/knowledge/**/*
+        - backend/wiki/**/*
+        - backend/ops-agent/**/*
+        - backend/pom.xml
+        - backend/modular-monolith-parent/pom.xml
+        - backend/common-core/**/*
+        - backend/common-security/**/*
+        - backend/common-web/**/*
+        - .gitlab-ci.yml
+
+verify:community-service:
+  extends: .svc-verify
+  variables: { SVC: community-service }
+  rules:
+    - changes:
+        - backend/community-service/**/*
+        - backend/community/**/*
+        - backend/pom.xml
+        - backend/modular-monolith-parent/pom.xml
+        - backend/common-core/**/*
+        - backend/common-security/**/*
+        - backend/common-web/**/*
+        - .gitlab-ci.yml
+
+verify:app:
+  extends: .svc-verify
+  variables: { SVC: app }
+  rules:
+    - changes:
+        - backend/app/**/*
+        - backend/job-middleware/**/*
+        - backend/job-database/**/*
+        - backend/job-host/**/*
+        - backend/job-network/**/*
+        - backend/job-security/**/*
+        - backend/pom.xml
+        - backend/modular-monolith-parent/pom.xml
+        - backend/common-core/**/*
+        - backend/common-security/**/*
+        - backend/common-web/**/*
+        - .gitlab-ci.yml
+
+# ----------------------------------------------------------------------------
+# 集成流水线（骨架）：起 Nacos + 各服务，跑认证越权与联通验证。
+# 需要 docker-in-docker 或预发环境；这里给出结构与验证清单，按你们环境补全。
+# 手动触发，避免每次 push 都跑重活。
+# ----------------------------------------------------------------------------
+integration:e2e:
+  stage: integration
+  allow_failure: true          # 骨架阶段先不阻断；补全后改 false
+  # services:                  # ← 取消注释并配好后启用
+  #   - name: nacos/nacos-server:v2.3.2
+  #     alias: nacos
+  #   - name: mysql:8
+  #     alias: mysql
+  variables:
+    GATEWAY_SIGNING_SECRET: "ci-integration-signing-secret-at-least-32-bytes"
+  script:
+    - echo "== 集成验证骨架（按 docs 阶段5 安全清单补全）=="
+    - echo "1) 起 Nacos + MySQL + 各服务 fat jar（cloud profile，注入 GATEWAY_SIGNING_SECRET）"
+    - echo "2) 经网关带有效 token 访问受保护端点 -> 期望 200"
+    - echo "3) 越权A：直连下游带伪造 X-Roles 但无签名 -> 期望 401/403"
+    - echo "4) 越权B：客户端经网关塞伪造 X-User -> 网关剥除后按 token 重注入"
+    - echo "5) 越权C：直连 introspect 不带 X-Gateway-Sign -> 期望 403"
+    - echo "6) 过期 token / 退出后同 token -> 期望 401"
+    - echo "TODO 用 docker compose 起服务并用 curl 断言以上各条"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+      allow_failure: true
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+      when: manual
+      allow_failure: true
+
+# ----------------------------------------------------------------------------
+# 部署（骨架）：每服务独立部署，互不依赖。改 core 不用重部 ai。
+# 手动触发；把 script 换成你们的部署方式（scp jar + systemd / k8s / 镜像推送）。
+# 注意共享运行时契约（introspect 接口 / GATEWAY_SIGNING_SECRET / Nacos 配置）需协调，别乱改。
+# ----------------------------------------------------------------------------
+.deploy-tpl:
+  stage: deploy
+  environment:
+    name: "staging/$SVC"
+  script:
+    - echo "部署 $SVC 到 staging（骨架）"
+    - echo "示例 scp backend/$SVC/target/*-exec.jar deploy@host:/opt/$SVC/ 然后 systemctl restart $SVC"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "master"'
+      when: manual
+
+deploy:api-gateway:
+  extends: .deploy-tpl
+  variables: { SVC: api-gateway }
+  needs: ["verify:api-gateway"]
+
+deploy:core-service:
+  extends: .deploy-tpl
+  variables: { SVC: core-service }
+  needs: ["verify:core-service"]
+
+deploy:ai-service:
+  extends: .deploy-tpl
+  variables: { SVC: ai-service }
+  needs: ["verify:ai-service"]
+
+deploy:community-service:
+  extends: .deploy-tpl
+  variables: { SVC: community-service }
+  needs: ["verify:community-service"]
+
+deploy:app:
+  extends: .deploy-tpl
+  variables: { SVC: app }
+  needs: ["verify:app"]
