@@ -1,6 +1,5 @@
 package com.middleware.manager;
 
-import com.middleware.manager.config.ModuleProperties;
 import com.middleware.manager.config.StorageProperties;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
@@ -13,13 +12,9 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @EnableDiscoveryClient
 @EnableAsync
 @MapperScan({
-        "com.middleware.manager.repository",
-        "com.middleware.manager.wiki.repository",
-        "com.middleware.manager.knowledge.agent",
-        "com.middleware.manager.knowledge.repository",
-        "com.middleware.manager.agent.repository"
+        "com.middleware.manager.repository"
 })
-@EnableConfigurationProperties({StorageProperties.class, ModuleProperties.class})
+@EnableConfigurationProperties(StorageProperties.class)
 public class MiddlewareResourceManagerApplication {
 
     public static void main(String[] args) {

@@ -122,6 +122,7 @@ if [[ "$MODULE" == "all" || "$MODULE" == "backend" ]]; then
     if [[ -d "$TMPDIR/backend" ]]; then
         log "停止旧后端..."
         systemctl stop api-gateway 2>/dev/null || true
+        systemctl stop ai-service 2>/dev/null || true
         systemctl stop community-service 2>/dev/null || true
         systemctl stop infra-portal 2>/dev/null || true
         sleep 3
@@ -148,14 +149,19 @@ if [[ "$MODULE" == "all" || "$MODULE" == "backend" ]]; then
             cp "$TMPDIR/backend/community-application.yml.example" "$DEPLOY_DIR/backend/community-application.yml"
             warn "已创建 community-application.yml，请检查数据库密码等配置"
         fi
+        if [[ ! -f "$DEPLOY_DIR/backend/ai-application.yml" && -f "$TMPDIR/backend/ai-application.yml.example" ]]; then
+            cp "$TMPDIR/backend/ai-application.yml.example" "$DEPLOY_DIR/backend/ai-application.yml"
+            warn "已创建 ai-application.yml，请检查数据库、模型和向量库配置"
+        fi
 
         # 确保日志目录存在
         mkdir -p "$DEPLOY_DIR/logs"
 
-        log "启动 app、community-service 与 api-gateway..."
+        log "启动 app、community-service、ai-service 与 api-gateway..."
         systemctl daemon-reload
         systemctl start infra-portal
         systemctl start community-service
+        systemctl start ai-service
 
         # app 先在 8081 就绪，再启动默认静态路由到 app 的网关
         log "等待 app 启动..."
@@ -178,6 +184,19 @@ if [[ "$MODULE" == "all" || "$MODULE" == "backend" ]]; then
             fi
             if [[ $i -eq 30 ]]; then
                 err "community-service 启动超时，请检查日志: $DEPLOY_DIR/logs/community-service.log"
+            fi
+            sleep 2
+        done
+
+        log "等待 ai-service 启动..."
+        for i in $(seq 1 30); do
+            AI_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8083/api/knowledge/search || true)
+            if [[ "$AI_STATUS" == "401" ]]; then
+                log "ai-service 启动成功"
+                break
+            fi
+            if [[ $i -eq 30 ]]; then
+                err "ai-service 启动超时，请检查日志: $DEPLOY_DIR/logs/ai-service.log"
             fi
             sleep 2
         done

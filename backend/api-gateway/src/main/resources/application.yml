@@ -23,6 +23,10 @@ spring:
               uri: "${COMMUNITY_SERVICE_URL:http://127.0.0.1:8082}"
               predicates:
                 - Path=/api/forum/**
+            - id: ai-api
+              uri: "${AI_SERVICE_URL:http://127.0.0.1:8083}"
+              predicates:
+                - Path=/api/knowledge/**,/api/agent/**,/api/wiki/**,/api/ops-agent/**,/api/ops-agent/export/**
             - id: app-api
               uri: "${APP_SERVICE_URL:http://127.0.0.1:8081}"
               predicates:

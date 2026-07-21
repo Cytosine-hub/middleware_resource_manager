@@ -23,15 +23,26 @@ class ApiGatewayApplicationTests {
     private Environment environment;
 
     @Test
-    @DisplayName("TC-GATEWAY-001 默认 profile 将论坛静态路由到 community-service")
+    @DisplayName("TC-GATEWAY-001 默认 profile 将论坛和 AI 集群静态路由到独立服务")
     void defaultProfileUsesStaticRouteWithNacosDisabled() {
         RouteDefinition communityRoute = findRoute("community-api");
+        RouteDefinition aiRoute = findRoute("ai-api");
         RouteDefinition appRoute = findRoute("app-api");
 
         assertThat(communityRoute.getUri()).isEqualTo(URI.create("http://127.0.0.1:8082"));
         assertThat(communityRoute.getPredicates()).singleElement().satisfies(predicate -> {
             assertThat(predicate.getName()).isEqualTo("Path");
             assertThat(predicate.getArgs()).containsValue("/api/forum/**");
+        });
+        assertThat(aiRoute.getUri()).isEqualTo(URI.create("http://127.0.0.1:8083"));
+        assertThat(aiRoute.getPredicates()).singleElement().satisfies(predicate -> {
+            assertThat(predicate.getName()).isEqualTo("Path");
+            assertThat(predicate.getArgs()).containsValues(
+                    "/api/knowledge/**",
+                    "/api/agent/**",
+                    "/api/wiki/**",
+                    "/api/ops-agent/**",
+                    "/api/ops-agent/export/**");
         });
         assertThat(appRoute.getUri()).isEqualTo(URI.create("http://127.0.0.1:8081"));
         assertThat(appRoute.getPredicates()).singleElement().satisfies(predicate -> {

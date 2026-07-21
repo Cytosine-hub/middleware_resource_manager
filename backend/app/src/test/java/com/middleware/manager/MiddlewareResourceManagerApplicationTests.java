@@ -30,4 +30,34 @@ class MiddlewareResourceManagerApplicationTests {
                 .getResource("com/middleware/manager/web/api/ForumController.class"))
                 .isNull();
     }
+
+    @Test
+    @DisplayName("TC-APP-003 app 类路径不再包含 AI 集群 Controller")
+    void appClasspathDoesNotContainAiControllers() {
+        ClassLoader classLoader = MiddlewareResourceManagerApplication.class.getClassLoader();
+
+        assertThat(classLoader.getResource(
+                "com/middleware/manager/knowledge/web/KnowledgeController.class")).isNull();
+        assertThat(classLoader.getResource(
+                "com/middleware/manager/knowledge/web/KnowledgeGraphController.class")).isNull();
+        assertThat(classLoader.getResource(
+                "com/middleware/manager/knowledge/web/AgentController.class")).isNull();
+        assertThat(classLoader.getResource(
+                "com/middleware/manager/wiki/web/WikiController.class")).isNull();
+        assertThat(classLoader.getResource(
+                "com/middleware/manager/agent/web/AgentController.class")).isNull();
+        assertThat(classLoader.getResource(
+                "com/middleware/manager/agent/web/ExportController.class")).isNull();
+    }
+
+    @Test
+    @DisplayName("TC-APP-004 app 类路径不再包含 AI 专属重依赖")
+    void appClasspathDoesNotContainAiOnlyDependencies() {
+        ClassLoader classLoader = MiddlewareResourceManagerApplication.class.getClassLoader();
+
+        assertThat(classLoader.getResource("io/milvus/client/MilvusServiceClient.class")).isNull();
+        assertThat(classLoader.getResource("dev/langchain4j/model/chat/ChatModel.class")).isNull();
+        assertThat(classLoader.getResource("org/jgrapht/Graph.class")).isNull();
+        assertThat(classLoader.getResource("com/fasterxml/jackson/dataformat/yaml/YAMLFactory.class")).isNull();
+    }
 }

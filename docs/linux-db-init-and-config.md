@@ -18,7 +18,7 @@
 - `APP_DB_PORT`，默认 `3306`
 - `APP_DB_NAME`，默认 `middleware_resource_manager`
 - `APP_DB_USERNAME`，默认 `root`
-- `APP_DB_PASSWORD`，默认 `OlgDqdJfehRwBUITqFpi`
+- `APP_DB_PASSWORD`，由环境变量 `APP_DB_PASSWORD` 提供（不内置默认，需部署时配置）
 
 对应应用配置见 `backend/app/src/main/resources/application.yml`：
 
@@ -27,7 +27,7 @@ spring:
   datasource:
     url: jdbc:mysql://${APP_DB_HOST:127.0.0.1}:${APP_DB_PORT:3306}/${APP_DB_NAME:middleware_resource_manager}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
     username: ${APP_DB_USERNAME:root}
-    password: ${APP_DB_PASSWORD:OlgDqdJfehRwBUITqFpi}
+    password: ${APP_DB_PASSWORD:}
 ```
 
 ### 2.2 当前数据表

@@ -1,6 +1,6 @@
 # 生产环境部署手册
 
-> 本文主体保留早期单体直连部署说明，仅供历史环境参考。当前阶段 2 拓扑为 Gateway `:8080` + app `:8081` + community-service `:8082`；新部署以 `docs/microservices-stage2-community-service.md` 为准。
+> 本文主体保留早期单体直连部署说明，仅供历史环境参考。当前阶段 3 拓扑为 Gateway `:8080` + app `:8081` + community-service `:8082` + ai-service `:8083`；新部署以 `docs/microservices-stage3-ai-service.md` 为准。
 
 ## 1. 架构概览
 

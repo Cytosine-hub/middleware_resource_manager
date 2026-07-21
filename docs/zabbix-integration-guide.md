@@ -19,7 +19,7 @@ app:
   zabbix:
     url: ${ZABBIX_URL:http://localhost:8080/api_jsonrpc.php}
     username: ${ZABBIX_USERNAME:Admin}
-    password: ${ZABBIX_PASSWORD:zabbix}
+    password: ${ZABBIX_PASSWORD:}
     timeout: ${ZABBIX_TIMEOUT:30}
 ```
 

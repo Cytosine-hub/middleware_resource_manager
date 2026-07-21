@@ -1,5 +1,5 @@
 # 生产配置
-# 启动方式: java -jar app.jar --spring.profiles.active=prod
+# 启动方式: java -jar ai-service.jar --spring.profiles.active=prod
 
 langchain4j:
   open-ai:
