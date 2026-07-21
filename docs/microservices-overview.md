@@ -106,6 +106,13 @@ sequenceDiagram
 - 服务间零编译依赖；部署服务只依赖 `common-*` 与自身能力模块。
 - 仓库不存真实密钥。DB、Nacos、AI、Zabbix 与网关签名凭据均通过环境变量注入。
 
+
+## 常用命令与软件类型/分类（阶段6 后）
+
+- `middleware_commands` 改挂 **catalog 的 `software_type_id`**（逻辑关联，无物理外键）；独立 `middleware_types` 迁入 `software_types`（归“中间件”分类）后淘汰。命令级 `categories` 标签保留。
+- 跨服务：middleware-service 经 catalog 的**内部软件类型 API**（`InternalSoftwareTypeApiController`，`resolveOrCreate` 等，均以网关 HMAC 签名鉴权、外部无签名→403）解析/落地类型，catalog 保持对 `software_types` 的写入权，不跨库写。
+- **数据迁移（test→prod）**：管理端 `GET /api/middleware-commands/export`（按分类名/类型名导出，无自增 ID）+ `POST /api/middleware-commands/import`（按名解析、幂等 upsert）。详见 `docs/middleware-commands-software-type-migration.md`。
+
 ## 后续待办
 
 - 注册 GitLab Runner，并补全 `integration:e2e` 的真实 Nacos/MySQL 多进程验证。
