@@ -6,7 +6,7 @@
 
 - JDK：17
 - 数据库：MySQL 8.x
-- 应用包：`backend/target/infra-portal-0.0.1-SNAPSHOT-exec.jar`
+- 应用包：`backend/app/target/infra-portal-0.0.1-SNAPSHOT-exec.jar`
 
 ## 2. 当前项目涉及的数据库与配置项
 
@@ -18,16 +18,16 @@
 - `APP_DB_PORT`，默认 `3306`
 - `APP_DB_NAME`，默认 `middleware_resource_manager`
 - `APP_DB_USERNAME`，默认 `root`
-- `APP_DB_PASSWORD`，默认 `OlgDqdJfehRwBUITqFpi`
+- `APP_DB_PASSWORD`，由环境变量 `APP_DB_PASSWORD` 提供（不内置默认，需部署时配置）
 
-对应应用配置见 `backend/src/main/resources/application.yml`：
+对应应用配置见 `backend/app/src/main/resources/application.yml`：
 
 ```yaml
 spring:
   datasource:
     url: jdbc:mysql://${APP_DB_HOST:127.0.0.1}:${APP_DB_PORT:3306}/${APP_DB_NAME:middleware_resource_manager}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
     username: ${APP_DB_USERNAME:root}
-    password: ${APP_DB_PASSWORD:OlgDqdJfehRwBUITqFpi}
+    password: ${APP_DB_PASSWORD:}
 ```
 
 ### 2.2 当前数据表
@@ -134,7 +134,7 @@ FLUSH PRIVILEGES;
 知识库相关表需手动执行 DDL：
 
 ```bash
-mysql -u root -p middleware_resource_manager < backend/src/main/resources/db/knowledge_ddl.sql
+mysql -u root -p middleware_resource_manager < backend/knowledge/src/main/resources/db/knowledge_ddl.sql
 ```
 
 启动完成后，可以执行检查：
@@ -334,7 +334,7 @@ EOF
 
 ```ini
 [Unit]
-Description=Middleware Resource Manager
+Description=集成中心门户 / Infra Portal
 After=network.target mysqld.service
 
 [Service]

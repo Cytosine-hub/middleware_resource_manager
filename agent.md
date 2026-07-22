@@ -2,36 +2,39 @@
 
 ## 1. 项目一句话定位与形态
 
-**集成中心门户**：一个面向基础设施/运维团队的内部门户，服务中间件、数据库、主机、网络、安全等多个运维岗位，管理软件下载包（ReleaseAsset）、参数标准（含草稿→审核→发布版本流）、标准文档、论坛，并集成 AI 知识库/RAG 排查（LangChain4j + Milvus）、Wiki 知识图谱和 Zabbix 监控 Agent。形态为**前后端分离单体**：Spring Boot 3.5.3（Java 17，MyBatis + MySQL 8）后端 + Vue 3 单页应用（Vite，无 vue-router，hash 路由）前端。
+**集成中心门户**：一个面向基础设施/运维团队，服务中间件、数据库、主机、网络和安全等多个运维岗位的内部门户，管理软件下载包（ReleaseAsset）、参数标准（含草稿→审核→发布版本流）、标准文档、论坛，并集成 AI 知识库/RAG 排查（LangChain4j + Milvus）、Wiki 知识图谱和 Zabbix 监控 Agent。业务运行时为 Spring Boot 3.5.3（Java 17，MyBatis + MySQL 8）：identity + catalog + standards 由独立 core-service 提供，论坛由 community-service 提供，knowledge + wiki + ops-agent 集群由 ai-service 提供，5 个岗位模块分别由 middleware/database/host/network/security-service 提供，前置 Spring Cloud Gateway；`cloud` profile 下通过 Nacos 注册、发现和配置。前端为 Vue 3 单页应用（Vite，无 vue-router，hash 路由）。
 
 ## 2. 代码地图
 
 ```
 .
-├── backend/                         # 后端 Spring Boot 工程（Maven，与 frontend/ 平级）
-│   ├── pom.xml                          # 后端唯一构建文件（spring-boot-maven-plugin）
-│   ├── src/main/java/com/middleware/manager/
-│   │   ├── MiddlewareResourceManagerApplication.java   # 后端入口
-│   │   ├── domain/          # Lombok POJO，映射 MySQL 表（SoftwareType、ReleaseAsset、ParameterStandard…）
-│   │   ├── repository/      # MyBatis Mapper 接口（XML 在 resources/mapper/*.xml，一一对应）
-│   │   ├── service/         # 业务逻辑（构造器注入，写操作 @Transactional）
-│   │   ├── web/api/         # REST 控制器：/api/admin/**、/api/public/**、/api/auth/**、/api/forum/**
-│   │   │   └── dto/         # Request/Response DTO + ApiError
-│   │   ├── web/controller/  # Thymeleaf SSR 页面控制器（/login、/admin/releases）
-│   │   ├── web/form/        # SSR 表单对象
-│   │   ├── config/          # SecurityConfig、StorageProperties、WarmupRunner、AccessLogFilter
-│   │   ├── security/        # Role 枚举（14 角色）+ PermissionService（按类目授权）
-│   │   ├── constant/        # ErrorCode.java、ErrorMessages.java（禁止魔法值）
-│   │   ├── exception/       # BusinessException / NotFoundException / ForbiddenException
-│   │   ├── knowledge/       # 知识库+RAG 排查（JdbcTemplate，非 MyBatis）：loader/splitter/embedding/store/retriever/agent/web
-│   │   ├── wiki/            # LLM Wiki 摄取与知识图谱：entity/repository/service/web
-│   │   ├── agent/           # 运维 Agent：tool/、skill/、zabbix/（ZabbixClient JSON-RPC）、export/（Excel）
-│   │   └── util/            # TextUtil
-│   ├── src/main/resources/
-│   │   ├── application.yml  # 唯一配置文件（DB/langchain4j/zabbix，环境变量可覆盖）
-│   │   ├── mapper/          # 30 个 MyBatis XML
-│   │   └── db/knowledge_ddl.sql
-│   └── src/test/java/…      # JUnit 5 + Mockito 单元测试（wiki/、agent/、knowledge/ 覆盖最全）
+├── backend/                         # Maven 多模块：9 个可执行部署单元 + 业务库模块
+│   ├── pom.xml                      # 聚合根父 POM，统一 Boot/Cloud/Alibaba BOM 与插件
+│   ├── modular-monolith-parent/     # 既有业务模块的依赖父 POM，隔离 Gateway WebFlux 依赖
+│   ├── common-core/                 # DTO、异常/错误码、常量、共享模型及跨模块业务端口
+│   ├── common-security/             # 网关身份头验签、PermissionService、角色/岗位权限上下文
+│   ├── common-web/                  # SecurityConfig、过滤器、全局异常处理、Web 通用配置
+│   ├── identity/                    # core-service 业务库：账号、Token、角色、系统设置、API 审计
+│   ├── catalog/                     # core-service 业务库：软件分类、软件类型、发布包与文件下载
+│   ├── standards/                   # core-service 业务库：参数标准、标准文档、审核、版本与转换
+│   ├── knowledge/                   # ai-service 业务库：知识库、向量检索、RAG 基础能力
+│   ├── wiki/                        # ai-service 业务库：Wiki 摄取、检索与知识图谱
+│   ├── community/                   # 论坛帖子、评论、标签与点赞
+│   ├── ops-agent/                   # ai-service 业务库：运维 Agent、工具、Skill、Zabbix 与导出
+│   ├── job-middleware/              # 中间件岗位专属命令端点
+│   ├── job-database/                # 数据库岗位边界（待演进）
+│   ├── job-host/                    # 主机岗位边界（待演进）
+│   ├── job-network/                 # 网络岗位边界（待演进）
+│   ├── job-security/                # 网络安全岗位边界（待演进）
+│   ├── api-gateway/                 # 集中认证与路由（:8080）；cloud 下经 Nacos lb:// 调 core-service
+│   ├── community-service/           # 独立论坛应用（:8082）；聚合 common-* + community
+│   ├── ai-service/                  # 独立 AI/Agent 应用（:8083）；聚合 knowledge + wiki + ops-agent
+│   ├── core-service/                # 独立平台核心应用（:8084）；聚合 identity + catalog + standards
+│   ├── middleware-service/          # 中间件岗位应用（:8085）；聚合 job-middleware
+│   ├── database-service/            # 数据库岗位薄服务（:8086）；聚合 job-database
+│   ├── host-service/                # 主机岗位薄服务（:8087）；聚合 job-host
+│   ├── network-service/             # 网络岗位薄服务（:8088）；聚合 job-network
+│   └── security-service/            # 网络安全岗位薄服务（:8089）；聚合 job-security
 ├── frontend/
 │   ├── src/main.js      # 前端入口
 │   ├── src/App.vue      # 应用骨架 + hash 路由分发
@@ -41,7 +44,7 @@
 │   ├── src/components/ui/  # Base* 通用组件（BaseButton/BaseModal/DataTable/Toast…，仅用设计令牌）
 │   ├── src/composables/ # useAuth/useNotify/useRoute/useAdmin（模块级单例状态）
 │   └── src/styles/tokens.css  # 设计令牌（--color-* 等）
-├── docs/                # development-standards.md（规范全文）、code-review-rules.md、各设计文档
+├── docs/                # development-standards.md、microservices-stage1-gateway-nacos.md 等
 ├── scripts/             # 启动/打包脚本（package-for-deploy.sh、start-local-*.ps1）
 ├── db/ deploy/ release/ # DDL、部署物、发布包
 └── commands/ examples/  # 中间件命令库、示例
@@ -121,11 +124,11 @@ API 调用统一走 `api.js` 的 `request()`（自动附带 `Authorization: Bear
 
 ## 4. 新增一个功能的配方（以"新增一个受权限管控的管理端 CRUD"为例）
 
-1. **建表**：DDL 加入 `db/`（知识模块相关放 `backend/src/main/resources/db/`），在 MySQL `middleware_resource_manager` 库执行。
+1. **建表**：DDL 加入所属模块的 `src/main/resources/db/`（例如知识模块放 `backend/knowledge/src/main/resources/db/`），在 MySQL `middleware_resource_manager` 库执行。
 2. **domain/**：新建 Lombok POJO（`@Data @NoArgsConstructor @AllArgsConstructor`）。
 3. **repository/**：新建 Mapper 接口 + `resources/mapper/XxxMapper.xml`（方法命名仿现有：`findById`、`findAllByOrderBy…`、`existsBy…`、`insert`、`update`、`deleteById`）。
 4. **constant/**：在 `ErrorCode.java` 加错误码常量、`ErrorMessages.java` 加中文消息（成对出现）。
-5. **先写测试**（TDD，见第 8 节）：`backend/src/test/java/.../service/XxxServiceTest.java`，Mockito mock Mapper，覆盖正常/重复/不存在/无权限分支。
+5. **先写测试**（TDD，见第 8 节）：`backend/<所属模块>/src/test/java/.../service/XxxServiceTest.java`，Mockito mock Mapper，覆盖正常/重复/不存在/无权限分支。
 6. **service/**：实现业务逻辑，构造器注入，写操作 `@Transactional`，校验失败抛 `BusinessException(ErrorCode.X, ErrorMessages.X)`。
 7. **web/api/dto/**：新建 `XxxRequest`（带 `jakarta.validation` 注解）和 `XxxResponse`。
 8. **web/api/**：新建 `AdminXxxApiController`，路径 `/api/admin/xxx`，注入 `PermissionService` 做类目权限过滤；公共只读接口另建 `PublicXxxApiController` 于 `/api/public/xxx`。
@@ -162,10 +165,18 @@ API 调用统一走 `api.js` 的 `request()`（自动附带 `Authorization: Bear
 | 目的 | 命令 |
 |------|------|
 | 后端编译打包 | `cd backend && mvn clean package -DskipTests` |
-| 后端启动（:8080） | `cd backend && mvn spring-boot:run` |
+| community-service 启动（:8082） | `cd backend && mvn -pl community-service -am spring-boot:run` |
+| ai-service 启动（:8083） | `cd backend && mvn -pl ai-service -am spring-boot:run` |
+| core-service 启动（:8084） | `cd backend && mvn -pl core-service -am spring-boot:run` |
+| middleware-service 启动（:8085） | `cd backend && mvn -pl middleware-service -am spring-boot:run` |
+| database-service 启动（:8086） | `cd backend && mvn -pl database-service -am spring-boot:run` |
+| host-service 启动（:8087） | `cd backend && mvn -pl host-service -am spring-boot:run` |
+| network-service 启动（:8088） | `cd backend && mvn -pl network-service -am spring-boot:run` |
+| security-service 启动（:8089） | `cd backend && mvn -pl security-service -am spring-boot:run` |
+| Gateway 启动（:8080） | `cd backend && mvn -pl api-gateway -am spring-boot:run` |
 | 后端测试 | `cd backend && mvn test` |
 | 前端安装 | `cd frontend && npm install` |
-| 前端开发（:5173，代理 /api、/files 到 :8080） | `cd frontend && npm run dev` |
+| 前端开发（:5173，代理 /api、/files 到 Gateway :8080） | `cd frontend && npm run dev` |
 | 前端构建 | `cd frontend && npm run build` |
 | 打部署包 | `scripts/package-for-deploy.sh` |
 | 重启前后端（含 Docker/Milvus） | `/restart` skill |
@@ -175,9 +186,13 @@ API 调用统一走 `api.js` 的 `request()`（自动附带 `Authorization: Bear
 
 数据库：MySQL 8.0 `127.0.0.1:3306/middleware_resource_manager`，用户 `root`，凭据在 `~/.my.cnf`；连接可用 `APP_DB_*` 环境变量覆盖。
 
+认证：九个后端进程启动前必须设置同一个至少 32 UTF-8 字节的 `GATEWAY_SIGNING_SECRET`，配置无生产默认值。外部请求只进 Gateway；Token 校验、滑动续期、角色和岗位权威归 core-service 的 identity，各业务服务的受保护端点只接受 Gateway 签名的身份头。协议和联通验证见 `docs/microservices-stage5-gateway-authentication.md`。
+
+Nacos：默认 profile 明确关闭注册与配置；仅 `cloud` profile 启用，9 个服务名与 Maven 服务目录一致。Gateway 将 `/api/forum/**` 路由到 community-service，将 `/api/knowledge/**`、`/api/agent/**`、`/api/wiki/**`、`/api/ops-agent/**` 路由到 ai-service，将 identity/catalog/standards 的原路径和 `/files/**` 路由到 core-service，将 `/api/middleware-commands/**` 路由到 middleware-service；其余 4 个岗位服务仅注册 Nacos，新增业务端点时再增加精确网关路由，禁止恢复 `/api/**` 泛路由。Gateway 对 introspect 的调用在 `cloud` profile 下通过负载均衡的 `http://core-service` 完成。端口和路由见 `docs/microservices-stage6-job-services.md`，认证联通见 `docs/microservices-stage5-gateway-authentication.md`。
+
 ## 8. 测试（严格 TDD）
 
-**测试先行**：任何功能/修复，先在 `backend/src/test/java` 写失败的测试（Red），再实现（Green），再重构。技术栈：JUnit 5 + Mockito + `spring-boot-starter-test`；Web 层安全用 `@WebMvcTest` 风格的 `*ControllerSecurityTest`（参照 `agent/web/OpsAgentControllerSecurityTest.java`）。
+**测试先行**：任何功能/修复，先在 `backend/<所属模块>/src/test/java` 写失败的测试（Red），再实现（Green），再重构。技术栈：JUnit 5 + Mockito + `spring-boot-starter-test`；Web 层安全用 `@WebMvcTest` 风格的 `*ControllerSecurityTest`（参照 `ai-service` 模块的 `agent/web/OpsAgentControllerSecurityTest.java`）。
 
 组织方式仿 `wiki/service/LinkResolverTest.java`：`@Mock` mock Mapper，`@BeforeEach` 中 `MockitoAnnotations.openMocks(this)` 后手动 new 被测类；用 `@Nested` + `@DisplayName` 按方法分组。
 
@@ -220,7 +235,7 @@ void getMissingThrows() { ... }
 
 ## 11. 踩坑与经验
 
-- **认证已是 Bearer Token**：前端登录后 token 存 `localStorage`（`mrm.token`/`mrm.user`/`mrm.expiresAt`，见 `api.js`），带过期校验；后端有 `TokenService` + `user_token` 表。旧文档提到的 HTTP Basic + sessionStorage 已过时，勿照抄。
+- **认证集中在 Gateway + identity**：前端登录后 token 存 `localStorage`（`mrm.token`/`mrm.user`/`mrm.expiresAt`，见 `api.js`）；Gateway 用 token 调 identity introspect，identity 独占 `TokenService` + `user_tokens` 表并做滑动续期。其他服务禁止恢复 token/角色表查询，只能验 `X-Gateway-Sign` 后使用签名身份头。
 - **两套数据访问并存**：主业务用 MyBatis（Mapper 接口 + XML），knowledge 模块用 JdbcTemplate——在 knowledge 下不要引入 MyBatis Mapper，反之亦然。
 - **Mapper 接口方法名是 JPA 风格但实现在 XML**：新增查询要同时改接口和 `resources/mapper/*.xml`，两边 id 必须一致，漏改 XML 只在运行时报错。
 - **种子数据在 Service 里**：`SoftwareTypeService` 实现 `ApplicationRunner` 在启动时 seed 类目/类型；改类目相关逻辑注意幂等，别造成重复插入。
@@ -228,4 +243,4 @@ void getMissingThrows() { ... }
 - **外部服务全部走环境变量**：Zabbix（`ZABBIX_URL` 等）、大模型（`AI_BASE_URL`/`AI_API_KEY`）、Milvus（`VECTOR_HOST`/`VECTOR_PORT`）；本地没起 Milvus 时知识库相关功能会失败，开发可用 `InMemoryVectorStore`。
 - **模块开关在 `system_settings` 表**（knowledge-enabled、diagnostics-enabled）：功能"不见了"先查开关再查代码。
 - **权限模型有两级**：管理员（`isCategoryAdmin`，可改可审）vs 管理岗（`isManagement`，只能改不能审），审核相关接口必须走 `PermissionService.canReview(auth, category)`，只按角色名判断会放过管理岗越权审核。
-- **文件存储路径**：上传文件落在 `./storage/<middlewareName>/`，下载走 `/files/**` 且需登录；本地调试删库不删 storage 会出现悬空记录。
+- **文件存储路径**：上传文件落在 `./storage/<middlewareName>/`，下载走公开的 `/files/**`；本地调试删库不删 storage 会出现悬空记录。

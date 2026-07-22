@@ -1,0 +1,50 @@
+spring:
+  config:
+    import:
+      - "optional:nacos:${spring.application.name}.properties?group=${NACOS_CONFIG_GROUP:DEFAULT_GROUP}&refreshEnabled=true"
+  cloud:
+    nacos:
+      server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+      username: ${NACOS_USERNAME:}
+      password: ${NACOS_PASSWORD:}
+      config:
+        enabled: true
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: ${NACOS_CONFIG_GROUP:DEFAULT_GROUP}
+        import-check:
+          enabled: true
+      discovery:
+        enabled: true
+        register-enabled: true
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: ${NACOS_DISCOVERY_GROUP:DEFAULT_GROUP}
+    loadbalancer:
+      nacos:
+        enabled: true
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: community-api
+              uri: lb://community-service
+              predicates:
+                - Path=/api/forum/**
+            - id: ai-api
+              uri: lb://ai-service
+              predicates:
+                - Path=/api/knowledge/**,/api/agent/**,/api/wiki/**,/api/ops-agent/**,/api/ops-agent/export/**
+            - id: core-api
+              uri: lb://core-service
+              predicates:
+                - Path=/api/auth/**,/api/admin/users/**,/api/admin/account/**,/api/admin/settings/**,/api/admin/releases/**,/api/admin/software-types/**,/api/admin/software-type-categories/**,/api/admin/parameter-standards/**,/api/admin/standard-documents/**,/api/admin/standard-parameters/**,/api/admin/reviews/**,/api/admin/revisions/**,/api/admin/images/**,/api/public/**,/files/**
+            - id: middleware-api
+              uri: lb://middleware-service
+              predicates:
+                - Path=/api/middleware-commands/**
+
+app:
+  security:
+    introspection-base-url: http://core-service
+    introspection-load-balanced: true

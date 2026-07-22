@@ -1,5 +1,7 @@
 # 生产环境部署手册
 
+> 本文主体保留早期单体直连部署说明，仅供历史环境参考。当前阶段 6 为 9 进程拓扑，`app` 与 `:8081` 已退役；新部署以 `docs/microservices-stage6-job-services.md` 和 `scripts/package-for-deploy.sh` 为准。
+
 ## 1. 架构概览
 
 ```
@@ -37,9 +39,9 @@
 ### 3.1 构建后端
 
 ```bash
-cd /path/to/middleware_resource_manager/backend
+cd /path/to/infra_portal/backend
 mvn clean package -DskipTests
-# 产物：backend/target/infra-portal-0.0.1-SNAPSHOT.jar
+# 产物：9 个 `backend/*-service/target/*-exec.jar`（含 api-gateway，无 app）
 ```
 
 ### 3.2 构建前端
@@ -58,7 +60,7 @@ npm run build
 ```
 /opt/infra-portal/
 ├── backend/
-│   ├── infra-portal-0.0.1-SNAPSHOT.jar
+│   ├── infra-portal-0.0.1-SNAPSHOT-exec.jar
 │   ├── data/skills/          # 经验 Skill YAML（运行时生成）
 │   └── storage/              # 上传文件存储
 ├── frontend/
@@ -90,7 +92,7 @@ mysql -u root middleware_resource_manager < release/db/upgrade-v1.0.4.sql
 cd /opt/infra-portal/backend
 
 # 生产环境推荐配置
-java -jar infra-portal-0.0.1-SNAPSHOT.jar \
+java -jar infra-portal-0.0.1-SNAPSHOT-exec.jar \
   --server.port=8080 \
   --spring.jpa.open-in-view=false \
   --app.modules.knowledge-enabled=false \
@@ -104,7 +106,7 @@ java -jar infra-portal-0.0.1-SNAPSHOT.jar \
 ```bash
 export APP_MODULES_KNOWLEDGE_ENABLED=false
 export APP_MODULES_DIAGNOSTICS_ENABLED=false
-java -jar infra-portal-0.0.1-SNAPSHOT.jar
+java -jar infra-portal-0.0.1-SNAPSHOT-exec.jar
 ```
 
 ### 4.4 systemd 服务（推荐）
@@ -115,14 +117,14 @@ sudo vi /etc/systemd/system/infra-portal.service
 
 ```ini
 [Unit]
-Description=Middleware Resource Manager
+Description=集成中心门户 / Infra Portal
 After=network.target mysql.service
 
 [Service]
 Type=simple
 User=appuser
 WorkingDirectory=/opt/infra-portal/backend
-ExecStart=/usr/bin/java -jar infra-portal-0.0.1-SNAPSHOT.jar \
+ExecStart=/usr/bin/java -jar infra-portal-0.0.1-SNAPSHOT-exec.jar \
   --server.port=8080 \
   --app.modules.knowledge-enabled=false \
   --app.modules.diagnostics-enabled=false
@@ -355,7 +357,7 @@ cd frontend && npm run build && cd ..
 
 # 替换后端 JAR
 sudo systemctl stop infra-portal
-cp backend/target/infra-portal-0.0.1-SNAPSHOT.jar /opt/infra-portal/backend/
+cp backend/app/target/infra-portal-0.0.1-SNAPSHOT-exec.jar /opt/infra-portal/backend/
 sudo systemctl start infra-portal
 
 # 替换前端

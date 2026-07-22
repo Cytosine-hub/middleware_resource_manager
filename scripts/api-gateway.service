@@ -1,0 +1,21 @@
+[Unit]
+Description=集成中心门户 / Infra Portal API Gateway
+After=network.target community-service.service ai-service.service core-service.service middleware-service.service database-service.service host-service.service network-service.service security-service.service
+Wants=community-service.service ai-service.service core-service.service middleware-service.service database-service.service host-service.service network-service.service security-service.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/app/infra_portal/backend
+EnvironmentFile=-/app/infra_portal/backend/services.env
+ExecStart=/usr/local/java/bisheng-jdk-17.0.12/bin/java -Xms512m -Xmx512m -jar /app/infra_portal/backend/api-gateway-0.0.1-SNAPSHOT-exec.jar
+ExecStop=/bin/kill -SIGTERM $MAINPID
+Restart=on-failure
+RestartSec=10
+SuccessExitStatus=143
+
+StandardOutput=append:/app/infra_portal/logs/api-gateway.log
+StandardError=append:/app/infra_portal/logs/api-gateway.log
+
+[Install]
+WantedBy=multi-user.target

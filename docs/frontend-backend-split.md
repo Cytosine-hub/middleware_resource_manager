@@ -4,11 +4,12 @@ This project now has a Spring Boot backend API and a separate Vue frontend.
 
 ## Backend
 
-Run from the `backend/` directory:
+Run the app and Gateway from the `backend/` directory in separate terminals:
 
 ```powershell
 cd backend
-mvn spring-boot:run
+mvn -pl app -am spring-boot:run
+mvn -pl api-gateway -am spring-boot:run
 ```
 
 Important API groups:
@@ -37,7 +38,7 @@ npm.cmd install
 npm.cmd run dev
 ```
 
-The Vite dev server listens on `http://localhost:5173` and proxies `/api` and `/files` to `http://localhost:8080`.
+The Vite dev server listens on `http://localhost:5173` and proxies `/api` and `/files` to Gateway at `http://localhost:8080`; the modular-monolith app listens directly on `http://localhost:8081`.
 
 Build for production:
 

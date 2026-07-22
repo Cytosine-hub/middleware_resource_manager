@@ -2,7 +2,15 @@
 
 本文档适用于当前前后端分离版本：
 
-- 后端：Spring Boot 3.5.3，默认端口 `8080`
+- API Gateway：Spring Cloud Gateway，默认端口 `8080`
+- community-service：独立论坛服务，默认端口 `8082`
+- ai-service：独立 AI/Agent 集群服务，默认端口 `8083`
+- core-service：独立 identity/catalog/standards 平台核心服务，默认端口 `8084`
+- middleware-service：中间件岗位服务，默认端口 `8085`
+- database-service：数据库岗位薄服务，默认端口 `8086`
+- host-service：主机岗位薄服务，默认端口 `8087`
+- network-service：网络岗位薄服务，默认端口 `8088`
+- security-service：网络安全岗位薄服务，默认端口 `8089`
 - 前端：Vue 3 + Vite，默认端口 `5173`
 - 数据库：MySQL 8.0，默认端口 `3306`
 
@@ -40,26 +48,58 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local-mysql.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\stop-local-mysql.ps1
 ```
 
-默认数据库配置在 `backend/src/main/resources/application.yml`：
+8 个业务服务的默认数据库配置分别在各自 `application.yml`，共同连接一期共享库：
 
 - 数据库：`middleware_resource_manager`
 - 地址：`127.0.0.1:3306`
 - 用户：`root`
-- 密码：读取 `APP_DB_PASSWORD`，未设置时使用配置文件默认值
+- 密码：读取 `APP_DB_PASSWORD`，仓库不提供密码默认值
 
-## 3. 启动后端
+## 3. 启动后端与 Gateway
 
 进入 `backend/` 目录执行：
 
+启动 core-service：
+
 ```powershell
 cd backend
-mvn spring-boot:run
+mvn -pl core-service -am spring-boot:run
 ```
 
-后端启动成功后访问：
+另开终端启动 community-service 与 ai-service：
+
+```powershell
+cd backend
+mvn -pl community-service -am spring-boot:run
+mvn -pl ai-service -am spring-boot:run
+```
+
+分别在独立终端启动 5 个岗位服务：
+
+```powershell
+cd backend
+mvn -pl middleware-service -am spring-boot:run
+mvn -pl database-service -am spring-boot:run
+mvn -pl host-service -am spring-boot:run
+mvn -pl network-service -am spring-boot:run
+mvn -pl security-service -am spring-boot:run
+```
+
+最后启动 Gateway：
+
+```powershell
+cd backend
+mvn -pl api-gateway -am spring-boot:run
+```
+
+默认 profile 不连接 Nacos。Gateway 将 `/api/forum/**` 静态转发到 community-service `:8082`；将 AI/Agent 路径转发到 ai-service `:8083`；将 identity/catalog/standards 原路径与 `/files/**` 转发到 core-service `:8084`；将 `/api/middleware-commands/**` 转发到 middleware-service `:8085`。其余 4 个岗位服务暂无业务路由。启用 Nacos 的 `cloud` 启动与验证步骤见 `docs/microservices-stage6-job-services.md`。
+
+九个后端进程启动成功后经 Gateway 访问：
 
 ```text
 http://localhost:8080/api/public/releases
+http://localhost:8080/api/forum/posts
+http://localhost:8080/api/wiki/pages
 ```
 
 如果返回 JSON，说明后端接口可用。
@@ -95,6 +135,8 @@ Vite 已配置代理：
 - `/api` 转发到 `http://localhost:8080`
 - `/files` 转发到 `http://localhost:8080`
 
+`8080` 是 Gateway；8 个业务服务直连端口为 `8082-8089`（`8081` 已停用）。外部业务流量只应进入 Gateway。
+
 ## 5. 登录后台
 
 打开前端：
@@ -105,12 +147,7 @@ http://localhost:5173/#/admin
 
 使用数据库中的管理员账号登录。
 
-默认账号配置为：
-
-- 用户名：`admin`
-- 密码：`admin123`
-
-注意：默认账号密码只会在管理员表为空时初始化。如果数据库里已经有管理员账号，实际密码以数据库现有数据为准。
+首次初始化空账号表前必须设置 `ADMIN_DEFAULT_PASSWORD`。仓库和配置文件不提供内置密码；如果数据库里已经有管理员账号，实际密码以数据库现有数据为准。
 
 ### RBAC 角色体系
 
@@ -163,6 +200,7 @@ http://localhost:5173/#/admin
 - 公开资源列表：`http://localhost:8080/api/public/releases`
 - 文件下载接口：`http://localhost:8080/files/{downloadToken}`
 - 公开参数标准：`http://localhost:8080/api/public/parameter-standards`
+- 论坛帖子：`http://localhost:8080/api/forum/posts`
 
 ## 7. 构建前端
 
@@ -193,6 +231,14 @@ mvn test
 
 ```powershell
 netstat -ano | Select-String ':8080'
+netstat -ano | Select-String ':8082'
+netstat -ano | Select-String ':8083'
+netstat -ano | Select-String ':8084'
+netstat -ano | Select-String ':8085'
+netstat -ano | Select-String ':8086'
+netstat -ano | Select-String ':8087'
+netstat -ano | Select-String ':8088'
+netstat -ano | Select-String ':8089'
 ```
 
 检查前端端口：
@@ -204,11 +250,14 @@ netstat -ano | Select-String ':5173'
 ## 10. 推荐启动顺序
 
 1. 启动 MySQL
-2. 启动 Spring Boot 后端
-3. 启动 Vue 前端
-4. 打开 `http://localhost:5173`
+2. 启动 core-service（`:8084`）
+3. 启动 community-service（`:8082`）与 ai-service（`:8083`）
+4. 启动 5 个岗位服务（`:8085-8089`）
+5. 启动 Gateway（`:8080`）
+6. 启动 Vue 前端
+7. 打开 `http://localhost:5173`
 
-如果前端页面能打开但接口报错，优先检查后端 `8080` 是否启动成功；如果后端启动失败，优先检查 MySQL 是否已启动。
+如果前端页面能打开但接口报错，先检查 Gateway `8080`；论坛检查 community-service `8082`；知识库、Wiki 和 Agent 检查 ai-service `8083`；登录、下载、标准和管理后台检查 core-service `8084`；中间件命令检查 middleware-service `8085`；4 个薄服务用各自 `/health` 检查。任一业务服务启动失败时优先检查 MySQL，AI 功能还需检查 Milvus、LLM 和 Zabbix 配置。
 
 ## 11. 知识库模块配置
 

@@ -48,7 +48,7 @@ langchain4j:
   open-ai:
     chat-model:
       base-url: https://token-plan-cn.xiaomimimo.com/v1
-      api-key: tp-c917uu165jgq2dosv8104vtxi7i8uaqb3wqkq5zxlbwm5haz
+      api-key: ${AI_API_KEY:}
       model-name: mimo-v2.5-pro
       max-tokens: 4096
       temperature: 0.1

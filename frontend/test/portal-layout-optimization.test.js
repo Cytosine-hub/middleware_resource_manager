@@ -93,7 +93,10 @@ describe('门户页面优化2验收用例（需求 #17 · Issue #10）', () => {
     const navSource = await readSource('../src/shared/jobs/JobNavigation.vue')
     // 按钮不再渲染二级小字子标签，容器自身使用收敛后的紧凑间距令牌
     expect(navSource).not.toContain('<small>')
-    expect(navSource).toMatch(/min-height:\s*32px/)
+    const relativeMinHeight = navSource.match(/\.job-navigation-button\s*\{[\s\S]*?min-height:\s*([\d.]+)(em|rem)/)
+    expect(relativeMinHeight, '岗位导航按钮应使用相对单位定义最小高度').toBeTruthy()
+    expect(Number(relativeMinHeight[1])).toBeGreaterThanOrEqual(2)
+    expect(Number(relativeMinHeight[1])).toBeLessThanOrEqual(3)
 
     const wrapper = track(mount(DownloadsPage))
     await flushPromises()

@@ -1,0 +1,4 @@
+-- 旧的固定自增 ID 种子已退役。
+-- 全新环境请先执行 catalog 类型迁移，再以系统管理员调用：
+-- POST /api/middleware-commands/import
+-- 请求体使用 ../commands/commands.json 的无 ID、按名格式数据。

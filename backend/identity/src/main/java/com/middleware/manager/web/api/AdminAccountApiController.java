@@ -1,0 +1,44 @@
+package com.middleware.manager.web.api;
+
+import com.middleware.manager.domain.RoleEntity;
+import com.middleware.manager.constant.ErrorCode;
+import com.middleware.manager.constant.ErrorMessages;
+import com.middleware.manager.exception.BusinessException;
+import com.middleware.manager.service.AdminAccountService;
+import com.middleware.manager.service.RoleService;
+import com.middleware.manager.web.api.dto.AuthResponse;
+import com.middleware.manager.web.api.dto.PasswordRequest;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
+
+@RestController
+@RequestMapping("/api/admin/account")
+public class AdminAccountApiController {
+    private final AdminAccountService adminAccountService;
+    private final RoleService roleService;
+
+    public AdminAccountApiController(AdminAccountService adminAccountService, RoleService roleService) {
+        this.adminAccountService = adminAccountService;
+        this.roleService = roleService;
+    }
+
+    @PostMapping("/password")
+    public AuthResponse changePassword(@Valid @RequestBody PasswordRequest request,
+                                       Authentication authentication) {
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new BusinessException(ErrorCode.PASSWORD_INVALID, ErrorMessages.PASSWORD_INVALID);
+        }
+
+        adminAccountService.changePassword(authentication.getName(), request.getCurrentPassword(), request.getNewPassword());
+        RoleEntity role = authentication.getAuthorities().stream()
+                .map(authority -> roleService.getByAuthority(authority.getAuthority()))
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+        return new AuthResponse(authentication.getName(), adminAccountService.getDisplayNameByUsername(authentication.getName()), role != null ? role.getDisplayName() : "系统管理员");
+    }
+}
