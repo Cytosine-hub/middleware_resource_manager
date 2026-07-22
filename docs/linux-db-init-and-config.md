@@ -1,12 +1,12 @@
 # Linux 服务器部署手册：数据库初始化与参数配置
 
-本文档基于当前项目实际代码整理，适用于将 `middleware-resource-manager` 部署到 Linux 服务器。
+本文档基于当前项目实际代码整理，适用于将 `infra-portal` 部署到 Linux 服务器。
 
 ## 1. 适用版本
 
 - JDK：17
 - 数据库：MySQL 8.x
-- 应用包：`backend/app/target/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar`
+- 应用包：`backend/app/target/infra-portal-0.0.1-SNAPSHOT-exec.jar`
 
 ## 2. 当前项目涉及的数据库与配置项
 
@@ -72,9 +72,9 @@ spring:
 建议目录：
 
 ```text
-/opt/middleware-resource-manager/
+/opt/infra-portal/
 ├─ app/
-│  └─ middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar
+│  └─ infra-portal-0.0.1-SNAPSHOT-exec.jar
 ├─ storage/
 ├─ logs/
 └─ conf/
@@ -192,7 +192,7 @@ app:
 Linux 部署建议改为绝对路径：
 
 ```bash
-export APP_STORAGE_LOCATION=/opt/middleware-resource-manager/storage
+export APP_STORAGE_LOCATION=/opt/infra-portal/storage
 ```
 
 说明：
@@ -262,9 +262,9 @@ spring:
 ### 6.1 创建目录
 
 ```bash
-mkdir -p /opt/middleware-resource-manager/app
-mkdir -p /opt/middleware-resource-manager/storage
-mkdir -p /opt/middleware-resource-manager/logs
+mkdir -p /opt/infra-portal/app
+mkdir -p /opt/infra-portal/storage
+mkdir -p /opt/infra-portal/logs
 ```
 
 ### 6.2 上传 JAR
@@ -272,7 +272,7 @@ mkdir -p /opt/middleware-resource-manager/logs
 把打包产物上传到：
 
 ```text
-/opt/middleware-resource-manager/app/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar
+/opt/infra-portal/app/infra-portal-0.0.1-SNAPSHOT-exec.jar
 ```
 
 ### 6.3 设置目录权限
@@ -280,14 +280,14 @@ mkdir -p /opt/middleware-resource-manager/logs
 假设应用运行用户为 `appuser`：
 
 ```bash
-chown -R appuser:appuser /opt/middleware-resource-manager
-chmod -R 755 /opt/middleware-resource-manager
+chown -R appuser:appuser /opt/infra-portal
+chmod -R 755 /opt/infra-portal
 ```
 
 上传目录必须确保应用用户可写：
 
 ```bash
-chmod -R 775 /opt/middleware-resource-manager/storage
+chmod -R 775 /opt/infra-portal/storage
 ```
 
 ## 7. Linux 启动命令示例
@@ -300,18 +300,18 @@ export APP_DB_PORT=3306
 export APP_DB_NAME=middleware_resource_manager
 export APP_DB_USERNAME=middleware_mgr
 export APP_DB_PASSWORD='ReplaceWithStrongPassword'
-export APP_STORAGE_LOCATION=/opt/middleware-resource-manager/storage
+export APP_STORAGE_LOCATION=/opt/infra-portal/storage
 export SERVER_PORT=8080
 
-java -jar /opt/middleware-resource-manager/app/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar
+java -jar /opt/infra-portal/app/infra-portal-0.0.1-SNAPSHOT-exec.jar
 ```
 
 ## 7.2 后台启动示例
 
 ```bash
-nohup java -jar /opt/middleware-resource-manager/app/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar \
-  > /opt/middleware-resource-manager/logs/app.out.log \
-  2> /opt/middleware-resource-manager/logs/app.err.log &
+nohup java -jar /opt/infra-portal/app/infra-portal-0.0.1-SNAPSHOT-exec.jar \
+  > /opt/infra-portal/logs/app.out.log \
+  2> /opt/infra-portal/logs/app.err.log &
 ```
 
 ## 7.3 推荐的 systemd 方式
@@ -319,13 +319,13 @@ nohup java -jar /opt/middleware-resource-manager/app/middleware-resource-manager
 建议创建环境文件：
 
 ```bash
-cat >/opt/middleware-resource-manager/conf/app.env <<'EOF'
+cat >/opt/infra-portal/conf/app.env <<'EOF'
 APP_DB_HOST=127.0.0.1
 APP_DB_PORT=3306
 APP_DB_NAME=middleware_resource_manager
 APP_DB_USERNAME=middleware_mgr
 APP_DB_PASSWORD=ReplaceWithStrongPassword
-APP_STORAGE_LOCATION=/opt/middleware-resource-manager/storage
+APP_STORAGE_LOCATION=/opt/infra-portal/storage
 SERVER_PORT=8080
 EOF
 ```
@@ -334,14 +334,14 @@ EOF
 
 ```ini
 [Unit]
-Description=Middleware Resource Manager
+Description=集成中心门户 / Infra Portal
 After=network.target mysqld.service
 
 [Service]
 User=appuser
-WorkingDirectory=/opt/middleware-resource-manager/app
-EnvironmentFile=/opt/middleware-resource-manager/conf/app.env
-ExecStart=/usr/bin/java -jar /opt/middleware-resource-manager/app/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar
+WorkingDirectory=/opt/infra-portal/app
+EnvironmentFile=/opt/infra-portal/conf/app.env
+ExecStart=/usr/bin/java -jar /opt/infra-portal/app/infra-portal-0.0.1-SNAPSHOT-exec.jar
 SuccessExitStatus=143
 Restart=always
 RestartSec=5
@@ -353,16 +353,16 @@ WantedBy=multi-user.target
 保存到：
 
 ```text
-/etc/systemd/system/middleware-resource-manager.service
+/etc/systemd/system/infra-portal.service
 ```
 
 执行：
 
 ```bash
 systemctl daemon-reload
-systemctl enable middleware-resource-manager
-systemctl start middleware-resource-manager
-systemctl status middleware-resource-manager
+systemctl enable infra-portal
+systemctl start infra-portal
+systemctl status infra-portal
 ```
 
 ## 8. 部署后验证
@@ -394,7 +394,7 @@ SHOW TABLES;
 首次上传文件后，检查：
 
 ```bash
-ls -R /opt/middleware-resource-manager/storage
+ls -R /opt/infra-portal/storage
 ```
 
 ## 9. 生产环境建议

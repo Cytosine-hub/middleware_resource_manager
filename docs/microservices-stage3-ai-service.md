@@ -18,14 +18,14 @@ api-gateway (:8080)
         `-- 其余 /api/**、/files/** ----------------> app (:8081)
 ```
 
-默认 profile 使用静态地址，四个进程均关闭 Nacos。`cloud` profile 下四个进程注册 Nacos，Gateway 分别使用 `lb://community-service`、`lb://ai-service` 和 `lb://middleware-resource-manager-app`。
+默认 profile 使用静态地址，四个进程均关闭 Nacos。`cloud` profile 下四个进程注册 Nacos，Gateway 分别使用 `lb://community-service`、`lb://ai-service` 和 `lb://infra-portal-app`。
 
 ## 2. 构建与模块边界
 
 四个可执行产物：
 
 ```text
-backend/app/target/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar
+backend/app/target/infra-portal-0.0.1-SNAPSHOT-exec.jar
 backend/api-gateway/target/api-gateway-0.0.1-SNAPSHOT-exec.jar
 backend/community-service/target/community-service-0.0.1-SNAPSHOT-exec.jar
 backend/ai-service/target/ai-service-0.0.1-SNAPSHOT-exec.jar
@@ -57,12 +57,12 @@ knowledge 与 wiki 原有少量双向源码引用无法用 Maven 循环依赖表
 | 组件/路由 | 默认 profile | `cloud` profile |
 |---|---|---|
 | Gateway | `:8080`，Nacos 关闭 | 注册为 `api-gateway` |
-| app | `:8081`，Nacos 关闭 | 注册为 `middleware-resource-manager-app` |
+| app | `:8081`，Nacos 关闭 | 注册为 `infra-portal-app` |
 | community-service | `:8082`，Nacos 关闭 | 注册为 `community-service` |
 | ai-service | `:8083`，Nacos 关闭 | 注册为 `ai-service` |
 | `/api/forum/**` | `${COMMUNITY_SERVICE_URL:http://127.0.0.1:8082}` | `lb://community-service` |
 | AI/Agent 五组原路径 | `${AI_SERVICE_URL:http://127.0.0.1:8083}` | `lb://ai-service` |
-| 其余 `/api/**`、`/files/**` | `${APP_SERVICE_URL:http://127.0.0.1:8081}` | `lb://middleware-resource-manager-app` |
+| 其余 `/api/**`、`/files/**` | `${APP_SERVICE_URL:http://127.0.0.1:8081}` | `lb://infra-portal-app` |
 
 `community-api` 和 `ai-api` 均声明在 app 泛路由之前，不剥离、不增加也不重写路径。ai-service 的 `cloud` profile 可选导入：
 
@@ -108,7 +108,7 @@ AI/Agent 配置从 app 移到 ai-service，环境变量名保持不变：
 cd backend
 mvn -DskipTests clean package
 
-java -jar app/target/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar
+java -jar app/target/infra-portal-0.0.1-SNAPSHOT-exec.jar
 java -jar community-service/target/community-service-0.0.1-SNAPSHOT-exec.jar
 java -jar ai-service/target/ai-service-0.0.1-SNAPSHOT-exec.jar
 java -jar api-gateway/target/api-gateway-0.0.1-SNAPSHOT-exec.jar
@@ -157,7 +157,7 @@ curl -i http://127.0.0.1:8080/api/public/config
 准备 Nacos 3.x，为四个终端设置相同 Nacos 环境变量，然后启动：
 
 ```bash
-java -Dspring.profiles.active=cloud -jar app/target/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar
+java -Dspring.profiles.active=cloud -jar app/target/infra-portal-0.0.1-SNAPSHOT-exec.jar
 java -Dspring.profiles.active=cloud -jar community-service/target/community-service-0.0.1-SNAPSHOT-exec.jar
 java -Dspring.profiles.active=cloud -jar ai-service/target/ai-service-0.0.1-SNAPSHOT-exec.jar
 java -Dspring.profiles.active=cloud -jar api-gateway/target/api-gateway-0.0.1-SNAPSHOT-exec.jar

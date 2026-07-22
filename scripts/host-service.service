@@ -1,5 +1,5 @@
 [Unit]
-Description=Host Job Service
+Description=集成中心门户 / Infra Portal Host Job Service
 After=network.target mysql.service
 
 [Service]

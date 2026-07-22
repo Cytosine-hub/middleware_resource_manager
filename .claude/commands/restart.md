@@ -9,7 +9,7 @@ description: 重启前后端服务（含 Docker/Milvus）
 
 ## 当前状态
 
-- 项目根目录: /Users/zhushihao/Projects/middleware_resource_manager
+- 项目根目录: /Users/zhushihao/Projects/infra_portal
 - 当前日期: !`date +%Y-%m-%d`
 
 ## 执行步骤
@@ -44,7 +44,7 @@ sleep 2
 ### 第三步：编译并启动后端
 
 ```bash
-cd /Users/zhushihao/Projects/middleware_resource_manager
+cd /Users/zhushihao/Projects/infra_portal
 (cd backend && mvn compile -q)
 ```
 
@@ -53,7 +53,7 @@ cd /Users/zhushihao/Projects/middleware_resource_manager
 启动后端：
 
 ```bash
-cd /Users/zhushihao/Projects/middleware_resource_manager
+cd /Users/zhushihao/Projects/infra_portal
 > /tmp/backend.log
 (cd backend && nohup mvn spring-boot:run -DskipTests >> /tmp/backend.log 2>&1 &)
 ```
@@ -74,7 +74,7 @@ grep -B5 "APPLICATION FAILED\|BUILD FAILURE" /tmp/backend.log
 ### 第四步：启动前端
 
 ```bash
-cd /Users/zhushihao/Projects/middleware_resource_manager/frontend
+cd /Users/zhushihao/Projects/infra_portal/frontend
 nohup npx vite --host 0.0.0.0 > /tmp/frontend.log 2>&1 &
 ```
 

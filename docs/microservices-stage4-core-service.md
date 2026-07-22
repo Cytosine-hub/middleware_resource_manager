@@ -16,14 +16,14 @@ api-gateway (:8080)
         `-- 其余 /api/** --------------------------> app (:8081，岗位模块)
 ```
 
-默认 profile 使用静态地址，五个进程均关闭 Nacos。`cloud` profile 下五个进程注册 Nacos，Gateway 分别使用 `lb://community-service`、`lb://ai-service`、`lb://core-service` 和 `lb://middleware-resource-manager-app`。
+默认 profile 使用静态地址，五个进程均关闭 Nacos。`cloud` profile 下五个进程注册 Nacos，Gateway 分别使用 `lb://community-service`、`lb://ai-service`、`lb://core-service` 和 `lb://infra-portal-app`。
 
 ## 2. 构建与模块边界
 
 五个可执行产物：
 
 ```text
-backend/app/target/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar
+backend/app/target/infra-portal-0.0.1-SNAPSHOT-exec.jar
 backend/api-gateway/target/api-gateway-0.0.1-SNAPSHOT-exec.jar
 backend/community-service/target/community-service-0.0.1-SNAPSHOT-exec.jar
 backend/ai-service/target/ai-service-0.0.1-SNAPSHOT-exec.jar
@@ -92,7 +92,7 @@ core-service 默认端口为 `8084`，服务名为 `core-service`。默认 profi
 cd backend
 mvn -DskipTests clean package
 
-java -jar app/target/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar
+java -jar app/target/infra-portal-0.0.1-SNAPSHOT-exec.jar
 java -jar community-service/target/community-service-0.0.1-SNAPSHOT-exec.jar
 java -jar ai-service/target/ai-service-0.0.1-SNAPSHOT-exec.jar
 java -jar core-service/target/core-service-0.0.1-SNAPSHOT-exec.jar
@@ -142,7 +142,7 @@ curl -i http://127.0.0.1:8080/api/wiki/pages
 
 ```text
 api-gateway                         8080
-middleware-resource-manager-app     8081
+infra-portal-app     8081
 community-service                   8082
 ai-service                          8083
 core-service                        8084

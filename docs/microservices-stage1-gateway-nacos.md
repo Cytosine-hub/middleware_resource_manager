@@ -12,9 +12,9 @@ Vue / Vite (:5173)
 api-gateway (:8080, service=api-gateway)
         |
         | 默认 profile: http://127.0.0.1:8081
-        | cloud profile: lb://middleware-resource-manager-app (Nacos)
+        | cloud profile: lb://infra-portal-app (Nacos)
         v
-app 单体 (:8081, service=middleware-resource-manager-app)
+app 单体 (:8081, service=infra-portal-app)
         |
         v
 MySQL / Milvus / LLM / Zabbix（保持原有连接方式）
@@ -43,7 +43,7 @@ MySQL / Milvus / LLM / Zabbix（保持原有连接方式）
 构建产物：
 
 ```text
-backend/app/target/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar
+backend/app/target/infra-portal-0.0.1-SNAPSHOT-exec.jar
 backend/api-gateway/target/api-gateway-0.0.1-SNAPSHOT-exec.jar
 ```
 
@@ -56,7 +56,7 @@ backend/api-gateway/target/api-gateway-0.0.1-SNAPSHOT-exec.jar
 | app 注册 Nacos | 关闭 | 开启 |
 | Gateway 注册/发现 Nacos | 关闭 | 开启 |
 | Nacos Config | 关闭且跳过 import check | 开启，使用 `spring.config.import` |
-| Gateway 到 app | 静态 `http://127.0.0.1:8081` | 动态 `lb://middleware-resource-manager-app` |
+| Gateway 到 app | 静态 `http://127.0.0.1:8081` | 动态 `lb://infra-portal-app` |
 
 默认 profile 明确设置：
 
@@ -72,7 +72,7 @@ spring.cloud.nacos.config.import-check.enabled: false
 `cloud` profile 从 Nacos 的 `DEFAULT_GROUP` 导入以下可选 DataId：
 
 ```text
-middleware-resource-manager-app.properties
+infra-portal-app.properties
 api-gateway.properties
 ```
 
@@ -109,7 +109,7 @@ VITE_NETWORK_SECURITY_API_BASE_URL=/api
 ```bash
 cd backend
 mvn -DskipTests clean package
-java -jar app/target/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar
+java -jar app/target/infra-portal-0.0.1-SNAPSHOT-exec.jar
 java -jar api-gateway/target/api-gateway-0.0.1-SNAPSHOT-exec.jar
 ```
 
@@ -153,7 +153,7 @@ docker logs -f nacos-stage1
 在 Nacos 控制台的 public namespace、`DEFAULT_GROUP` 下创建：
 
 ```properties
-# DataId: middleware-resource-manager-app.properties
+# DataId: infra-portal-app.properties
 logging.level.com.middleware.manager=INFO
 ```
 
@@ -175,10 +175,10 @@ export NACOS_USERNAME=nacos
 export NACOS_PASSWORD='<控制台初始化后的密码>'
 
 java -Dspring.profiles.active=cloud \
-  -jar app/target/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar
+  -jar app/target/infra-portal-0.0.1-SNAPSHOT-exec.jar
 ```
 
-检查 app 日志没有 Nacos 注册异常；在 Nacos 服务列表确认 `middleware-resource-manager-app` 有一个健康实例，端口为 `8081`。
+检查 app 日志没有 Nacos 注册异常；在 Nacos 服务列表确认 `infra-portal-app` 有一个健康实例，端口为 `8081`。
 
 ### 6.4 启动 Gateway
 

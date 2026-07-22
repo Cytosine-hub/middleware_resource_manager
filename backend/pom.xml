@@ -11,11 +11,11 @@
     </parent>
 
     <groupId>com.middleware</groupId>
-    <artifactId>middleware-resource-manager-parent</artifactId>
+    <artifactId>infra-portal-parent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>middleware-resource-manager-parent</name>
-    <description>Middleware resource manager modular monolith</description>
+    <name>infra-portal-parent</name>
+    <description>Infra Portal modular monolith</description>
 
     <modules>
         <module>modular-monolith-parent</module>

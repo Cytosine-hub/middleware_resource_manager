@@ -4,7 +4,7 @@ set -e
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION=$(date +%Y%m%d)
-PACKAGE_NAME="middleware-resource-manager-${VERSION}"
+PACKAGE_NAME="infra-portal-${VERSION}"
 OUTPUT_DIR="${PROJECT_DIR}/release/${PACKAGE_NAME}"
 
 echo "=== 打包生产部署包: ${PACKAGE_NAME} ==="

@@ -1,6 +1,6 @@
 # 后端微服务化 · 全景与备忘
 
-> 中间件资源管理平台后端按平台能力与岗位边界拆分后的总览。各阶段详细说明见 `docs/microservices-split-plan.md` 与 `docs/microservices-stage*.md`。
+> 集成中心门户后端按平台能力与岗位边界拆分后的总览。各阶段详细说明见 `docs/microservices-split-plan.md` 与 `docs/microservices-stage*.md`。
 
 ## 概览
 

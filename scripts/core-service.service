@@ -1,5 +1,5 @@
 [Unit]
-Description=Middleware Resource Manager Core Service
+Description=集成中心门户 / Infra Portal Core Service
 After=network.target mysql.service
 
 [Service]

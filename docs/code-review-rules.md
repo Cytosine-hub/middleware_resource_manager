@@ -1,6 +1,6 @@
 # 代码审查规则
 
-> 适用于 middleware_resource_manager 全项目（后端 Java + 前端 Vue）
+> 适用于 infra_portal 全项目（后端 Java + 前端 Vue）
 
 ---
 

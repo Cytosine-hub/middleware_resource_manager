@@ -98,7 +98,7 @@ MyBatis 的 `mapper-locations` 由 `classpath:mapper/*.xml` 调整为 `classpath
 
 - 聚合父工程：`backend/pom.xml`
 - 唯一启动模块：`backend/app`
-- 唯一可执行产物：`backend/app/target/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar`
+- 唯一可执行产物：`backend/app/target/infra-portal-0.0.1-SNAPSHOT-exec.jar`
 - 可执行 JAR 的 `BOOT-INF/lib` 已包含 3 个 common、7 个平台和 5 个岗位模块 JAR。
 - `scripts/package-for-deploy.sh`、两个本地 JAR PowerShell 脚本及部署文档均已切换到新路径。
 

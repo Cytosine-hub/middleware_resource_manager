@@ -36,7 +36,7 @@ sleep 2
 ### 3. 启动后端
 
 ```bash
-cd /Users/zhushihao/Projects/middleware_resource_manager
+cd /Users/zhushihao/Projects/infra_portal
 > /tmp/backend.log
 (cd backend && nohup mvn spring-boot:run -DskipTests >> /tmp/backend.log 2>&1 &)
 ```
@@ -51,7 +51,7 @@ grep "Started\|ERROR" /tmp/backend.log
 ### 4. 启动前端
 
 ```bash
-cd /Users/zhushihao/Projects/middleware_resource_manager/frontend
+cd /Users/zhushihao/Projects/infra_portal/frontend
 nohup npx vite --host 0.0.0.0 > /tmp/frontend.log 2>&1 &
 ```
 

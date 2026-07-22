@@ -1,5 +1,5 @@
 [Unit]
-Description=Middleware Resource Manager API Gateway
+Description=集成中心门户 / Infra Portal API Gateway
 After=network.target community-service.service ai-service.service core-service.service middleware-service.service database-service.service host-service.service network-service.service security-service.service
 Wants=community-service.service ai-service.service core-service.service middleware-service.service database-service.service host-service.service network-service.service security-service.service
 

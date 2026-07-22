@@ -15,7 +15,7 @@ Default behavior is change-aware:
 
 ## Project Paths
 
-- Root: `/Users/zhushihao/Projects/middleware_resource_manager`
+- Root: `/Users/zhushihao/Projects/infra_portal`
 - Backend port: `8080`
 - Frontend port: `5173`
 - Backend log: `/tmp/backend.log`

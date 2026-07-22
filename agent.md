@@ -2,7 +2,7 @@
 
 ## 1. 项目一句话定位与形态
 
-**中间件资源管理平台**：一个面向基础设施团队的内部门户，管理软件下载包（ReleaseAsset）、参数标准（含草稿→审核→发布版本流）、标准文档、论坛，并集成 AI 知识库/RAG 排查（LangChain4j + Milvus）、Wiki 知识图谱和 Zabbix 监控 Agent。业务运行时为 Spring Boot 3.5.3（Java 17，MyBatis + MySQL 8）：identity + catalog + standards 由独立 core-service 提供，论坛由 community-service 提供，knowledge + wiki + ops-agent 集群由 ai-service 提供，5 个岗位模块分别由 middleware/database/host/network/security-service 提供，前置 Spring Cloud Gateway；`cloud` profile 下通过 Nacos 注册、发现和配置。前端为 Vue 3 单页应用（Vite，无 vue-router，hash 路由）。
+**集成中心门户**：一个面向基础设施/运维团队，服务中间件、数据库、主机、网络和安全等多个运维岗位的内部门户，管理软件下载包（ReleaseAsset）、参数标准（含草稿→审核→发布版本流）、标准文档、论坛，并集成 AI 知识库/RAG 排查（LangChain4j + Milvus）、Wiki 知识图谱和 Zabbix 监控 Agent。业务运行时为 Spring Boot 3.5.3（Java 17，MyBatis + MySQL 8）：identity + catalog + standards 由独立 core-service 提供，论坛由 community-service 提供，knowledge + wiki + ops-agent 集群由 ai-service 提供，5 个岗位模块分别由 middleware/database/host/network/security-service 提供，前置 Spring Cloud Gateway；`cloud` profile 下通过 Nacos 注册、发现和配置。前端为 Vue 3 单页应用（Vite，无 vue-router，hash 路由）。
 
 ## 2. 代码地图
 
