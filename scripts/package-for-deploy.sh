@@ -4,7 +4,7 @@ set -e
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION=$(date +%Y%m%d)
-PACKAGE_NAME="middleware-resource-manager-${VERSION}"
+PACKAGE_NAME="infra-portal-${VERSION}"
 OUTPUT_DIR="${PROJECT_DIR}/release/${PACKAGE_NAME}"
 
 echo "=== 打包生产部署包: ${PACKAGE_NAME} ==="
@@ -13,7 +13,7 @@ echo "=== 打包生产部署包: ${PACKAGE_NAME} ==="
 echo "[1/4] 构建后端..."
 cd "$PROJECT_DIR/backend"
 mvn clean package -DskipTests -q
-echo "  后端 JAR: backend/target/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar"
+echo "  后端 JAR: backend/target/infra-portal-0.0.1-SNAPSHOT-exec.jar"
 
 # 2. 构建前端
 echo "[2/4] 构建前端..."
@@ -28,7 +28,7 @@ rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR/backend" "$OUTPUT_DIR/frontend/dist" "$OUTPUT_DIR/db" "$OUTPUT_DIR/docs"
 
 # 后端
-cp "$PROJECT_DIR/backend/target/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar" "$OUTPUT_DIR/backend/"
+cp "$PROJECT_DIR/backend/target/infra-portal-0.0.1-SNAPSHOT-exec.jar" "$OUTPUT_DIR/backend/"
 
 # 前端
 cp -r "$PROJECT_DIR/frontend/dist/"* "$OUTPUT_DIR/frontend/dist/"

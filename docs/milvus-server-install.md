@@ -111,14 +111,14 @@ export EMBEDDING_MODEL=bge-large
 
 ```ini
 [Unit]
-Description=Middleware Resource Manager
+Description=集成中心门户 / Infra Portal
 After=network.target docker.service
 
 [Service]
 Type=simple
 User=app
-WorkingDirectory=/opt/middleware-resource-manager/backend
-ExecStart=/usr/bin/java -jar middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar
+WorkingDirectory=/opt/infra-portal/backend
+ExecStart=/usr/bin/java -jar infra-portal-0.0.1-SNAPSHOT-exec.jar
 
 # 数据库配置
 Environment="APP_DB_HOST=127.0.0.1"
@@ -221,7 +221,7 @@ docker start milvus
 ollama serve &
 
 # 4. 启动应用
-systemctl start middleware-resource-manager
+systemctl start infra-portal
 
 # 5. 验证
 curl http://localhost:8080/api/public/parameter-standards
@@ -249,7 +249,7 @@ curl http://localhost:9091/healthz
 
 ```bash
 # 查看应用日志
-journalctl -u middleware-resource-manager -f
+journalctl -u infra-portal -f
 
 # 常见错误：
 # - "Failed to connect to Milvus" → Milvus 未启动或地址配置错误
@@ -262,7 +262,7 @@ journalctl -u middleware-resource-manager -f
 
 ```bash
 export VECTOR_TYPE=memory
-systemctl restart middleware-resource-manager
+systemctl restart infra-portal
 ```
 
 注意：内存模式下向量数据不持久化，重启后丢失。

@@ -1,12 +1,12 @@
 [Unit]
-Description=Middleware Resource Manager
+Description=集成中心门户 / Infra Portal
 After=network.target mysql.service
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/app/infra_portal/backend
-ExecStart=/usr/local/java/bisheng-jdk-17.0.12/bin/java -Xms2048m -Xmx2048m -jar /app/infra_portal/backend/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar --spring.config.location=file:/app/infra_portal/backend/application.yml
+ExecStart=/usr/local/java/bisheng-jdk-17.0.12/bin/java -Xms2048m -Xmx2048m -jar /app/infra_portal/backend/infra-portal-0.0.1-SNAPSHOT-exec.jar --spring.config.location=file:/app/infra_portal/backend/application.yml
 ExecStop=/bin/kill -SIGTERM $MAINPID
 Restart=on-failure
 RestartSec=10

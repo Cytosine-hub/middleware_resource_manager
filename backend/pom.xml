@@ -11,10 +11,10 @@
     </parent>
 
     <groupId>com.middleware</groupId>
-    <artifactId>middleware-resource-manager</artifactId>
+    <artifactId>infra-portal</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>middleware-resource-manager</name>
-    <description>Middleware resource manager</description>
+    <name>infra-portal</name>
+    <description>Integration center portal for infrastructure and operations teams</description>
 
     <properties>
         <java.version>17</java.version>

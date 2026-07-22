@@ -10,7 +10,7 @@ logging:
     root: INFO
     com.middleware.manager: INFO
   file:
-    name: logs/middleware-resource-manager.log
+    name: logs/infra-portal.log
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"

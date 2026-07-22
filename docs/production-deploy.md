@@ -39,7 +39,7 @@
 ```bash
 cd /path/to/middleware_resource_manager/backend
 mvn clean package -DskipTests
-# 产物：backend/target/middleware-resource-manager-0.0.1-SNAPSHOT.jar
+# 产物：backend/target/infra-portal-0.0.1-SNAPSHOT.jar
 ```
 
 ### 3.2 构建前端
@@ -56,9 +56,9 @@ npm run build
 ### 4.1 目录结构
 
 ```
-/opt/middleware-resource-manager/
+/opt/infra-portal/
 ├── backend/
-│   ├── middleware-resource-manager-0.0.1-SNAPSHOT.jar
+│   ├── infra-portal-0.0.1-SNAPSHOT.jar
 │   ├── data/skills/          # 经验 Skill YAML（运行时生成）
 │   └── storage/              # 上传文件存储
 ├── frontend/
@@ -87,10 +87,10 @@ mysql -u root middleware_resource_manager < release/db/upgrade-v1.0.4.sql
 ### 4.3 启动后端
 
 ```bash
-cd /opt/middleware-resource-manager/backend
+cd /opt/infra-portal/backend
 
 # 生产环境推荐配置
-java -jar middleware-resource-manager-0.0.1-SNAPSHOT.jar \
+java -jar infra-portal-0.0.1-SNAPSHOT.jar \
   --server.port=8080 \
   --spring.jpa.open-in-view=false \
   --app.modules.knowledge-enabled=false \
@@ -104,13 +104,13 @@ java -jar middleware-resource-manager-0.0.1-SNAPSHOT.jar \
 ```bash
 export APP_MODULES_KNOWLEDGE_ENABLED=false
 export APP_MODULES_DIAGNOSTICS_ENABLED=false
-java -jar middleware-resource-manager-0.0.1-SNAPSHOT.jar
+java -jar infra-portal-0.0.1-SNAPSHOT.jar
 ```
 
 ### 4.4 systemd 服务（推荐）
 
 ```bash
-sudo vi /etc/systemd/system/middleware-resource-manager.service
+sudo vi /etc/systemd/system/infra-portal.service
 ```
 
 ```ini
@@ -121,8 +121,8 @@ After=network.target mysql.service
 [Service]
 Type=simple
 User=appuser
-WorkingDirectory=/opt/middleware-resource-manager/backend
-ExecStart=/usr/bin/java -jar middleware-resource-manager-0.0.1-SNAPSHOT.jar \
+WorkingDirectory=/opt/infra-portal/backend
+ExecStart=/usr/bin/java -jar infra-portal-0.0.1-SNAPSHOT.jar \
   --server.port=8080 \
   --app.modules.knowledge-enabled=false \
   --app.modules.diagnostics-enabled=false
@@ -137,14 +137,14 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable middleware-resource-manager
-sudo systemctl start middleware-resource-manager
+sudo systemctl enable infra-portal
+sudo systemctl start infra-portal
 ```
 
 ## 5. Nginx 配置
 
 ```bash
-sudo vi /etc/nginx/conf.d/middleware-resource-manager.conf
+sudo vi /etc/nginx/conf.d/infra-portal.conf
 ```
 
 ```nginx
@@ -161,7 +161,7 @@ server {
     listen 80;
     server_name your-domain.com;
 
-    root /opt/middleware-resource-manager/frontend/dist;
+    root /opt/infra-portal/frontend/dist;
     index index.html;
 
     # 文件上传大小限制
@@ -307,10 +307,10 @@ curl -I http://your-domain.com/files/{token}
 
 ```bash
 # systemd 日志
-sudo journalctl -u middleware-resource-manager -f
+sudo journalctl -u infra-portal -f
 
 # 应用日志（如果配置了文件输出）
-tail -f /opt/middleware-resource-manager/backend/logs/middleware-resource-manager.log
+tail -f /opt/infra-portal/backend/logs/infra-portal.log
 ```
 
 ## 10. 更新部署
@@ -324,13 +324,13 @@ tail -f /opt/middleware-resource-manager/backend/logs/middleware-resource-manage
 mysql -u root middleware_resource_manager < db/upgrade-v1.0.4.sql
 
 # 2. 替换后端 JAR
-sudo systemctl stop middleware-resource-manager
-cp backend/middleware-resource-manager-0.0.1-SNAPSHOT-exec.jar /opt/middleware-resource-manager/backend/
-sudo systemctl start middleware-resource-manager
+sudo systemctl stop infra-portal
+cp backend/infra-portal-0.0.1-SNAPSHOT-exec.jar /opt/infra-portal/backend/
+sudo systemctl start infra-portal
 
 # 3. 替换前端
-rm -rf /opt/middleware-resource-manager/frontend/dist
-cp -r frontend/dist /opt/middleware-resource-manager/frontend/
+rm -rf /opt/infra-portal/frontend/dist
+cp -r frontend/dist /opt/infra-portal/frontend/
 sudo systemctl reload nginx
 ```
 
@@ -354,12 +354,12 @@ mysql -u root middleware_resource_manager < db/seed_data.sql
 cd frontend && npm run build && cd ..
 
 # 替换后端 JAR
-sudo systemctl stop middleware-resource-manager
-cp backend/target/middleware-resource-manager-0.0.1-SNAPSHOT.jar /opt/middleware-resource-manager/backend/
-sudo systemctl start middleware-resource-manager
+sudo systemctl stop infra-portal
+cp backend/target/infra-portal-0.0.1-SNAPSHOT.jar /opt/infra-portal/backend/
+sudo systemctl start infra-portal
 
 # 替换前端
-rm -rf /opt/middleware-resource-manager/frontend/dist
-cp -r frontend/dist /opt/middleware-resource-manager/frontend/
+rm -rf /opt/infra-portal/frontend/dist
+cp -r frontend/dist /opt/infra-portal/frontend/
 sudo systemctl reload nginx
 ```

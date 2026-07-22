@@ -2,7 +2,7 @@
 
 ## 1. 项目一句话定位与形态
 
-**中间件资源管理平台**：一个面向基础设施团队的内部门户，管理软件下载包（ReleaseAsset）、参数标准（含草稿→审核→发布版本流）、标准文档、论坛，并集成 AI 知识库/RAG 排查（LangChain4j + Milvus）、Wiki 知识图谱和 Zabbix 监控 Agent。形态为**前后端分离单体**：Spring Boot 3.5.3（Java 17，MyBatis + MySQL 8）后端 + Vue 3 单页应用（Vite，无 vue-router，hash 路由）前端。
+**集成中心门户**：一个面向基础设施/运维团队的内部门户，服务中间件、数据库、主机、网络、安全等多个运维岗位，管理软件下载包（ReleaseAsset）、参数标准（含草稿→审核→发布版本流）、标准文档、论坛，并集成 AI 知识库/RAG 排查（LangChain4j + Milvus）、Wiki 知识图谱和 Zabbix 监控 Agent。形态为**前后端分离单体**：Spring Boot 3.5.3（Java 17，MyBatis + MySQL 8）后端 + Vue 3 单页应用（Vite，无 vue-router，hash 路由）前端。
 
 ## 2. 代码地图
 

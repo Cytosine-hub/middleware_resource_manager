@@ -3,7 +3,7 @@
 # 由 PostToolUse hook 调用
 
 FILE_PATH="$1"
-CHANGES_FILE="/Users/zhushihao/Projects/middleware_resource_manager/.claude/changes.md"
+CHANGES_FILE="/Users/zhushihao/Projects/infra_portal/.claude/changes.md"
 DATE=$(date +%Y-%m-%d)
 
 # 判断是否为需要追踪的文件
@@ -53,7 +53,7 @@ track_change() {
     # 如果匹配到需要追踪的类型，记录到文件
     if [[ -n "$type" ]]; then
         # 获取相对路径
-        local rel_path="${file#/Users/zhushihao/Projects/middleware_resource_manager/}"
+        local rel_path="${file#/Users/zhushihao/Projects/infra_portal/}"
 
         # 检查是否已存在相同记录（避免重复）
         if ! grep -q "$rel_path" "$CHANGES_FILE" 2>/dev/null; then

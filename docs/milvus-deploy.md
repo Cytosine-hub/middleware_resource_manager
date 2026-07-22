@@ -164,7 +164,7 @@ export GLM_API_KEY=your-glm-api-key
 export MILVUS_HOST=10.x.x.x
 export MILVUS_PORT=19530
 
-java -jar middleware-resource-manager.jar \
+java -jar infra-portal.jar \
   --spring.profiles.active=prod \
   --server.port=8080
 ```

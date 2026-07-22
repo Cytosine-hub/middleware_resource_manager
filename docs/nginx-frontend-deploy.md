@@ -7,9 +7,9 @@
 推荐结构：
 
 ```text
-/opt/middleware-resource-manager/
+/opt/infra-portal/
   backend/
-    middleware-resource-manager-0.0.1-SNAPSHOT.jar
+    infra-portal-0.0.1-SNAPSHOT.jar
   frontend/
     dist/
       index.html
@@ -42,7 +42,7 @@ frontend/dist
 将 `frontend/dist` 整个目录上传到服务器，例如：
 
 ```text
-/opt/middleware-resource-manager/frontend/dist
+/opt/infra-portal/frontend/dist
 ```
 
 ## 3. 启动后端
@@ -52,8 +52,8 @@ frontend/dist
 示例：
 
 ```bash
-cd /opt/middleware-resource-manager/backend
-java -jar middleware-resource-manager-0.0.1-SNAPSHOT.jar
+cd /opt/infra-portal/backend
+java -jar infra-portal-0.0.1-SNAPSHOT.jar
 ```
 
 验证后端：
@@ -69,7 +69,7 @@ curl http://127.0.0.1:8080/api/public/releases
 新建配置文件：
 
 ```bash
-sudo vi /etc/nginx/conf.d/middleware-resource-manager.conf
+sudo vi /etc/nginx/conf.d/infra-portal.conf
 ```
 
 写入：
@@ -79,7 +79,7 @@ server {
     listen 80;
     server_name _;
 
-    root /opt/middleware-resource-manager/frontend/dist;
+    root /opt/infra-portal/frontend/dist;
     index index.html;
 
     client_max_body_size 2048m;
@@ -183,7 +183,7 @@ npm.cmd run build
 将新的 `dist` 覆盖服务器目录：
 
 ```text
-/opt/middleware-resource-manager/frontend/dist
+/opt/infra-portal/frontend/dist
 ```
 
 然后重载 Nginx：

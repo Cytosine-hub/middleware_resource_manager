@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # ============================================================
-# 中间件资源管理平台 - 生产部署脚本
+# 集成中心门户 / Infra Portal - 生产部署脚本
 # 用法: ./deploy.sh <tar包路径> [模块: all|backend|frontend|db]
-# 示例: ./deploy.sh /tmp/middleware-resource-manager-v1.0.8-20260602.tar.gz
-#       ./deploy.sh /tmp/middleware-resource-manager-v1.0.8-20260602.tar.gz backend
+# 示例: ./deploy.sh /tmp/infra-portal-v1.0.8-20260602.tar.gz
+#       ./deploy.sh /tmp/infra-portal-v1.0.8-20260602.tar.gz backend
 # ============================================================
 
 DEPLOY_DIR="/app/infra_portal"

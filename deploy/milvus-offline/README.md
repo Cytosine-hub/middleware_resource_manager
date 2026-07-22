@@ -1,6 +1,6 @@
 # Milvus Offline Package
 
-This directory contains the files used to build and install an offline Milvus Standalone package for the middleware resource manager project.
+This directory contains the files used to build and install an offline Milvus Standalone package for the Infra Portal project.
 
 Recommended workflow:
 
@@ -25,4 +25,3 @@ Recommended workflow:
    ./scripts/start.sh
    ./scripts/healthcheck.sh
    ```
-

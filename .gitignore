@@ -1,4 +1,6 @@
 /backend/target/
+# 忽略任意层级的 Maven 构建产物（含多模块 backend/*/target）
+target/
 /.idea/
 /.vscode/
 /.settings/

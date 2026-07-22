@@ -1,6 +1,6 @@
-# Middleware Resource Manager
+# Infra Portal
 
-基于 `Spring Boot 3.5 + Java 17 + MySQL 8.0` 的中间件文件管理平台，集成 Wiki 知识库、AI 智能排查和运维 Agent。
+面向基础设施/运维团队的集成中心门户，服务中间件、数据库、主机、网络、安全等多个运维岗位；基于 `Spring Boot 3.5 + Java 17 + MySQL 8.0`，集成 Wiki 知识库、AI 智能排查和运维 Agent。
 
 ## 功能模块
 
