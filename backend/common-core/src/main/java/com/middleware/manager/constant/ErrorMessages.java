@@ -79,6 +79,9 @@ public final class ErrorMessages {
     public static final String COMMAND_EXPORT_FAILED = "命令导出失败";
     public static final String COMMAND_IMPORT_FAILED = "命令导入失败";
 
+    // 限流相关
+    public static final String RATE_LIMIT_EXCEEDED = "请求过于频繁，请稍后重试";
+
     // 图片相关
     public static final String IMAGE_FILE_REQUIRED = "请选择图片文件";
     public static final String IMAGE_TYPE_NOT_SUPPORTED = "仅支持图片文件上传";

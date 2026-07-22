@@ -69,4 +69,7 @@ public final class ErrorCode {
     // 发布资源相关
     public static final String RELEASE_NOT_FOUND = "RELEASE_NOT_FOUND";
     public static final String RELEASE_PUBLISHED = "RELEASE_PUBLISHED";
+
+    // 限流相关
+    public static final String RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED";
 }
