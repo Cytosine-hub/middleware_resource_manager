@@ -2,7 +2,7 @@ package com.middleware.manager.web.ratelimit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.middleware.manager.service.DownloadRateLimitProperties;
+import com.middleware.manager.service.DocumentRateLimitProperties;
 import com.middleware.manager.service.RateLimiter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -14,37 +14,39 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class DownloadRateLimitInterceptorTest {
+class DocumentRateLimitInterceptorTest {
 
     @Mock
     private RateLimiter rateLimiter;
 
-    private DownloadRateLimitProperties properties;
-    private DownloadRateLimitInterceptor interceptor;
+    private DocumentRateLimitProperties properties;
+    private DocumentRateLimitInterceptor interceptor;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        properties = new DownloadRateLimitProperties();
+        properties = new DocumentRateLimitProperties();
         properties.setEnabled(true);
         properties.setLimit(10);
         properties.setWindowSeconds(60);
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        interceptor = new DownloadRateLimitInterceptor(rateLimiter, properties, objectMapper);
+        interceptor = new DocumentRateLimitInterceptor(rateLimiter, properties, objectMapper);
     }
 
     @Test
-    @DisplayName("TC-01 未超出阈值时正常放行下载请求")
+    @DisplayName("TC-01 未超出阈值时正常放行标准文档访问请求")
     void allowsRequestWithinLimit() throws Exception {
         when(rateLimiter.tryAcquire(anyString(), eq(10), anyLong())).thenReturn(true);
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/files/token-a");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/public/standards/1");
         request.setRemoteAddr("10.0.0.1");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -58,7 +60,7 @@ class DownloadRateLimitInterceptorTest {
     @DisplayName("TC-02 达到阈值后返回 429 并附带可识别的限流提示")
     void rejectsWithTooManyRequestsWhenLimitExceeded() throws Exception {
         when(rateLimiter.tryAcquire(anyString(), eq(10), anyLong())).thenReturn(false);
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/files/token-a");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/public/standards/preview");
         request.setRemoteAddr("10.0.0.1");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -73,7 +75,7 @@ class DownloadRateLimitInterceptorTest {
     @DisplayName("TC-05 限流开关关闭时不生效，请求直接放行")
     void bypassesWhenDisabled() throws Exception {
         properties.setEnabled(false);
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/files/token-a");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/public/standards/raw");
         request.setRemoteAddr("10.0.0.1");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -84,21 +86,20 @@ class DownloadRateLimitInterceptorTest {
     }
 
     @Test
-    @DisplayName("TC-07 限流按来源客户端计数，更换资源 token 不会绕过限流")
-    void rateLimitKeyIsIndependentOfRequestedResource() throws Exception {
+    @DisplayName("TC-07 限流按来源客户端计数，更换文档/文件参数不会绕过限流")
+    void rateLimitKeyIsIndependentOfRequestedDocument() throws Exception {
         when(rateLimiter.tryAcquire(anyString(), eq(10), anyLong())).thenReturn(true);
         ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
 
-        MockHttpServletRequest first = new MockHttpServletRequest("GET", "/files/token-a");
+        MockHttpServletRequest first = new MockHttpServletRequest("GET", "/api/public/standards/1");
         first.setRemoteAddr("10.0.0.1");
         interceptor.preHandle(first, new MockHttpServletResponse(), new Object());
 
-        MockHttpServletRequest second = new MockHttpServletRequest("GET", "/files/does-not-exist");
+        MockHttpServletRequest second = new MockHttpServletRequest("GET", "/api/public/standards/999999");
         second.setRemoteAddr("10.0.0.1");
         interceptor.preHandle(second, new MockHttpServletResponse(), new Object());
 
-        verify(rateLimiter, org.mockito.Mockito.times(2))
-                .tryAcquire(keyCaptor.capture(), eq(10), anyLong());
+        verify(rateLimiter, times(2)).tryAcquire(keyCaptor.capture(), eq(10), anyLong());
         assertThat(keyCaptor.getAllValues().get(0)).isEqualTo(keyCaptor.getAllValues().get(1));
     }
 
@@ -108,22 +109,18 @@ class DownloadRateLimitInterceptorTest {
         when(rateLimiter.tryAcquire(anyString(), eq(10), anyLong())).thenReturn(true);
         ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
 
-        MockHttpServletRequest first = new MockHttpServletRequest("GET", "/files/token-a");
+        MockHttpServletRequest first = new MockHttpServletRequest("GET", "/api/public/standards/1");
         first.setRemoteAddr("10.0.0.1");
         first.addHeader("X-Forwarded-For", "203.0.113.9");
         interceptor.preHandle(first, new MockHttpServletResponse(), new Object());
 
-        MockHttpServletRequest second = new MockHttpServletRequest("GET", "/files/token-a");
+        MockHttpServletRequest second = new MockHttpServletRequest("GET", "/api/public/standards/1");
         second.setRemoteAddr("10.0.0.1");
         second.addHeader("X-Forwarded-For", "198.51.100.7");
         interceptor.preHandle(second, new MockHttpServletResponse(), new Object());
 
-        verify(rateLimiter, org.mockito.Mockito.times(2))
+        verify(rateLimiter, times(2))
                 .tryAcquire(keyCaptor.capture(), eq(10), anyLong());
         assertThat(keyCaptor.getAllValues().get(0)).isEqualTo(keyCaptor.getAllValues().get(1));
-    }
-
-    private static int anyInt() {
-        return org.mockito.ArgumentMatchers.anyInt();
     }
 }

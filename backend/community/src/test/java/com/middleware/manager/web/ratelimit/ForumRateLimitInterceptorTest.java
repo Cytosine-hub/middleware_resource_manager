@@ -118,4 +118,24 @@ class ForumRateLimitInterceptorTest {
         verify(rateLimiter, times(2)).tryAcquire(keyCaptor.capture(), eq(10), anyLong());
         assertThat(keyCaptor.getAllValues().get(0)).isEqualTo(keyCaptor.getAllValues().get(1));
     }
+
+    @Test
+    @DisplayName("TC-07 伪造 X-Forwarded-For 请求头不能绕过按客户端的限流")
+    void forgedForwardedForHeaderDoesNotBypassRateLimit() throws Exception {
+        when(rateLimiter.tryAcquire(anyString(), eq(10), anyLong())).thenReturn(true);
+        ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
+
+        MockHttpServletRequest first = new MockHttpServletRequest("GET", "/api/forum/posts/1");
+        first.setRemoteAddr("10.0.0.1");
+        first.addHeader("X-Forwarded-For", "203.0.113.9");
+        interceptor.preHandle(first, new MockHttpServletResponse(), new Object());
+
+        MockHttpServletRequest second = new MockHttpServletRequest("GET", "/api/forum/posts/1");
+        second.setRemoteAddr("10.0.0.1");
+        second.addHeader("X-Forwarded-For", "198.51.100.7");
+        interceptor.preHandle(second, new MockHttpServletResponse(), new Object());
+
+        verify(rateLimiter, times(2)).tryAcquire(keyCaptor.capture(), eq(10), anyLong());
+        assertThat(keyCaptor.getAllValues().get(0)).isEqualTo(keyCaptor.getAllValues().get(1));
+    }
 }

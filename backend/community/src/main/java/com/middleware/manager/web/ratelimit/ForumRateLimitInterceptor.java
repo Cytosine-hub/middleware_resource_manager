@@ -12,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 @Component
@@ -46,10 +45,8 @@ public class ForumRateLimitInterceptor implements HandlerInterceptor {
     }
 
     private String clientId(HttpServletRequest request) {
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (StringUtils.hasText(forwardedFor)) {
-            return forwardedFor.split(",")[0].trim();
-        }
+        // 只信任连接层的 remoteAddr；X-Forwarded-For 等请求头由客户端自行携带，可伪造/轮换，
+        // 用于限流分组会被绕过，因此不采信。
         return request.getRemoteAddr();
     }
 

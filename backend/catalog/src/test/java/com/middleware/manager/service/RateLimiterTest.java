@@ -42,7 +42,7 @@ class RateLimiterTest {
     void concurrentRequestsNeverExceedLimit() throws InterruptedException {
         int limit = 20;
         int threads = 100;
-        ExecutorService pool = Executors.newFixedThreadPool(20);
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
         CountDownLatch ready = new CountDownLatch(threads);
         CountDownLatch start = new CountDownLatch(1);
         AtomicInteger allowed = new AtomicInteger();
@@ -58,11 +58,25 @@ class RateLimiterTest {
                 }
             });
         }
-        ready.await();
+        assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
         start.countDown();
         pool.shutdown();
         assertThat(pool.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
         assertThat(allowed.get()).isEqualTo(limit);
+    }
+
+    @Test
+    @DisplayName("TC-03 大量不同来源访问后，过期的限流窗口会被淘汰，内存占用保持可控")
+    void expiredWindowsAreEvictedToKeepMemoryBounded() {
+        for (int i = 0; i < 500; i++) {
+            assertThat(rateLimiter.tryAcquire("download:client-" + i, 5, 1000)).isTrue();
+        }
+        assertThat(rateLimiter.trackedKeyCount()).isEqualTo(500);
+
+        clock.advance(Duration.ofMillis(2000));
+        assertThat(rateLimiter.tryAcquire("download:trigger-eviction", 5, 1000)).isTrue();
+
+        assertThat(rateLimiter.trackedKeyCount()).isLessThan(500);
     }
 
     @Test

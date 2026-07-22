@@ -24,7 +24,7 @@ class RateLimiterTest {
     @DisplayName("TC-01 窗口内请求数未超过阈值时全部放行")
     void withinLimitAllRequestsAllowed() {
         for (int i = 0; i < 5; i++) {
-            assertThat(rateLimiter.tryAcquire("forum:1.2.3.4", 5, 1000)).isTrue();
+            assertThat(rateLimiter.tryAcquire("document:1.2.3.4", 5, 1000)).isTrue();
         }
     }
 
@@ -32,9 +32,9 @@ class RateLimiterTest {
     @DisplayName("TC-02 第 N 次请求放行，第 N+1 次请求被拒绝")
     void nPlusOneRequestRejected() {
         for (int i = 0; i < 5; i++) {
-            assertThat(rateLimiter.tryAcquire("forum:1.2.3.4", 5, 1000)).isTrue();
+            assertThat(rateLimiter.tryAcquire("document:1.2.3.4", 5, 1000)).isTrue();
         }
-        assertThat(rateLimiter.tryAcquire("forum:1.2.3.4", 5, 1000)).isFalse();
+        assertThat(rateLimiter.tryAcquire("document:1.2.3.4", 5, 1000)).isFalse();
     }
 
     @Test
@@ -53,7 +53,7 @@ class RateLimiterTest {
                     start.await();
                 } catch (InterruptedException ignored) {
                 }
-                if (rateLimiter.tryAcquire("forum:concurrent", limit, 1000)) {
+                if (rateLimiter.tryAcquire("document:concurrent", limit, 1000)) {
                     allowed.incrementAndGet();
                 }
             });
@@ -69,12 +69,12 @@ class RateLimiterTest {
     @DisplayName("TC-03 大量不同来源访问后，过期的限流窗口会被淘汰，内存占用保持可控")
     void expiredWindowsAreEvictedToKeepMemoryBounded() {
         for (int i = 0; i < 500; i++) {
-            assertThat(rateLimiter.tryAcquire("forum:client-" + i, 5, 1000)).isTrue();
+            assertThat(rateLimiter.tryAcquire("document:client-" + i, 5, 1000)).isTrue();
         }
         assertThat(rateLimiter.trackedKeyCount()).isEqualTo(500);
 
         clock.advance(Duration.ofMillis(2000));
-        assertThat(rateLimiter.tryAcquire("forum:trigger-eviction", 5, 1000)).isTrue();
+        assertThat(rateLimiter.tryAcquire("document:trigger-eviction", 5, 1000)).isTrue();
 
         assertThat(rateLimiter.trackedKeyCount()).isLessThan(500);
     }
@@ -83,24 +83,38 @@ class RateLimiterTest {
     @DisplayName("TC-04 窗口结束后自动恢复，无需重启或手动清理")
     void resetsAfterWindowElapses() {
         for (int i = 0; i < 3; i++) {
-            assertThat(rateLimiter.tryAcquire("forum:1.2.3.4", 3, 1000)).isTrue();
+            assertThat(rateLimiter.tryAcquire("document:1.2.3.4", 3, 1000)).isTrue();
         }
-        assertThat(rateLimiter.tryAcquire("forum:1.2.3.4", 3, 1000)).isFalse();
+        assertThat(rateLimiter.tryAcquire("document:1.2.3.4", 3, 1000)).isFalse();
 
         clock.advance(Duration.ofMillis(1000));
 
-        assertThat(rateLimiter.tryAcquire("forum:1.2.3.4", 3, 1000)).isTrue();
+        assertThat(rateLimiter.tryAcquire("document:1.2.3.4", 3, 1000)).isTrue();
+    }
+
+    @Test
+    @DisplayName("TC-05 阈值与窗口时长参数可配置且各自独立生效")
+    void limitAndWindowAreConfigurablePerCall() {
+        for (int i = 0; i < 2; i++) {
+            assertThat(rateLimiter.tryAcquire("document:small-limit", 2, 500)).isTrue();
+        }
+        assertThat(rateLimiter.tryAcquire("document:small-limit", 2, 500)).isFalse();
+
+        for (int i = 0; i < 10; i++) {
+            assertThat(rateLimiter.tryAcquire("document:big-limit", 10, 500)).isTrue();
+        }
+        assertThat(rateLimiter.tryAcquire("document:big-limit", 10, 500)).isFalse();
     }
 
     @Test
     @DisplayName("TC-07 不同 key 之间限流计数互不影响，无法通过更换参数绕过限流")
     void differentKeysAreCountedIndependently() {
         for (int i = 0; i < 3; i++) {
-            assertThat(rateLimiter.tryAcquire("forum:same-client", 3, 1000)).isTrue();
+            assertThat(rateLimiter.tryAcquire("document:same-client", 3, 1000)).isTrue();
         }
-        assertThat(rateLimiter.tryAcquire("forum:same-client", 3, 1000)).isFalse();
+        assertThat(rateLimiter.tryAcquire("document:same-client", 3, 1000)).isFalse();
 
-        assertThat(rateLimiter.tryAcquire("forum:other-client", 3, 1000)).isTrue();
+        assertThat(rateLimiter.tryAcquire("document:other-client", 3, 1000)).isTrue();
     }
 
     private static final class MutableClock extends Clock {
