@@ -6,13 +6,13 @@
 # 构建期服务之间零依赖：只用 `mvn -pl <服务> -am`（also-make，连带构建 common-* 与其能力模块）。
 # 服务间真实联通（网关↔Nacos↔服务、认证越权）属【集成】层，单独一条流水线在预发环境跑。
 #
-# 需要：一个 docker executor 的 GitLab Runner（把 default.tags 改成你们 runner 的 tag）。
+# 需要：一个支持 Maven 镜像的 GitLab Runner（default.tags 使用项目 Runner 的 TLB 标签）。
 #       内网若无法直连 Docker Hub，把 image 换成你们镜像仓库里的 maven:3.9-eclipse-temurin-17。
 # ============================================================================
 
 default:
   image: maven:3.9-eclipse-temurin-17
-  tags: [docker]                       # ← 改成你们 runner 的 tag
+  tags: [TLB]                          # 项目 Runner 标签
   cache:                               # 复用 .m2，加速依赖解析
     key: "mvn-$CI_COMMIT_REF_SLUG"
     paths: [.m2/repository]
