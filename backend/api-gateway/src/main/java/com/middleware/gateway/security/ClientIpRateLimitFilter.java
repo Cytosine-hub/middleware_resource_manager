@@ -37,9 +37,9 @@ public class ClientIpRateLimitFilter implements GlobalFilter, Ordered {
     private static final PathPattern ADMIN_DOCUMENT_DETAIL =
             PATH_PATTERN_PARSER.parse("/api/admin/standard-documents/{id:[0-9]+}");
     private static final PathPattern ADMIN_DOCUMENT_PREVIEW =
-            PATH_PATTERN_PARSER.parse("/api/admin/standard-documents/{id:[0-9]+}/preview");
+            PATH_PATTERN_PARSER.parse("/api/admin/standard-documents/preview");
     private static final PathPattern ADMIN_DOCUMENT_RAW =
-            PATH_PATTERN_PARSER.parse("/api/admin/standard-documents/{id:[0-9]+}/raw");
+            PATH_PATTERN_PARSER.parse("/api/admin/standard-documents/raw");
     private static final PathPattern FORUM_POST_DETAIL =
             PATH_PATTERN_PARSER.parse("/api/forum/posts/{id:[0-9]+}");
     private static final String REAL_IP_HEADER = "X-Real-IP";

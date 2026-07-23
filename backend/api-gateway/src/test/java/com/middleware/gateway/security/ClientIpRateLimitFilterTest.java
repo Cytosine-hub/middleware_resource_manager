@@ -80,8 +80,10 @@ class ClientIpRateLimitFilterTest {
         exhaustAndAssertLimited(filter, "/api/public/standards/preview?storedFileName=test.docx", IP_A, 18);
         exhaustAndAssertLimited(filter, "/api/forum/posts/42", IP_A, 120);
         exhaustAndAssertLimited(filter, "/api/admin/standard-documents/42", IP_B, 60);
-        exhaustAndAssertLimited(filter, "/api/admin/standard-documents/42/preview", IP_B, 18);
-        exhaustAndAssertLimited(filter, "/api/admin/standard-documents/42/raw", "192.0.2.12", 18);
+        exhaustAndAssertLimited(filter,
+                "/api/admin/standard-documents/preview?storedFileName=test.docx", IP_B, 18);
+        exhaustAndAssertLimited(filter,
+                "/api/admin/standard-documents/raw?storedFileName=test.docx", "192.0.2.12", 18);
     }
 
     @Test
@@ -135,7 +137,8 @@ class ClientIpRateLimitFilterTest {
         assertThat(authenticationFilter.getOrder()).isLessThan(rateLimitFilter.getOrder());
 
         for (int requestNumber = 1; requestNumber <= 7; requestNumber++) {
-            MockServerWebExchange exchange = exchange("/api/admin/standard-documents/42/raw", IP_A);
+            MockServerWebExchange exchange = exchange(
+                    "/api/admin/standard-documents/raw?storedFileName=test.docx", IP_A);
 
             filterThroughAuthentication(authenticationFilter, rateLimitFilter, exchange, rateLimitCalls);
 
@@ -146,7 +149,7 @@ class ClientIpRateLimitFilterTest {
 
         for (int requestNumber = 1; requestNumber <= 6; requestNumber++) {
             MockServerWebExchange exchange = exchangeWithBearer(
-                    "/api/admin/standard-documents/42/raw", IP_A);
+                    "/api/admin/standard-documents/raw?storedFileName=test.docx", IP_A);
 
             filterThroughAuthentication(authenticationFilter, rateLimitFilter, exchange, rateLimitCalls);
 
@@ -155,7 +158,7 @@ class ClientIpRateLimitFilterTest {
         }
 
         MockServerWebExchange limitedExchange = exchangeWithBearer(
-                "/api/admin/standard-documents/42/raw", IP_A);
+                "/api/admin/standard-documents/raw?storedFileName=test.docx", IP_A);
         filterThroughAuthentication(authenticationFilter, rateLimitFilter, limitedExchange, rateLimitCalls);
 
         assertThat(limitedExchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
