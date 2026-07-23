@@ -10,6 +10,17 @@
 #       内网若无法直连 Docker Hub，把 image 换成你们镜像仓库里的 maven:3.9-eclipse-temurin-17。
 # ============================================================================
 
+# 只在【后端代码 / CI 文件】改动时创建流水线（MR / push / tag）。
+# 纯文档改动（agent.md、docs、README 等）没有可跑的 job → 不创建流水线，
+# 避免 GitLab 把"空流水线"判为 failed（doc-only 合并不再爆红叉）。
+workflow:
+  rules:
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: ["backend/**/*", ".gitlab-ci.yml"]
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+      changes: ["backend/**/*", ".gitlab-ci.yml"]
+
 default:
   image: maven:3.9-eclipse-temurin-17
   tags: [docker]                       # ← 改成你们 runner 的 tag
