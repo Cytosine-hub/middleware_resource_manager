@@ -25,7 +25,7 @@ default:
   image:
     name: docker:27-cli
     pull_policy: if-not-present       # 仅本地不存在时拉取镜像
-  tags: [TLB]                          # 项目 Runner 标签
+  tags: [TLZJJ]                          # 项目 Runner 标签
 
 variables:
   DOCKER_BUILDKIT: "1"
